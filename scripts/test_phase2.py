@@ -5,7 +5,8 @@ Tests all service classes and their methods with proper error handling.
 
 import sys
 import os
-from datetime import date, datetime
+import traceback
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 # Add the project root to the Python path
