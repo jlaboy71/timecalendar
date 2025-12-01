@@ -148,18 +148,22 @@ def main():
         # Seed departments first (required for users)
         print("\n1. Seeding departments...")
         seed_departments(session)
+        session.flush()  # Make departments available for foreign key references
         
         # Seed admin user
         print("\n2. Seeding admin user...")
         admin_user = seed_admin_user(session)
+        session.flush()  # Make admin user available for foreign key references
         
         # Seed market holidays
         print("\n3. Seeding market holidays...")
         seed_market_holidays(session)
+        session.flush()  # Make holidays available if needed
         
         # Seed admin PTO balance
         print("\n4. Seeding admin PTO balance...")
         seed_admin_pto_balance(session, admin_user)
+        session.flush()  # Make PTO balance available if needed
         
         # Commit all changes
         session.commit()
