@@ -7,6 +7,8 @@ from sqlalchemy.orm.session import Session
 from typing import Generator
 
 from src.config import config
+# Import models module to ensure all models are registered with Base
+import src.models  # noqa: F401
 
 
 # Create database engine using SQLAlchemy 2.0 syntax
@@ -52,9 +54,6 @@ def init_db() -> None:
     This function creates all tables defined by models that inherit
     from the Base class.
     """
-    # Import all models here to ensure they are registered with Base
-    # This will be updated when we add actual models
-    from src.models import *  # noqa: F401, F403
-    
+    # Models are imported at module level to ensure they are registered with Base
     # Create all tables
     Base.metadata.create_all(bind=engine)
