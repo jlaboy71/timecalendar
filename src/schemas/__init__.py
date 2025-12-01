@@ -12,14 +12,7 @@ from .user_schemas import (
 from .pto_schemas import (
     PTORequestBase,
     PTORequestCreate,
-    PTORequestUpdate,
-    PTORequestApprove,
-    PTORequestDeny,
-    PTORequestResponse,
-    PTOBalanceBase,
-    PTOBalanceCreate,
     PTOBalanceUpdate,
-    PTOBalanceResponse,
 )
 
 __all__ = [
@@ -33,12 +26,5 @@ __all__ = [
     # PTO schemas
     "PTORequestBase",
     "PTORequestCreate",
-    "PTORequestUpdate",
-    "PTORequestApprove",
-    "PTORequestDeny",
-    "PTORequestResponse",
-    "PTOBalanceBase",
-    "PTOBalanceCreate",
     "PTOBalanceUpdate",
-    "PTOBalanceResponse",
 ]
