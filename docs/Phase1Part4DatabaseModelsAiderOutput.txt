@@ -1,0 +1,545 @@
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> python -m scripts.seed
+Starting database seeding...
+
+1. Seeding departments...
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine select current_schema()
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.code = %(code_1)s 
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'code_1': 'EXEC', 'param_1': 1}
+Created department: Executive (EXEC)
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.code = %(code_1)s 
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [cached since 0.001737s ago] {'code_1': 'TECH', 'param_1': 1}
+Created department: Technology (TECH)
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.code = %(code_1)s 
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [cached since 0.002387s ago] {'code_1': 'OPS', 'param_1': 1}
+Created department: Operations (OPS)
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,897 INFO sqlalchemy.engine.Engine [cached since 0.003129s ago] {'code_1': 'FIN', 'param_1': 1}
+Created department: Finance (FIN)
+2025-12-01 12:47:23,908 INFO sqlalchemy.engine.Engine INSERT INTO departments (name, code, manager_id, is_active, created_at) SELECT p0::VARCHAR, p1::VARCHAR, p2::INTEGER, p3::BOOLEAN, p4::TIMESTAMP WITHOUT TIME ZONE FROM (VALUES (%(name__0)s, %(code__0)s, %(manager_id__0)s, %(is_active__0)s, now(), 0), ... 264 characters truncated ... nter) ORDER BY sen_counter RETURNING departments.id, departments.created_at, departments.id AS id__1
+2025-12-01 12:47:23,908 INFO sqlalchemy.engine.Engine [generated in 0.00007s (insertmanyvalues) 1/1 (ordered)] {'name__0': 'Executive', 'manager_id__0': None, 'code__0': 'EXEC', 'is_active__0': True, 'name__1': 'Technology', 'manager_id__1': None, 'code__1': 'TECH', 'is_active__1': True, 'name__2': 'Operations', 'manager_id__2': None, 'code__2': 'OPS', 'is_active__2': True, 'name__3': 'Finance', 'manager_id__3': None, 'code__3': 'FIN', 'is_active__3': True}
+
+2. Seeding admin user...
+2025-12-01 12:47:23,911 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.username = %(username_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,911 INFO sqlalchemy.engine.Engine [generated in 0.00019s] {'username_1': 'netadmin', 'param_1': 1}
+2025-12-01 12:47:23,912 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:23,912 INFO sqlalchemy.engine.Engine [cached since 0.00859s ago] {'code_1': 'EXEC', 'param_1': 1}
+(trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+Created admin user: netadmin
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine INSERT INTO users (username, email, password_hash, first_name, last_name, department_id, role, hire_date, is_active, created_at, updated_at) VALUES (%(username)s, %(email)s, %(password_hash)s, %(first_name)s, %(last_name)s, %(department_id)s, %(role)s, %(hire_date)s, %(is_active)s, now(), now()) RETURNING users.id, users.created_at, users.updated_at
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine [generated in 0.00025s] {'username': 'netadmin', 'email': 'netadmin@haventech.com', 'password_hash': '$2b$12$s/0PO/xT1Eo7eExc4Wa3.usAlGrGoceJ3PBs6Q1SU1Qw73l1stkUW', 'first_name': 'System', 'last_name': 'Administrator', 'department_id': 5, 'role': 'admin', 'hire_date': datetime.date(2024, 1, 1), 'is_active': True}
+
+3. Seeding market holidays...
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine [generated in 0.00022s] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created NYSE holiday: New Year's Day (2025-01-01)
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,110 INFO sqlalchemy.engine.Engine [cached since 0.001792s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created NYSE holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:47:24,126 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,126 INFO sqlalchemy.engine.Engine [cached since 0.003103s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created NYSE holiday: Presidents Day (2025-02-17)
+2025-12-01 12:47:24,127 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,127 INFO sqlalchemy.engine.Engine [cached since 0.004045s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created NYSE holiday: Good Friday (2025-04-18)
+2025-12-01 12:47:24,128 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,128 INFO sqlalchemy.engine.Engine [cached since 0.004827s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created NYSE holiday: Memorial Day (2025-05-26)
+2025-12-01 12:47:24,129 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,129 INFO sqlalchemy.engine.Engine [cached since 0.005636s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created NYSE holiday: Juneteenth (2025-06-19)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.006784s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created NYSE holiday: Independence Day (2025-07-04)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.007742s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created NYSE holiday: Labor Day (2025-09-01)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.008729s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created NYSE holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.00953s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created NYSE holiday: Christmas Day (2025-12-25)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.01031s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created CME holiday: New Year's Day (2025-01-01)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.01105s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created CME holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.01189s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created CME holiday: Presidents Day (2025-02-17)
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,130 INFO sqlalchemy.engine.Engine [cached since 0.01272s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created CME holiday: Good Friday (2025-04-18)
+2025-12-01 12:47:24,137 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,137 INFO sqlalchemy.engine.Engine [cached since 0.01356s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created CME holiday: Memorial Day (2025-05-26)
+2025-12-01 12:47:24,138 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,138 INFO sqlalchemy.engine.Engine [cached since 0.01441s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created CME holiday: Juneteenth (2025-06-19)
+2025-12-01 12:47:24,138 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,139 INFO sqlalchemy.engine.Engine [cached since 0.01519s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created CME holiday: Independence Day (2025-07-04)
+2025-12-01 12:47:24,139 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,139 INFO sqlalchemy.engine.Engine [cached since 0.01591s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created CME holiday: Labor Day (2025-09-01)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.01673s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created CME holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.01751s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created CME holiday: Christmas Day (2025-12-25)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.01822s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created CBOE holiday: New Year's Day (2025-01-01)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.01901s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created CBOE holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.01971s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created CBOE holiday: Presidents Day (2025-02-17)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.02054s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created CBOE holiday: Good Friday (2025-04-18)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.0213s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created CBOE holiday: Memorial Day (2025-05-26)
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,140 INFO sqlalchemy.engine.Engine [cached since 0.02211s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created CBOE holiday: Juneteenth (2025-06-19)
+2025-12-01 12:47:24,146 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,146 INFO sqlalchemy.engine.Engine [cached since 0.02305s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created CBOE holiday: Independence Day (2025-07-04)
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine [cached since 0.02395s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created CBOE holiday: Labor Day (2025-09-01)
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine [cached since 0.02487s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created CBOE holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine [cached since 0.02568s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created CBOE holiday: Christmas Day (2025-12-25)
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine INSERT INTO market_holidays (holiday_date, name, market, year, is_observed, created_at) SELECT p0::DATE, p1::VARCHAR, p2::VARCHAR, p3::INTEGER, p4::BOOLEAN, p5::TIMESTAMP WITHOUT TIME ZONE FROM (VALUES (%(holiday_date__0)s, %(name__0)s, %(market__0)s ... 2946 characters truncated ... BY sen_counter RETURNING market_holidays.id, market_holidays.created_at, market_holidays.id AS id__1
+2025-12-01 12:47:24,147 INFO sqlalchemy.engine.Engine [generated in 0.00010s (insertmanyvalues) 1/1 (ordered)] {'holiday_date__0': datetime.date(2025, 1, 1), 'name__0': "New Year's Day", 'market__0': 'NYSE', 'is_observed__0': True, 'year__0': 2025, 'holiday_date__1': datetime.date(2025, 1, 20), 'name__1': 'Martin Luther King Jr. Day', 'market__1': 'NYSE', 'is_observed__1': True, 'year__1': 2025, 'holiday_date__2': datetime.date(2025, 2, 17), 'name__2': 'Presidents Day', 'market__2': 'NYSE', 'is_observed__2': True, 'year__2': 2025, 'holiday_date__3': datetime.date(2025, 4, 18), 'name__3': 'Good Friday', 'market__3': 'NYSE', 'is_observed__3': True, 'year__3': 2025, 'holiday_date__4': datetime.date(2025, 5, 26), 'name__4': 'Memorial Day', 'market__4': 'NYSE', 'is_observed__4': True, 'year__4': 2025, 'holiday_date__5': datetime.date(2025, 6, 19), 'name__5': 'Juneteenth', 'market__5': 'NYSE', 'is_observed__5': True, 'year__5': 2025, 'holiday_date__6': datetime.date(2025, 7, 4), 'name__6': 'Independence Day', 'market__6': 'NYSE', 'is_observed__6': True, 'year__6': 2025, 'holiday_date__7': datetime.date(2025, 9, 1), 'name__7': 'Labor Day', 'market__7': 'NYSE', 'is_observed__7': True, 'year__7': 2025, 'holiday_date__8': datetime.date(2025, 11, 27), 'name__8': 'Thanksgiving Day', 'market__8': 'NYSE', 'is_observed__8': True, 'year__8': 2025, 'holiday_date__9': datetime.date(2025, 12, 25), 'name__9': 'Christmas Day', 'market__9': 'NYSE', 'is_observed__9': True, 'year__9': 2025 ... 50 parameters truncated ... 'holiday_date__20': datetime.date(2025, 1, 1), 'name__20': "New Year's Day", 'market__20': 'CBOE', 'is_observed__20': True, 'year__20': 2025, 'holiday_date__21': datetime.date(2025, 1, 20), 'name__21': 'Martin Luther King Jr. Day', 'market__21': 'CBOE', 'is_observed__21': True, 'year__21': 2025, 'holiday_date__22': datetime.date(2025, 2, 17), 'name__22': 'Presidents Day', 'market__22': 'CBOE', 'is_observed__22': True, 'year__22': 2025, 'holiday_date__23': datetime.date(2025, 4, 18), 'name__23': 'Good Friday', 'market__23': 'CBOE', 'is_observed__23': True, 'year__23': 2025, 'holiday_date__24': datetime.date(2025, 5, 26), 'name__24': 'Memorial Day', 'market__24': 'CBOE', 'is_observed__24': True, 'year__24': 2025, 'holiday_date__25': datetime.date(2025, 6, 19), 'name__25': 'Juneteenth', 'market__25': 'CBOE', 'is_observed__25': True, 'year__25': 2025, 'holiday_date__26': datetime.date(2025, 7, 4), 'name__26': 'Independence Day', 'market__26': 'CBOE', 'is_observed__26': True, 'year__26': 2025, 'holiday_date__27': datetime.date(2025, 9, 1), 'name__27': 'Labor Day', 'market__27': 'CBOE', 'is_observed__27': True, 'year__27': 2025, 'holiday_date__28': datetime.date(2025, 11, 27), 'name__28': 'Thanksgiving Day', 'market__28': 'CBOE', 'is_observed__28': True, 'year__28': 2025, 'holiday_date__29': datetime.date(2025, 12, 25), 'name__29': 'Christmas Day', 'market__29': 'CBOE', 'is_observed__29': True, 'year__29': 2025}
+
+4. Seeding admin PTO balance...
+2025-12-01 12:47:24,155 INFO sqlalchemy.engine.Engine SELECT pto_balances.id AS pto_balances_id, pto_balances.user_id AS pto_balances_user_id, pto_balances.year AS pto_balances_year, pto_balances.vacation_total AS pto_balances_vacation_total, pto_balances.vacation_used AS pto_balances_vacation_used, pto_balances.vacation_pending AS pto_balances_vacation_pending, pto_balances.sick_total AS pto_balances_sick_total, pto_balances.sick_used AS pto_balances_sick_used, pto_balances.personal_total AS pto_balances_personal_total, pto_balances.personal_used AS pto_balances_personal_used, pto_balances.remote_weekly_used AS pto_balances_remote_weekly_used, pto_balances.created_at AS pto_balances_created_at, pto_balances.updated_at AS pto_balances_updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:47:24,156 INFO sqlalchemy.engine.Engine [generated in 0.00026s] {'user_id_1': 2, 'year_1': 2025, 'param_1': 1}
+2025-12-01 12:47:24,156 INFO sqlalchemy.engine.Engine ROLLBACK
+
+❌ Error during seeding: 'remote_work_used' is an invalid keyword argument for PTOBalance
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 182, in <module>
+    main()
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 166, in main
+    seed_admin_pto_balance(session, admin_user)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 126, in seed_admin_pto_balance
+    pto_balance = PTOBalance(
+                  ^^^^^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remote_work_used' is an invalid keyword argument for PTOBalance
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> python -m scripts.seed
+Starting database seeding...
+
+1. Seeding departments...
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine select current_schema()
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [generated in 0.00022s] {'code_1': 'EXEC', 'param_1': 1}
+Created department: Executive (EXEC)
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [cached since 0.002177s ago] {'code_1': 'TECH', 'param_1': 1}
+Created department: Technology (TECH)
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,088 INFO sqlalchemy.engine.Engine [cached since 0.0031s ago] {'code_1': 'OPS', 'param_1': 1}
+Created department: Operations (OPS)
+2025-12-01 12:50:54,103 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,105 INFO sqlalchemy.engine.Engine [cached since 0.004394s ago] {'code_1': 'FIN', 'param_1': 1}
+Created department: Finance (FIN)
+2025-12-01 12:50:54,107 INFO sqlalchemy.engine.Engine INSERT INTO departments (name, code, manager_id, is_active, created_at) SELECT p0::VARCHAR, p1::VARCHAR, p2::INTEGER, p3::BOOLEAN, p4::TIMESTAMP WITHOUT TIME ZONE FROM (VALUES (%(name__0)s, %(code__0)s, %(manager_id__0)s, %(is_active__0)s, now(), 0), ... 264 characters truncated ... nter) ORDER BY sen_counter RETURNING departments.id, departments.created_at, departments.id AS id__1
+2025-12-01 12:50:54,107 INFO sqlalchemy.engine.Engine [generated in 0.00009s (insertmanyvalues) 1/1 (ordered)] {'manager_id__0': None, 'is_active__0': True, 'code__0': 'EXEC', 'name__0': 'Executive', 'manager_id__1': None, 'is_active__1': True, 'code__1': 'TECH', 'name__1': 'Technology', 'manager_id__2': None, 'is_active__2': True, 'code__2': 'OPS', 'name__2': 'Operations', 'manager_id__3': None, 'is_active__3': True, 'code__3': 'FIN', 'name__3': 'Finance'}
+
+2. Seeding admin user...
+2025-12-01 12:50:54,109 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.username = %(username_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,110 INFO sqlalchemy.engine.Engine [generated in 0.00026s] {'username_1': 'netadmin', 'param_1': 1}
+2025-12-01 12:50:54,111 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.name AS departments_name, departments.code AS departments_code, departments.manager_id AS departments_manager_id, departments.is_active AS departments_is_active, departments.created_at AS departments_created_at
+FROM departments
+WHERE departments.code = %(code_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,111 INFO sqlalchemy.engine.Engine [cached since 0.01108s ago] {'code_1': 'EXEC', 'param_1': 1}
+(trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+Created admin user: netadmin
+2025-12-01 12:50:54,320 INFO sqlalchemy.engine.Engine INSERT INTO users (username, email, password_hash, first_name, last_name, department_id, role, hire_date, is_active, created_at, updated_at) VALUES (%(username)s, %(email)s, %(password_hash)s, %(first_name)s, %(last_name)s, %(department_id)s, %(role)s, %(hire_date)s, %(is_active)s, now(), now()) RETURNING users.id, users.created_at, users.updated_at
+2025-12-01 12:50:54,320 INFO sqlalchemy.engine.Engine [generated in 0.00035s] {'username': 'netadmin', 'email': 'netadmin@haventech.com', 'password_hash': '$2b$12$ZV2EagkG/Ogq6rVoG4dBWOSgZyVRWZ8eqk23A.nYgQAwjjhHLmtYa', 'first_name': 'System', 'last_name': 'Administrator', 'department_id': 9, 'role': 'admin', 'hire_date': datetime.date(2024, 1, 1), 'is_active': True}
+
+3. Seeding market holidays...
+2025-12-01 12:50:54,322 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,322 INFO sqlalchemy.engine.Engine [generated in 0.00023s] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created NYSE holiday: New Year's Day (2025-01-01)
+2025-12-01 12:50:54,324 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,324 INFO sqlalchemy.engine.Engine [cached since 0.002155s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created NYSE holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:50:54,325 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,325 INFO sqlalchemy.engine.Engine [cached since 0.003105s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created NYSE holiday: Presidents Day (2025-02-17)
+2025-12-01 12:50:54,326 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,326 INFO sqlalchemy.engine.Engine [cached since 0.003974s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created NYSE holiday: Good Friday (2025-04-18)
+2025-12-01 12:50:54,326 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,327 INFO sqlalchemy.engine.Engine [cached since 0.004817s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created NYSE holiday: Memorial Day (2025-05-26)
+2025-12-01 12:50:54,327 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,328 INFO sqlalchemy.engine.Engine [cached since 0.005875s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created NYSE holiday: Juneteenth (2025-06-19)
+2025-12-01 12:50:54,328 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,329 INFO sqlalchemy.engine.Engine [cached since 0.006818s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created NYSE holiday: Independence Day (2025-07-04)
+2025-12-01 12:50:54,329 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,329 INFO sqlalchemy.engine.Engine [cached since 0.007723s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created NYSE holiday: Labor Day (2025-09-01)
+2025-12-01 12:50:54,330 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,330 INFO sqlalchemy.engine.Engine [cached since 0.008734s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created NYSE holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:50:54,331 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,331 INFO sqlalchemy.engine.Engine [cached since 0.009728s ago] {'market_1': 'NYSE', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created NYSE holiday: Christmas Day (2025-12-25)
+2025-12-01 12:50:54,332 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,332 INFO sqlalchemy.engine.Engine [cached since 0.01064s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created CME holiday: New Year's Day (2025-01-01)
+2025-12-01 12:50:54,333 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,333 INFO sqlalchemy.engine.Engine [cached since 0.01151s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created CME holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:50:54,334 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,334 INFO sqlalchemy.engine.Engine [cached since 0.01233s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created CME holiday: Presidents Day (2025-02-17)
+2025-12-01 12:50:54,335 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,335 INFO sqlalchemy.engine.Engine [cached since 0.0133s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created CME holiday: Good Friday (2025-04-18)
+2025-12-01 12:50:54,336 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,336 INFO sqlalchemy.engine.Engine [cached since 0.01416s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created CME holiday: Memorial Day (2025-05-26)
+2025-12-01 12:50:54,337 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,337 INFO sqlalchemy.engine.Engine [cached since 0.0153s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created CME holiday: Juneteenth (2025-06-19)
+2025-12-01 12:50:54,338 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,339 INFO sqlalchemy.engine.Engine [cached since 0.01633s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created CME holiday: Independence Day (2025-07-04)
+2025-12-01 12:50:54,339 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,340 INFO sqlalchemy.engine.Engine [cached since 0.01736s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created CME holiday: Labor Day (2025-09-01)
+2025-12-01 12:50:54,340 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,340 INFO sqlalchemy.engine.Engine [cached since 0.01831s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created CME holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:50:54,341 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,341 INFO sqlalchemy.engine.Engine [cached since 0.01924s ago] {'market_1': 'CME', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created CME holiday: Christmas Day (2025-12-25)
+2025-12-01 12:50:54,342 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,342 INFO sqlalchemy.engine.Engine [cached since 0.02019s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 1, 1), 'param_1': 1}
+Created CBOE holiday: New Year's Day (2025-01-01)
+2025-12-01 12:50:54,343 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,343 INFO sqlalchemy.engine.Engine [cached since 0.02112s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 1, 20), 'param_1': 1}
+Created CBOE holiday: Martin Luther King Jr. Day (2025-01-20)
+2025-12-01 12:50:54,344 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,344 INFO sqlalchemy.engine.Engine [cached since 0.02193s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 2, 17), 'param_1': 1}
+Created CBOE holiday: Presidents Day (2025-02-17)
+2025-12-01 12:50:54,345 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,345 INFO sqlalchemy.engine.Engine [cached since 0.02281s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 4, 18), 'param_1': 1}
+Created CBOE holiday: Good Friday (2025-04-18)
+2025-12-01 12:50:54,346 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,346 INFO sqlalchemy.engine.Engine [cached since 0.02367s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 5, 26), 'param_1': 1}
+Created CBOE holiday: Memorial Day (2025-05-26)
+2025-12-01 12:50:54,346 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,347 INFO sqlalchemy.engine.Engine [cached since 0.02444s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 6, 19), 'param_1': 1}
+Created CBOE holiday: Juneteenth (2025-06-19)
+2025-12-01 12:50:54,347 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,347 INFO sqlalchemy.engine.Engine [cached since 0.02527s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 7, 4), 'param_1': 1}
+Created CBOE holiday: Independence Day (2025-07-04)
+2025-12-01 12:50:54,348 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,348 INFO sqlalchemy.engine.Engine [cached since 0.02603s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 9, 1), 'param_1': 1}
+Created CBOE holiday: Labor Day (2025-09-01)
+2025-12-01 12:50:54,349 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,349 INFO sqlalchemy.engine.Engine [cached since 0.02681s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 11, 27), 'param_1': 1}
+Created CBOE holiday: Thanksgiving Day (2025-11-27)
+2025-12-01 12:50:54,350 INFO sqlalchemy.engine.Engine SELECT market_holidays.id AS market_holidays_id, market_holidays.holiday_date AS market_holidays_holiday_date, market_holidays.name AS market_holidays_name, market_holidays.market AS market_holidays_market, market_holidays.year AS market_holidays_year, market_holidays.is_observed AS market_holidays_is_observed, market_holidays.created_at AS market_holidays_created_at
+FROM market_holidays
+WHERE market_holidays.market = %(market_1)s AND market_holidays.holiday_date = %(holiday_date_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,350 INFO sqlalchemy.engine.Engine [cached since 0.02766s ago] {'market_1': 'CBOE', 'holiday_date_1': datetime.date(2025, 12, 25), 'param_1': 1}
+Created CBOE holiday: Christmas Day (2025-12-25)
+2025-12-01 12:50:54,351 INFO sqlalchemy.engine.Engine INSERT INTO market_holidays (holiday_date, name, market, year, is_observed, created_at) SELECT p0::DATE, p1::VARCHAR, p2::VARCHAR, p3::INTEGER, p4::BOOLEAN, p5::TIMESTAMP WITHOUT TIME ZONE FROM (VALUES (%(holiday_date__0)s, %(name__0)s, %(market__0)s ... 2946 characters truncated ... BY sen_counter RETURNING market_holidays.id, market_holidays.created_at, market_holidays.id AS id__1
+2025-12-01 12:50:54,352 INFO sqlalchemy.engine.Engine [generated in 0.00010s (insertmanyvalues) 1/1 (ordered)] {'is_observed__0': True, 'name__0': "New Year's Day", 'year__0': 2025, 'market__0': 'NYSE', 'holiday_date__0': datetime.date(2025, 1, 1), 'is_observed__1': True, 'name__1': 'Martin Luther King Jr. Day', 'year__1': 2025, 'market__1': 'NYSE', 'holiday_date__1': datetime.date(2025, 1, 20), 'is_observed__2': True, 'name__2': 'Presidents Day', 'year__2': 2025, 'market__2': 'NYSE', 'holiday_date__2': datetime.date(2025, 2, 17), 'is_observed__3': True, 'name__3': 'Good Friday', 'year__3': 2025, 'market__3': 'NYSE', 'holiday_date__3': datetime.date(2025, 4, 18), 'is_observed__4': True, 'name__4': 'Memorial Day', 'year__4': 2025, 'market__4': 'NYSE', 'holiday_date__4': datetime.date(2025, 5, 26), 'is_observed__5': True, 'name__5': 'Juneteenth', 'year__5': 2025, 'market__5': 'NYSE', 'holiday_date__5': datetime.date(2025, 6, 19), 'is_observed__6': True, 'name__6': 'Independence Day', 'year__6': 2025, 'market__6': 'NYSE', 'holiday_date__6': datetime.date(2025, 7, 4), 'is_observed__7': True, 'name__7': 'Labor Day', 'year__7': 2025, 'market__7': 'NYSE', 'holiday_date__7': datetime.date(2025, 9, 1), 'is_observed__8': True, 'name__8': 'Thanksgiving Day', 'year__8': 2025, 'market__8': 'NYSE', 'holiday_date__8': datetime.date(2025, 11, 27), 'is_observed__9': True, 'name__9': 'Christmas Day', 'year__9': 2025, 'market__9': 'NYSE', 'holiday_date__9': datetime.date(2025, 12, 25) ... 50 parameters truncated ... 'is_observed__20': True, 'name__20': "New Year's Day", 'year__20': 2025, 'market__20': 'CBOE', 'holiday_date__20': datetime.date(2025, 1, 1), 'is_observed__21': True, 'name__21': 'Martin Luther King Jr. Day', 'year__21': 2025, 'market__21': 'CBOE', 'holiday_date__21': datetime.date(2025, 1, 20), 'is_observed__22': True, 'name__22': 'Presidents Day', 'year__22': 2025, 'market__22': 'CBOE', 'holiday_date__22': datetime.date(2025, 2, 17), 'is_observed__23': True, 'name__23': 'Good Friday', 'year__23': 2025, 'market__23': 'CBOE', 'holiday_date__23': datetime.date(2025, 4, 18), 'is_observed__24': True, 'name__24': 'Memorial Day', 'year__24': 2025, 'market__24': 'CBOE', 'holiday_date__24': datetime.date(2025, 5, 26), 'is_observed__25': True, 'name__25': 'Juneteenth', 'year__25': 2025, 'market__25': 'CBOE', 'holiday_date__25': datetime.date(2025, 6, 19), 'is_observed__26': True, 'name__26': 'Independence Day', 'year__26': 2025, 'market__26': 'CBOE', 'holiday_date__26': datetime.date(2025, 7, 4), 'is_observed__27': True, 'name__27': 'Labor Day', 'year__27': 2025, 'market__27': 'CBOE', 'holiday_date__27': datetime.date(2025, 9, 1), 'is_observed__28': True, 'name__28': 'Thanksgiving Day', 'year__28': 2025, 'market__28': 'CBOE', 'holiday_date__28': datetime.date(2025, 11, 27), 'is_observed__29': True, 'name__29': 'Christmas Day', 'year__29': 2025, 'market__29': 'CBOE', 'holiday_date__29': datetime.date(2025, 12, 25)}
+
+4. Seeding admin PTO balance...
+2025-12-01 12:50:54,355 INFO sqlalchemy.engine.Engine SELECT pto_balances.id AS pto_balances_id, pto_balances.user_id AS pto_balances_user_id, pto_balances.year AS pto_balances_year, pto_balances.vacation_total AS pto_balances_vacation_total, pto_balances.vacation_used AS pto_balances_vacation_used, pto_balances.vacation_pending AS pto_balances_vacation_pending, pto_balances.sick_total AS pto_balances_sick_total, pto_balances.sick_used AS pto_balances_sick_used, pto_balances.personal_total AS pto_balances_personal_total, pto_balances.personal_used AS pto_balances_personal_used, pto_balances.remote_weekly_used AS pto_balances_remote_weekly_used, pto_balances.created_at AS pto_balances_created_at, pto_balances.updated_at AS pto_balances_updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+ LIMIT %(param_1)s
+2025-12-01 12:50:54,356 INFO sqlalchemy.engine.Engine [generated in 0.00025s] {'user_id_1': 3, 'year_1': 2025, 'param_1': 1}
+2025-12-01 12:50:54,357 INFO sqlalchemy.engine.Engine ROLLBACK
+
+❌ Error during seeding: 'remote_work_used' is an invalid keyword argument for PTOBalance
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 182, in <module>
+    main()
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 166, in main
+    seed_admin_pto_balance(session, admin_user)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\scripts\seed.py", line 126, in seed_admin_pto_balance
+    pto_balance = PTOBalance(
+                  ^^^^^^^^^^^
+  File "<string>", line 4, in __init__
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "C:\Users\jlaboy\codelab\projects\timecalendar\venv\Lib\site-packages\sqlalchemy\orm\decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remote_work_used' is an invalid keyword argument for PTOBalance
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> 
