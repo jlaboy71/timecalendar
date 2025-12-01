@@ -2,11 +2,16 @@
 User model for the PTO and Market Calendar System.
 """
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+
+if TYPE_CHECKING:
+    from .department import Department
+    from .pto_request import PTORequest
+    from .pto_balance import PTOBalance
 
 
 class User(Base):

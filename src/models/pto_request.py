@@ -3,11 +3,14 @@ PTO Request model for the PTO and Market Calendar System.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Integer, Date, DateTime, Numeric, Text, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+
+if TYPE_CHECKING:
+    from .user import User
 
 
 class PTORequest(Base):

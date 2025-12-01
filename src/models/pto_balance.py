@@ -3,10 +3,14 @@ PTO Balance model for the PTO and Market Calendar System.
 """
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from sqlalchemy import Integer, Numeric, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+
+if TYPE_CHECKING:
+    from .user import User
 
 
 class PTOBalance(Base):
