@@ -132,7 +132,7 @@ def seed_admin_pto_balance(session, admin_user):
         sick_used=Decimal("0.00"),
         personal_total=Decimal("3.00"),
         personal_used=Decimal("0.00"),
-        remote_work_used=Decimal("0.00")
+        remote_weekly_used=Decimal("0.00")
     )
     
     session.add(pto_balance)
