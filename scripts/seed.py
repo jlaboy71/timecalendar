@@ -22,10 +22,10 @@ from src.models import User, Department, MarketHoliday, PTOBalance
 def seed_departments(session):
     """Create initial departments."""
     departments = [
-        {"name": "Executive", "code": "EXEC", "description": "Executive leadership team"},
-        {"name": "Technology", "code": "TECH", "description": "Technology and development team"},
-        {"name": "Operations", "code": "OPS", "description": "Operations and support team"},
-        {"name": "Finance", "code": "FIN", "description": "Finance and accounting team"},
+        {"name": "Executive", "code": "EXEC"},
+        {"name": "Technology", "code": "TECH"},
+        {"name": "Operations", "code": "OPS"},
+        {"name": "Finance", "code": "FIN"},
     ]
     
     for dept_data in departments:
@@ -100,7 +100,7 @@ def seed_market_holidays(session):
             if not existing:
                 holiday = MarketHoliday(
                     market=market,
-                    holiday_name=holiday_data["name"],
+                    name=holiday_data["name"],
                     holiday_date=holiday_data["date"],
                     is_observed=True
                 )
