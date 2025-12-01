@@ -7,9 +7,9 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from src.models.pto_request import PTORequest
-from src.models.user import User
-from src.schemas.pto_schemas import PTORequestCreate
+from ..models.pto_request import PTORequest
+from ..models.user import User
+from ..schemas.pto_schemas import PTORequestCreate
 from .balance_service import BalanceService
 
 

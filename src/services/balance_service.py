@@ -7,8 +7,8 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from src.models.pto_balance import PTOBalance
-from src.schemas.pto_schemas import PTOBalanceUpdate
+from ..models.pto_balance import PTOBalance
+from ..schemas.pto_schemas import PTOBalanceUpdate
 
 
 class BalanceService:
