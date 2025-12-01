@@ -102,7 +102,7 @@ def seed_market_holidays(session):
                     market=market,
                     name=holiday_data["name"],
                     holiday_date=holiday_data["date"],
-                    year=holiday_data["date"].year,
+                    year=2025,
                     is_observed=True
                 )
                 session.add(holiday)
