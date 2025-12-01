@@ -79,7 +79,7 @@ def test_phase2_services():
             last_name='User',
             role='employee',
             hire_date=date.today(),
-            department_id=1,  # Assuming department 1 exists from seed data
+            department_id=None,  # No department required for testing
             is_active=True
         )
         db.add(test_user)
