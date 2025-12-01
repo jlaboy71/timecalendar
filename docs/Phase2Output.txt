@@ -1,0 +1,402 @@
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> aider --yes-always src/services/__init__.py src/models/pto_balance.py src/schemas/pto_schemas.py
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Using sonnet model with API key from environment.
+Creating empty file C:\Users\jlaboy\codelab\projects\TimeCalendar\src\schemas\pto_schemas.py
+Aider v0.86.1
+Main model: anthropic/claude-sonnet-4-20250514 with diff edit format, infinite output
+Weak model: anthropic/claude-3-5-haiku-20241022
+Git repo: .git with 31 files
+Repo-map: using 4096 tokens, auto refresh
+Added src\models\pto_balance.py to the chat.
+Added src\schemas\pto_schemas.py to the chat.
+Added src\services\__init__.py to the chat.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+src\models\pto_balance.py src\schemas\pto_schemas.py src\services\__init__.py
+>    - Commit and return updated balance
+>
+> 6. adjust_vacation_used(balance_id: int, days: Decimal, is_pending: bool = False) -> PTOBalance
+>    - Get balance by ID (raise ValueError if not found)
+>    - If is_pending: adjust vacation_pending
+>    - Else: adjust vacation_used
+>    - Commit and return balance
+>
+> 7. adjust_sick_used(balance_id: int, days: Decimal) -> PTOBalance
+>    - Get balance by ID (raise ValueError if not found)
+>    - Adjust sick_used
+>    - Commit and return balance
+>
+> 8. adjust_personal_used(balance_id: int, days: Decimal) -> PTOBalance
+>    - Get balance by ID (raise ValueError if not found)
+>    - Adjust personal_used
+>    - Commit and return balance
+>
+> 9. move_pending_to_used(balance_id: int, days: Decimal) -> PTOBalance
+>    - Decrease vacation_pending by days
+>    - Increase vacation_used by days
+>    - Used when request is approved
+>
+> 10. remove_pending(balance_id: int, days: Decimal) -> PTOBalance
+>     - Decrease vacation_pending by days
+>     - Used when request is denied
+>
+> Use SQLAlchemy 2.0 syntax, comprehensive docstrings, and type hints.
+>
+> Update src/services/__init__.py to export BalanceService.
+
+I'll create the BalanceService class and update the services init.py file. First, I need to create the PTOBalanceUpdate schema that will be used in the service.
+
+src\schemas\pto_schemas.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+PTO-related Pydantic schemas for the PTO and Market Calendar System.
+"""
+from decimal import Decimal
+from typing import Optional
+from pydantic import BaseModel, Field
+
+
+class PTOBalanceUpdate(BaseModel):
+    """Schema for updating PTO balance totals."""
+    vacation_total: Optional[Decimal] = Field(None, ge=0, description="Total vacation days allocated")
+    sick_total: Optional[Decimal] = Field(None, ge=0, description="Total sick days allocated")
+    personal_total: Optional[Decimal] = Field(None, ge=0, description="Total personal days allocated")
+    remote_weekly_used: Optional[int] = Field(None, ge=0, description="Remote work days used this week")
+
+    class Config:
+        """Pydantic configuration."""
+        from_attributes = True
+>>>>>>> REPLACE
+
+
+src\services\balance_service.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Balance service for managing PTO balances in the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from decimal import Decimal
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+
+from src.models.pto_balance import PTOBalance
+from src.schemas.pto_schemas import PTOBalanceUpdate
+
+
+class BalanceService:
+    """
+    Service class for managing PTO balance operations.
+    
+    This service provides methods for creating, retrieving, and updating
+    PTO balances for users across different years.
+    """
+                                                                                                                                                                                                                                                                                                                                                                   
+    def __init__(self, db: Session) -> None:
+        """
+        Initialize the BalanceService with a database session.
+        
+        Args:
+            db: SQLAlchemy database session
+        """
+        self.db = db
+
+    def get_or_create_balance(self, user_id: int, year: int) -> PTOBalance:
+        """
+        Get existing balance for user/year or create new one with zeros.
+
+        Args:
+            user_id: ID of the user
+            year: Year for the balance
+            
+        Returns:
+            PTOBalance: The existing or newly created balance
+        """
+        # Try to get existing balance
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id == user_id,
+            PTOBalance.year == year
+        )
+        balance = self.db.execute(stmt).scalar_one_or_none()
+
+        if balance is None:
+            # Create new balance with zeros
+            balance = PTOBalance(
+                user_id=user_id,
+                year=year,
+                vacation_total=Decimal('0.00'),
+                vacation_used=Decimal('0.00'),
+                vacation_pending=Decimal('0.00'),
+                sick_total=Decimal('0.00'),
+                sick_used=Decimal('0.00'),
+                personal_total=Decimal('0.00'),
+                personal_used=Decimal('0.00'),
+                remote_weekly_used=0
+            )
+            self.db.add(balance)
+            self.db.commit()
+            self.db.refresh(balance)
+
+        return balance
+
+    def get_balance_by_id(self, balance_id: int) -> Optional[PTOBalance]:
+        """
+        Get balance by ID.
+
+        Args:
+            balance_id: ID of the balance
+            
+        Returns:
+            Optional[PTOBalance]: The balance or None if not found
+        """
+        stmt = select(PTOBalance).where(PTOBalance.id == balance_id)
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_user_balances(self, user_id: int) -> List[PTOBalance]:
+        """
+        Get all balances for a user ordered by year descending.
+
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            List[PTOBalance]: List of balances ordered by year descending
+        """
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id == user_id
+        ).order_by(PTOBalance.year.desc())
+
+        result = self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    def get_current_year_balance(self, user_id: int) -> Optional[PTOBalance]:
+        """
+        Get balance for current year.
+
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            Optional[PTOBalance]: The current year balance or None if not found
+        """
+        current_year = datetime.now().year
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id == user_id,
+            PTOBalance.year == current_year
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def update_balance_totals(
+        self,
+        balance_id: int,
+        balance_data: PTOBalanceUpdate
+    ) -> Optional[PTOBalance]:
+        """
+        Update balance totals with provided data.
+
+        Args:
+            balance_id: ID of the balance to update
+            balance_data: Data containing fields to update
+            
+        Returns:
+            Optional[PTOBalance]: Updated balance or None if not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            return None
+
+        # Update only provided fields
+        update_data = balance_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(balance, field, value)
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def adjust_vacation_used(
+        self,
+        balance_id: int,
+        days: Decimal,
+        is_pending: bool = False
+    ) -> PTOBalance:
+        """
+        Adjust vacation used or pending days.
+        
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to adjust (can be negative)
+            is_pending: If True, adjust pending; otherwise adjust used
+            
+        Returns:
+            PTOBalance: Updated balance
+            
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        if is_pending:
+            balance.vacation_pending += days
+        else:
+            balance.vacation_used += days
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def adjust_sick_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+        """
+        Adjust sick days used.
+        
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to adjust (can be negative)
+            
+        Returns:
+            PTOBalance: Updated balance
+            
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        balance.sick_used += days
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def adjust_personal_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+        """
+        Adjust personal days used.                                                                                                                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                                                                                                                                   
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to adjust (can be negative)
+            
+        Returns:
+            PTOBalance: Updated balance
+            
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        balance.personal_used += days
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def move_pending_to_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+        """
+        Move days from pending to used (when request is approved).
+        
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to move
+            
+        Returns:
+            PTOBalance: Updated balance
+            
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        balance.vacation_pending -= days
+        balance.vacation_used += days
+                                                                                                                                                                                                                                                                                                                                                                   
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def remove_pending(self, balance_id: int, days: Decimal) -> PTOBalance:
+        """
+        Remove days from pending (when request is denied).                                                                                                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                                                                                                                                                   
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to remove from pending
+            
+        Returns:
+            PTOBalance: Updated balance
+            
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        balance.vacation_pending -= days
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src\services_init_.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Services package for the PTO and Market Calendar System.
+"""
+from .balance_service import BalanceService
+                                                                                                                                                                                                                                                                                                                                                                   
+__all__ = [
+    'BalanceService',
+]
+>>>>>>> REPLACE
+
+
+The BalanceService class has been created with all the requested methods using SQLAlchemy 2.0 syntax, comprehensive docstrings, and proper type hints. The service provides complete CRUD operations for PTO balances including:
+
+ • Creating/retrieving balances by user and year
+ • Updating balance totals
+ • Adjusting used days for different PTO types
+ • Managing pending vacation requests (moving to used when approved, removing when denied)
+
+I also created the PTOBalanceUpdate schema in the pto_schemas.py file that's used by the update_balance_totals method.
+
+
+Tokens: 5.0k sent, 2.1k received. Cost: $0.05 message, $0.05 session.
+Committing src\schemas\pto_schemas.py before applying edits.
+
+src\services\balance_service.py                                                                                                                                                                                                                                                                                                                                    
+Committing src\services\__init__.py before applying edits.
+Unable to commit: Cmd('git') failed due to: exit code(128)
+  cmdline: git commit -m feat: add initial services and PTO schemas --no-verify -- C:\Users\jlaboy\codelab\projects\TimeCalendar\src\services\__init__.py C:\Users\jlaboy\codelab\projects\TimeCalendar\src\schemas\pto_schemas.py
+  stderr: 'fatal: cannot do a partial commit during a merge.'
+Applied edit to src\services\balance_service.py
+Applied edit to src\services\__init__.py
+Applied edit to src\schemas\pto_schemas.py
+Unable to commit: Cmd('git') failed due to: exit code(128)
+  cmdline: git commit -m feat: implement BalanceService with comprehensive PTO balance management methods
+
+Co-authored-by: aider (anthropic/claude-sonnet-4-20250514) <aider@aider.chat> --no-verify -- C:\Users\jlaboy\codelab\projects\TimeCalendar\src\services\balance_service.py C:\Users\jlaboy\codelab\projects\TimeCalendar\src\services\__init__.py C:\Users\jlaboy\codelab\projects\TimeCalendar\src\schemas\pto_schemas.py
+  stderr: 'fatal: cannot do a partial commit during a merge.'
+Unable to commit: Cmd('git') failed due to: exit code(128)
+  cmdline: git commit -m style: run linter and format code
+
+Co-authored-by: aider (anthropic/claude-sonnet-4-20250514) <aider@aider.chat> --no-verify -- C:\Users\jlaboy\codelab\projects\TimeCalendar\src\services\balance_service.py C:\Users\jlaboy\codelab\projects\TimeCalendar\src\services\__init__.py C:\Users\jlaboy\codelab\projects\TimeCalendar\src\schemas\pto_schemas.py
+  stderr: 'fatal: cannot do a partial commit during a merge.'
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+src\models\pto_balance.py src\schemas\pto_schemas.py src\services\__init__.py src\services\balance_service.py
