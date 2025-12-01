@@ -1,0 +1,767 @@
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> aider --model sonnet
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Aider v0.86.1
+Main model: anthropic/claude-sonnet-4-20250514 with diff edit format, infinite output
+Weak model: anthropic/claude-3-5-haiku-20241022
+Git repo: .git with 10 files
+Repo-map: using 4096 tokens, auto refresh
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+>  The test should:
+>
+>  1. Test that all required packages are importable:
+>     - sqlalchemy
+>     - alembic
+>     - psycopg2
+>     - dotenv (from python-dotenv)
+>     - passlib
+>     - bcrypt
+>
+>  2. Test that .env file can be loaded:
+>     - Use load_dotenv() to load the .env file
+>     - Verify DATABASE_URL exists and is not empty
+>     - Verify SECRET_KEY exists and is not empty
+>     - Verify ENVIRONMENT exists
+>
+>  3. Test DATABASE_URL format:
+>     - Verify it starts with "postgresql://"
+>     - Verify it contains "@localhost"
+>     - Verify it ends with "/ptodb"
+>
+>  4. Test PostgreSQL connection:
+>     - Import create_engine from sqlalchemy
+>     - Create engine with DATABASE_URL
+>     - Try to connect to verify database exists
+>     - Close connection
+>
+>  Use pytest format with descriptive test function names.
+>  Each test should print what it's checking.
+>  Add helpful error messages if tests fail.
+
+I can create the new test file tests/test_environment.py since it doesn't exist yet. This will be a comprehensive test suite to verify your development environment is properly configured.
+
+tests/test_environment.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Test suite to verify development environment is properly configured.
+"""
+import os
+import pytest
+from dotenv import load_dotenv
+
+
+def test_required_packages_importable():
+    """Test that all required packages can be imported."""
+    print("Testing that all required packages are importable...")
+
+    try:
+        import sqlalchemy
+        print("✓ sqlalchemy imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import sqlalchemy: {e}")
+
+    try:
+        import alembic
+        print("✓ alembic imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import alembic: {e}")
+
+    try:
+        import psycopg2
+        print("✓ psycopg2 imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import psycopg2: {e}")
+
+    try:
+        from dotenv import load_dotenv
+        print("✓ dotenv imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import dotenv from python-dotenv: {e}")
+
+    try:
+        import passlib
+        print("✓ passlib imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import passlib: {e}")
+
+    try:
+        import bcrypt
+        print("✓ bcrypt imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import bcrypt: {e}")
+
+
+def test_env_file_loading():
+    """Test that .env file can be loaded and contains required variables."""
+    print("Testing .env file loading...")
+
+    # Load the .env file
+    env_loaded = load_dotenv()
+    if not env_loaded:
+        print("Warning: .env file not found or could not be loaded")
+    else:
+        print("✓ .env file loaded successfully")
+
+    # Check DATABASE_URL
+    database_url = os.getenv('DATABASE_URL')
+    if not database_url:
+        pytest.fail("DATABASE_URL environment variable is missing")
+    if not database_url.strip():
+        pytest.fail("DATABASE_URL environment variable is empty")
+    print("✓ DATABASE_URL exists and is not empty")
+
+    # Check SECRET_KEY
+    secret_key = os.getenv('SECRET_KEY')
+    if not secret_key:
+        pytest.fail("SECRET_KEY environment variable is missing")
+    if not secret_key.strip():
+        pytest.fail("SECRET_KEY environment variable is empty")
+    print("✓ SECRET_KEY exists and is not empty")
+
+    # Check ENVIRONMENT
+    environment = os.getenv('ENVIRONMENT')
+    if not environment:
+        pytest.fail("ENVIRONMENT environment variable is missing")
+    print("✓ ENVIRONMENT exists")
+
+
+def test_database_url_format():
+    """Test that DATABASE_URL has the correct format."""
+    print("Testing DATABASE_URL format...")
+
+    # Load environment variables
+    load_dotenv()
+    database_url = os.getenv('DATABASE_URL')
+
+    if not database_url:
+        pytest.fail("DATABASE_URL is not set - cannot test format")
+
+    # Test starts with postgresql://
+    if not database_url.startswith('postgresql://'):
+        pytest.fail(f"DATABASE_URL should start with 'postgresql://', got: {database_url}")
+    print("✓ DATABASE_URL starts with 'postgresql://'")
+
+    # Test contains @localhost
+    if '@localhost' not in database_url:
+        pytest.fail(f"DATABASE_URL should contain '@localhost', got: {database_url}")
+    print("✓ DATABASE_URL contains '@localhost'")
+
+    # Test ends with /ptodb
+    if not database_url.endswith('/ptodb'):
+        pytest.fail(f"DATABASE_URL should end with '/ptodb', got: {database_url}")
+    print("✓ DATABASE_URL ends with '/ptodb'")
+
+
+def test_postgresql_connection():
+    """Test that we can connect to the PostgreSQL database."""
+    print("Testing PostgreSQL connection...")
+
+    try:
+        from sqlalchemy import create_engine
+        print("✓ sqlalchemy.create_engine imported successfully")
+    except ImportError as e:
+        pytest.fail(f"Failed to import create_engine from sqlalchemy: {e}")
+
+    # Load environment variables
+    load_dotenv()
+    database_url = os.getenv('DATABASE_URL')
+
+    if not database_url:
+        pytest.fail("DATABASE_URL is not set - cannot test database connection")
+
+    try:
+        # Create engine
+        engine = create_engine(database_url)
+        print("✓ Database engine created successfully")
+
+        # Try to connect
+        with engine.connect() as connection:
+            print("✓ Successfully connected to PostgreSQL database")
+            print("✓ Connection closed successfully")
+
+    except Exception as e:
+        pytest.fail(f"Failed to connect to PostgreSQL database: {e}")
+>>>>>>> REPLACE
+
+
+
+pytest tests/test_environment.py -v
+
+
+
+Tokens: 2.8k sent, 1.0k received. Cost: $0.02 message, $0.02 session.
+
+tests/test_environment.py
+Create new file? (Y)es/(N)o [Yes]: y
+Applied edit to tests/test_environment.py
+Commit 2ecde3d feat: add comprehensive environment configuration test suite
+
+pytest tests/test_environment.py -v
+Run shell command? (Y)es/(N)o/(D)on't ask again [Yes]: y
+
+Running pytest tests/test_environment.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-7.4.3, pluggy-1.6.0 -- C:\Users\jlaboy\codelab\projects\TimeCalendar\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\jlaboy\codelab\projects\TimeCalendar
+collecting ... collected 4 items
+
+tests/test_environment.py::test_required_packages_importable PASSED      [ 25%]
+tests/test_environment.py::test_env_file_loading PASSED                  [ 50%]
+tests/test_environment.py::test_database_url_format PASSED               [ 75%]
+tests/test_environment.py::test_postgresql_connection FAILED             [100%]
+
+================================== FAILURES ===================================
+_________________________ test_postgresql_connection __________________________
+
+self = <sqlalchemy.engine.base.Connection object at 0x000001501DE99A10>
+engine = Engine(postgresql://user:***@localhost/ptodb), connection = None
+_has_events = None, _allow_revalidate = True, _allow_autobegin = True
+
+    def __init__(
+        self,
+        engine: Engine,
+        connection: Optional[PoolProxiedConnection] = None,
+        _has_events: Optional[bool] = None,
+        _allow_revalidate: bool = True,
+        _allow_autobegin: bool = True,
+    ):
+        """Construct a new Connection."""
+        self.engine = engine
+        self.dialect = dialect = engine.dialect
+
+        if connection is None:
+            try:
+>               self._dbapi_connection = engine.raw_connection()
+
+venv\Lib\site-packages\sqlalchemy\engine\base.py:145:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3292: in raw_connection
+    return self.pool.connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:452: in connect
+    return _ConnectionFairy._checkout(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:1269: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:716: in checkout
+    rec = pool._do_get()
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:169: in _do_get
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:167: in _do_get
+    return self._create_connection()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:393: in _create_connection
+    return _ConnectionRecord(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:678: in __init__
+    self.__connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:902: in __connect
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:898: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+venv\Lib\site-packages\sqlalchemy\engine\create.py:637: in connect
+    return dialect.connect(*cargs, **cparams)
+venv\Lib\site-packages\sqlalchemy\engine\default.py:616: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+dsn = 'host=localhost dbname=ptodb user=user password=netpass'
+connection_factory = None, cursor_factory = None
+kwargs = {'dbname': 'ptodb', 'host': 'localhost', 'password': 'netpass', 'user': 'user'}
+kwasync = {}
+
+    def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
+        """
+        Create a new database connection.
+
+        The connection parameters can be specified as a string:
+
+            conn = psycopg2.connect("dbname=test user=postgres password=secret")
+
+        or using a set of keyword arguments:
+
+            conn = psycopg2.connect(database="test", user="postgres", password="secret")
+
+        Or as a mix of both. The basic connection parameters are:
+
+        - *dbname*: the database name
+        - *database*: the database name (only as keyword argument)
+        - *user*: user name used to authenticate
+        - *password*: password used to authenticate
+        - *host*: database host address (defaults to UNIX socket if not provided)
+        - *port*: connection port number (defaults to 5432 if not provided)
+
+        Using the *connection_factory* parameter a different class or connections
+        factory can be specified. It should be a callable object taking a dsn
+        argument.
+
+        Using the *cursor_factory* parameter, a new default cursor factory will be
+        used by cursor().
+
+        Using *async*=True an asynchronous connection will be created. *async_* is
+        a valid alias (for Python versions where ``async`` is a keyword).
+
+        Any other keyword parameter will be passed to the underlying client
+        library: the list of supported parameters depends on the library version.
+
+        """
+        kwasync = {}
+        if 'async' in kwargs:
+            kwasync['async'] = kwargs.pop('async')
+        if 'async_' in kwargs:
+            kwasync['async_'] = kwargs.pop('async_')
+
+        dsn = _ext.make_dsn(dsn, **kwargs)
+>       conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+E       psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+
+venv\Lib\site-packages\psycopg2\__init__.py:122: OperationalError
+
+The above exception was the direct cause of the following exception:
+
+    def test_postgresql_connection():
+        """Test that we can connect to the PostgreSQL database."""
+        print("Testing PostgreSQL connection...")
+
+        try:
+            from sqlalchemy import create_engine
+            print("\u2713 sqlalchemy.create_engine imported successfully")
+        except ImportError as e:
+            pytest.fail(f"Failed to import create_engine from sqlalchemy: {e}")
+
+        # Load environment variables
+        load_dotenv()
+        database_url = os.getenv('DATABASE_URL')
+
+        if not database_url:
+            pytest.fail("DATABASE_URL is not set - cannot test database connection")
+
+        try:
+            # Create engine
+            engine = create_engine(database_url)
+            print("\u2713 Database engine created successfully")
+
+            # Try to connect
+>           with engine.connect() as connection:
+
+tests\test_environment.py:134:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3268: in connect
+    return self._connection_cls(self)
+venv\Lib\site-packages\sqlalchemy\engine\base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+venv\Lib\site-packages\sqlalchemy\engine\base.py:2430: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+venv\Lib\site-packages\sqlalchemy\engine\base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3292: in raw_connection
+    return self.pool.connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:452: in connect
+    return _ConnectionFairy._checkout(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:1269: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:716: in checkout
+    rec = pool._do_get()
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:169: in _do_get
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:167: in _do_get
+    return self._create_connection()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:393: in _create_connection
+    return _ConnectionRecord(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:678: in __init__
+    self.__connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:902: in __connect
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:898: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+venv\Lib\site-packages\sqlalchemy\engine\create.py:637: in connect
+    return dialect.connect(*cargs, **cparams)
+venv\Lib\site-packages\sqlalchemy\engine\default.py:616: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+dsn = 'host=localhost dbname=ptodb user=user password=netpass'
+connection_factory = None, cursor_factory = None
+kwargs = {'dbname': 'ptodb', 'host': 'localhost', 'password': 'netpass', 'user': 'user'}
+kwasync = {}
+
+    def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
+        """
+        Create a new database connection.
+
+        The connection parameters can be specified as a string:
+
+            conn = psycopg2.connect("dbname=test user=postgres password=secret")
+
+        or using a set of keyword arguments:
+
+            conn = psycopg2.connect(database="test", user="postgres", password="secret")
+
+        Or as a mix of both. The basic connection parameters are:
+
+        - *dbname*: the database name
+        - *database*: the database name (only as keyword argument)
+        - *user*: user name used to authenticate
+        - *password*: password used to authenticate
+        - *host*: database host address (defaults to UNIX socket if not provided)
+        - *port*: connection port number (defaults to 5432 if not provided)
+
+        Using the *connection_factory* parameter a different class or connections
+        factory can be specified. It should be a callable object taking a dsn
+        argument.
+
+        Using the *cursor_factory* parameter, a new default cursor factory will be
+        used by cursor().
+
+        Using *async*=True an asynchronous connection will be created. *async_* is
+        a valid alias (for Python versions where ``async`` is a keyword).
+
+        Any other keyword parameter will be passed to the underlying client
+        library: the list of supported parameters depends on the library version.
+
+        """
+        kwasync = {}
+        if 'async' in kwargs:
+            kwasync['async'] = kwargs.pop('async')
+        if 'async_' in kwargs:
+            kwasync['async_'] = kwargs.pop('async_')
+
+        dsn = _ext.make_dsn(dsn, **kwargs)
+>       conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+E       sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+E
+E       (Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+venv\Lib\site-packages\psycopg2\__init__.py:122: OperationalError
+
+During handling of the above exception, another exception occurred:
+
+    def test_postgresql_connection():
+        """Test that we can connect to the PostgreSQL database."""
+        print("Testing PostgreSQL connection...")
+
+        try:
+            from sqlalchemy import create_engine
+            print("\u2713 sqlalchemy.create_engine imported successfully")
+        except ImportError as e:
+            pytest.fail(f"Failed to import create_engine from sqlalchemy: {e}")
+
+        # Load environment variables
+        load_dotenv()
+        database_url = os.getenv('DATABASE_URL')
+
+        if not database_url:
+            pytest.fail("DATABASE_URL is not set - cannot test database connection")
+
+        try:
+            # Create engine
+            engine = create_engine(database_url)
+            print("\u2713 Database engine created successfully")
+
+            # Try to connect
+            with engine.connect() as connection:
+                print("\u2713 Successfully connected to PostgreSQL database")
+                print("\u2713 Connection closed successfully")
+
+        except Exception as e:
+>           pytest.fail(f"Failed to connect to PostgreSQL database: {e}")
+E           Failed: Failed to connect to PostgreSQL database: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+E
+E           (Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+tests\test_environment.py:139: Failed
+---------------------------- Captured stdout call -----------------------------
+Testing PostgreSQL connection...\n\u2713 sqlalchemy.create_engine imported successfully\n\u2713 Database engine created successfully
+=========================== short test summary info ===========================
+FAILED tests/test_environment.py::test_postgresql_connection - Failed: Failed...
+========================= 1 failed, 3 passed in 0.59s =========================
+Add command output to the chat? (Y)es/(N)o/(D)on't ask again [Yes]:
+
+
+I then went to a terminal and tried and got this: 
+
+PS C:\Users\jlaboy\codelab\projects\timecalendar> venv\Scripts\activate
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> pytest tests/test_environment.py -v
+====================================================================================================================================================================== test session starts =======================================================================================================================================================================
+platform win32 -- Python 3.11.9, pytest-7.4.3, pluggy-1.6.0 -- C:\Users\jlaboy\codelab\projects\TimeCalendar\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\jlaboy\codelab\projects\timecalendar
+collected 4 items                                                                                                                                                                                                                                                                                                                                                 
+
+tests/test_environment.py::test_required_packages_importable PASSED                                                                                                                                                                                                                                                                                         [ 25%]
+tests/test_environment.py::test_env_file_loading PASSED                                                                                                                                                                                                                                                                                                     [ 50%]
+tests/test_environment.py::test_database_url_format PASSED                                                                                                                                                                                                                                                                                                  [ 75%]
+tests/test_environment.py::test_postgresql_connection FAILED                                                                                                                                                                                                                                                                                                [100%]
+
+============================================================================================================================================================================ FAILURES ============================================================================================================================================================================
+___________________________________________________________________________________________________________________________________________________________________ test_postgresql_connection ___________________________________________________________________________________________________________________________________________________________________
+
+self = <sqlalchemy.engine.base.Connection object at 0x000002483B6F2BD0>, engine = Engine(postgresql://user:***@localhost/ptodb), connection = None, _has_events = None, _allow_revalidate = True, _allow_autobegin = True
+
+    def __init__(
+        self,
+        engine: Engine,
+        connection: Optional[PoolProxiedConnection] = None,
+        _has_events: Optional[bool] = None,
+        _allow_revalidate: bool = True,
+        _allow_autobegin: bool = True,
+    ):
+        """Construct a new Connection."""
+        self.engine = engine
+        self.dialect = dialect = engine.dialect
+
+        if connection is None:
+            try:
+>               self._dbapi_connection = engine.raw_connection()
+
+venv\Lib\site-packages\sqlalchemy\engine\base.py:145:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3292: in raw_connection
+    return self.pool.connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:452: in connect
+    return _ConnectionFairy._checkout(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:1269: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:716: in checkout
+    rec = pool._do_get()
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:169: in _do_get
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:167: in _do_get
+    return self._create_connection()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:393: in _create_connection
+    return _ConnectionRecord(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:678: in __init__
+    self.__connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:902: in __connect
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:898: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+venv\Lib\site-packages\sqlalchemy\engine\create.py:637: in connect
+    return dialect.connect(*cargs, **cparams)
+venv\Lib\site-packages\sqlalchemy\engine\default.py:616: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+
+dsn = 'host=localhost dbname=ptodb user=user password=netpass', connection_factory = None, cursor_factory = None, kwargs = {'dbname': 'ptodb', 'host': 'localhost', 'password': 'netpass', 'user': 'user'}, kwasync = {}
+
+    def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
+        """
+        Create a new database connection.
+
+        The connection parameters can be specified as a string:
+
+            conn = psycopg2.connect("dbname=test user=postgres password=secret")
+
+        or using a set of keyword arguments:
+
+            conn = psycopg2.connect(database="test", user="postgres", password="secret")
+
+        Or as a mix of both. The basic connection parameters are:
+
+        - *dbname*: the database name
+        - *database*: the database name (only as keyword argument)
+        - *user*: user name used to authenticate
+        - *password*: password used to authenticate
+        - *host*: database host address (defaults to UNIX socket if not provided)
+        - *port*: connection port number (defaults to 5432 if not provided)
+
+        Using the *connection_factory* parameter a different class or connections
+        factory can be specified. It should be a callable object taking a dsn
+        argument.
+
+        Using the *cursor_factory* parameter, a new default cursor factory will be
+        used by cursor().
+
+        Using *async*=True an asynchronous connection will be created. *async_* is
+        a valid alias (for Python versions where ``async`` is a keyword).
+
+        Any other keyword parameter will be passed to the underlying client
+        library: the list of supported parameters depends on the library version.
+
+        """
+        kwasync = {}
+        if 'async' in kwargs:
+            kwasync['async'] = kwargs.pop('async')
+        if 'async_' in kwargs:
+            kwasync['async_'] = kwargs.pop('async_')
+
+        dsn = _ext.make_dsn(dsn, **kwargs)
+>       conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+E       psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+
+venv\Lib\site-packages\psycopg2\__init__.py:122: OperationalError
+
+The above exception was the direct cause of the following exception:
+
+    def test_postgresql_connection():
+        """Test that we can connect to the PostgreSQL database."""
+        print("Testing PostgreSQL connection...")
+
+        try:
+            from sqlalchemy import create_engine
+            print("✓ sqlalchemy.create_engine imported successfully")
+        except ImportError as e:
+            pytest.fail(f"Failed to import create_engine from sqlalchemy: {e}")
+
+        # Load environment variables
+        load_dotenv()
+        database_url = os.getenv('DATABASE_URL')
+
+        if not database_url:
+            pytest.fail("DATABASE_URL is not set - cannot test database connection")
+
+        try:
+            # Create engine
+            engine = create_engine(database_url)
+            print("✓ Database engine created successfully")
+
+            # Try to connect
+>           with engine.connect() as connection:
+
+tests\test_environment.py:134:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3268: in connect
+    return self._connection_cls(self)
+venv\Lib\site-packages\sqlalchemy\engine\base.py:147: in __init__
+    Connection._handle_dbapi_exception_noconnection(
+venv\Lib\site-packages\sqlalchemy\engine\base.py:2430: in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+venv\Lib\site-packages\sqlalchemy\engine\base.py:145: in __init__
+    self._dbapi_connection = engine.raw_connection()
+venv\Lib\site-packages\sqlalchemy\engine\base.py:3292: in raw_connection
+    return self.pool.connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:452: in connect
+    return _ConnectionFairy._checkout(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:1269: in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:716: in checkout
+    rec = pool._do_get()
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:169: in _do_get
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\impl.py:167: in _do_get
+    return self._create_connection()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:393: in _create_connection
+    return _ConnectionRecord(self)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:678: in __init__
+    self.__connect()
+venv\Lib\site-packages\sqlalchemy\pool\base.py:902: in __connect
+    with util.safe_reraise():
+venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+venv\Lib\site-packages\sqlalchemy\pool\base.py:898: in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+venv\Lib\site-packages\sqlalchemy\engine\create.py:637: in connect
+    return dialect.connect(*cargs, **cparams)
+venv\Lib\site-packages\sqlalchemy\engine\default.py:616: in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  
+
+dsn = 'host=localhost dbname=ptodb user=user password=netpass', connection_factory = None, cursor_factory = None, kwargs = {'dbname': 'ptodb', 'host': 'localhost', 'password': 'netpass', 'user': 'user'}, kwasync = {}
+
+    def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
+        """
+        Create a new database connection.
+
+        The connection parameters can be specified as a string:
+
+            conn = psycopg2.connect("dbname=test user=postgres password=secret")
+
+        or using a set of keyword arguments:
+
+            conn = psycopg2.connect(database="test", user="postgres", password="secret")
+
+        Or as a mix of both. The basic connection parameters are:
+
+        - *dbname*: the database name
+        - *database*: the database name (only as keyword argument)
+        - *user*: user name used to authenticate
+        - *password*: password used to authenticate
+        - *host*: database host address (defaults to UNIX socket if not provided)
+        - *port*: connection port number (defaults to 5432 if not provided)
+
+        Using the *connection_factory* parameter a different class or connections
+        factory can be specified. It should be a callable object taking a dsn
+        argument.
+
+        Using the *cursor_factory* parameter, a new default cursor factory will be
+        used by cursor().
+
+        Using *async*=True an asynchronous connection will be created. *async_* is
+        a valid alias (for Python versions where ``async`` is a keyword).
+
+        Any other keyword parameter will be passed to the underlying client
+        library: the list of supported parameters depends on the library version.
+
+        """
+        kwasync = {}
+        if 'async' in kwargs:
+            kwasync['async'] = kwargs.pop('async')
+        if 'async_' in kwargs:
+            kwasync['async_'] = kwargs.pop('async_')
+
+        dsn = _ext.make_dsn(dsn, **kwargs)
+>       conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+E       sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+E       
+E       (Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+venv\Lib\site-packages\psycopg2\__init__.py:122: OperationalError
+
+During handling of the above exception, another exception occurred:
+
+    def test_postgresql_connection():
+        """Test that we can connect to the PostgreSQL database."""
+        print("Testing PostgreSQL connection...")
+
+        try:
+            from sqlalchemy import create_engine
+            print("✓ sqlalchemy.create_engine imported successfully")
+        except ImportError as e:
+            pytest.fail(f"Failed to import create_engine from sqlalchemy: {e}")
+
+        # Load environment variables
+        load_dotenv()
+        database_url = os.getenv('DATABASE_URL')
+
+        if not database_url:
+            pytest.fail("DATABASE_URL is not set - cannot test database connection")
+
+        try:
+            # Create engine
+            engine = create_engine(database_url)
+            print("✓ Database engine created successfully")
+
+            # Try to connect
+            with engine.connect() as connection:
+                print("✓ Successfully connected to PostgreSQL database")
+                print("✓ Connection closed successfully")
+
+        except Exception as e:
+>           pytest.fail(f"Failed to connect to PostgreSQL database: {e}")
+E           Failed: Failed to connect to PostgreSQL database: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+E
+E           (Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+tests\test_environment.py:139: Failed
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------- Captured stdout call ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+Testing PostgreSQL connection...
+✓ sqlalchemy.create_engine imported successfully
+✓ Database engine created successfully
+==================================================================================================================================================================== short test summary info ===================================================================================================================================================================== 
+FAILED tests/test_environment.py::test_postgresql_connection - Failed: Failed to connect to PostgreSQL database: (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "user"
+================================================================================================================================================================== 1 failed, 3 passed in 0.62s =================================================================================================================================================================== 
+(venv) PS C:\Users\jlaboy\codelab\projects\timecalendar> 
