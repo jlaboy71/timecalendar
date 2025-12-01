@@ -5,26 +5,22 @@ Tests all service classes and their methods with proper error handling.
 
 import sys
 import os
-import traceback
-from datetime import date, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import services
-from services import BalanceService, PTOService
-
-# Import database utilities
-from database import get_db, SessionLocal
-
-# Import schemas
-from schemas import (
-    UserCreate, UserUpdate, PTORequestCreate, PTOBalanceUpdate
-)
-
-# Import models
-from models import User, PTOBalance, PTORequest
+# Now import from src package using absolute imports
+from src.services.balance_service import BalanceService
+from src.services.pto_service import PTOService
+from src.services.user_service import UserService
+from src.database import SessionLocal
+from src.schemas.user_schemas import UserCreate, UserUpdate
+from src.schemas.pto_schemas import PTORequestCreate, PTOBalanceUpdate
+from src.models.user import User
+from src.models.pto_balance import PTOBalance
+from src.models.pto_request import PTORequest
 
 
 def print_section(title: str) -> None:
@@ -72,7 +68,7 @@ def test_phase2_services():
         
         # 3. TEST USER CREATION (Manual since UserService not available)
         print_section("Creating Test User")
-        from utils.password import hash_password
+        from src.utils.password import hash_password
         
         test_user = User(
             username='test_user_phase2',
