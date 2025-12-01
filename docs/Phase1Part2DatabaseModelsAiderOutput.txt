@@ -1,0 +1,863 @@
+src\config.py src\database.py src\models\__init__.py tests\test_environment.py
+>     - status (String(20), default='pending')
+>     - notes (Text, nullable)
+>     - submitted_at (DateTime, default=now)
+>     - approved_by (Foreign key to user, nullable)
+>     - approved_at (DateTime, nullable)
+>     - denial_reason (Text, nullable)
+>     - created_at (DateTime, default=now)
+>     - updated_at (DateTime, onupdate=now)
+>     - Relationships: user, approver
+>
+>  5. src/models/market_holiday.py - MarketHoliday model with:
+>     - id (Integer, primary key)
+>     - holiday_date (Date, not null)
+>     - name (String(100), not null)
+>     - market (String(20), not null) # NYSE, CME, CBOE
+>     - year (Integer, not null)
+>     - is_observed (Boolean, default=True)
+>     - created_at (DateTime, default=now)
+>     - Unique constraint on (holiday_date, market)
+>
+>  6. Update src/models/__init__.py to import all models:
+>     - Import all model classes
+>     - Add to __all__ list
+>
+>  Use proper SQLAlchemy 2.0 syntax with:
+>  - Mapped[] type hints
+>  - mapped_column() for columns
+>  - relationship() for relationships
+>  - Add comprehensive docstrings
+>  - Use func.now() for timestamps
+
+I'll create the SQLAlchemy models for the PTO system using proper SQLAlchemy 2.0 syntax with type hints and comprehensive docstrings.
+
+src/models/user.py
+
+                                                                                                                                                                                                                                                                                                                                                                   
+<<<<<<< SEARCH
+=======
+"""
+User model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from typing import List, Optional
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+
+class User(Base):
+    """
+    User model representing employees in the PTO system.
+    
+    This model stores user information including authentication details,
+    personal information, department association, and role-based access.
+    """
+    __tablename__ = "users"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Authentication fields
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Personal information
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # Department and role
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("departments.id"),
+        nullable=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="employee")
+
+    # Employment information
+    hire_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
+
+    # Relationships
+    department: Mapped[Optional["Department"]] = relationship(
+        "Department",
+        back_populates="users",
+        foreign_keys=[department_id]
+    )
+    pto_requests: Mapped[List["PTORequest"]] = relationship(
+        "PTORequest",
+        back_populates="user",
+        foreign_keys="PTORequest.user_id"
+    )
+    approved_requests: Mapped[List["PTORequest"]] = relationship(
+        "PTORequest",
+        back_populates="approver",
+        foreign_keys="PTORequest.approved_by"
+    )
+    pto_balances: Mapped[List["PTOBalance"]] = relationship(
+        "PTOBalance",
+        back_populates="user"
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the User model."""
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
+    @property
+    def full_name(self) -> str:
+        """Return the user's full name."""
+        return f"{self.first_name} {self.last_name}"
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src/models/department.py
+
+                                                                                                                                                                                                                                                                                                                                                                   
+<<<<<<< SEARCH
+=======                                                                                                                                                                                                                                                                                                                                                            
+"""
+Department model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from typing import List, Optional
+from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+                                                                                                                                                                                                                                                                                                                                                                   
+class Department(Base):
+    """
+    Department model representing organizational departments.
+    
+    This model stores department information including name, code,
+    manager assignment, and active status.
+    """
+    __tablename__ = "departments"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Department information
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+
+    # Manager assignment
+    manager_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    # Status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        nullable=False
+    )
+
+    # Relationships
+    users: Mapped[List["User"]] = relationship(
+        "User",
+        back_populates="department",
+        foreign_keys="User.department_id"
+    )
+    manager: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[manager_id]
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the Department model."""
+        return f"<Department(id={self.id}, name='{self.name}', code='{self.code}')>"
+>>>>>>> REPLACE
+
+
+src/models/pto_balance.py
+
+                                                                                                                                                                                                                                                                                                                                                                   
+<<<<<<< SEARCH
+=======                                                                                                                                                                                                                                                                                                                                                            
+"""
+PTO Balance model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from decimal import Decimal
+from sqlalchemy import Integer, Numeric, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+
+class PTOBalance(Base):
+    """
+    PTO Balance model representing employee PTO balances by year.
+    
+    This model tracks various types of PTO balances including vacation,
+    sick leave, personal days, and remote work usage for each employee by year.
+    """
+    __tablename__ = "pto_balances"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Foreign keys
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Vacation balances
+    vacation_total: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+    vacation_used: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+    vacation_pending: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+
+    # Sick leave balances
+    sick_total: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+    sick_used: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+
+    # Personal day balances
+    personal_total: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+    personal_used: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False
+    )
+
+    # Remote work tracking
+    remote_weekly_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,                                                                                                                                                                                                                                                                                                                                                  
+        default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('user_id', 'year', name='uq_user_year'),
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="pto_balances")
+
+    def __repr__(self) -> str:
+        """String representation of the PTOBalance model."""
+        return f"<PTOBalance(id={self.id}, user_id={self.user_id}, year={self.year})>"
+
+    @property
+    def vacation_available(self) -> Decimal:
+        """Calculate available vacation days."""
+        return self.vacation_total - self.vacation_used - self.vacation_pending
+
+    @property
+    def sick_available(self) -> Decimal:
+        """Calculate available sick days."""
+        return self.sick_total - self.sick_used
+
+    @property
+    def personal_available(self) -> Decimal:
+        """Calculate available personal days."""
+        return self.personal_total - self.personal_used
+>>>>>>> REPLACE
+
+
+src/models/pto_request.py
+
+                                                                                                                                                                                                                                                                                                                                                                   
+<<<<<<< SEARCH
+=======                                                                                                                                                                                                                                                                                                                                                            
+"""
+PTO Request model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional
+from sqlalchemy import String, Integer, Date, DateTime, Numeric, Text, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+                                                                                                                                                                                                                                                                                                                                                                   
+from src.database import Base
+                                                                                                                                                                                                                                                                                                                                                                   
+                                                                                                                                                                                                                                                                                                                                                                   
+class PTORequest(Base):
+    """
+    PTO Request model representing employee time-off requests.
+    
+    This model stores PTO request information including dates, type,
+    approval status, and related metadata for tracking and approval workflow.
+    """
+    __tablename__ = "pto_requests"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Foreign keys
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True
+    )                                                                                                                                                                                                                                                                                                                                                              
+    approved_by: Mapped[Optional[int]] = mapped_column(
+        Integer,                                                                                                                                                                                                                                                                                                                                                   
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    # Request details
+    pto_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    total_days: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+
+    # Status and approval
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        nullable=False,
+        index=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+                                                                                                                                                                                                                                                                                                                                                                   
+    # Timestamps
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        nullable=False
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )                                                                                                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                                                                                                                   
+    # Relationships
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="pto_requests",
+        foreign_keys=[user_id]
+    )
+    approver: Mapped[Optional["User"]] = relationship(
+        "User",
+        back_populates="approved_requests",
+        foreign_keys=[approved_by]
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the PTORequest model."""
+        return (f"<PTORequest(id={self.id}, user_id={self.user_id}, "
+                f"type='{self.pto_type}', status='{self.status}')>")
+
+    @property
+    def duration_days(self) -> int:
+        """Calculate the number of calendar days for this request."""
+        return (self.end_date - self.start_date).days + 1
+
+    @property
+    def is_pending(self) -> bool:
+        """Check if the request is pending approval."""
+        return self.status == "pending"
+                                                                                                                                                                                                                                                                                                                                                                   
+    @property
+    def is_approved(self) -> bool:
+        """Check if the request is approved."""
+        return self.status == "approved"
+
+    @property
+    def is_denied(self) -> bool:
+        """Check if the request is denied."""
+        return self.status == "denied"
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src/models/market_holiday.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Market Holiday model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from sqlalchemy import String, Integer, Date, DateTime, Boolean, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+                                                                                                                                                                                                                                                                                                                                                                   
+from src.database import Base
+
+
+class MarketHoliday(Base):
+    """
+    Market Holiday model representing financial market holidays.
+    
+    This model stores information about holidays for different financial
+    markets (NYSE, CME, CBOE, etc.) to help with PTO planning and scheduling.
+    """
+    __tablename__ = "market_holidays"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    # Holiday information
+    holiday_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    market: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Status
+    is_observed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,                                                                                                                                                                                                                                                                                                                                                  
+        default=func.now(),
+        nullable=False
+    )
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('holiday_date', 'market', name='uq_holiday_date_market'),
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the MarketHoliday model."""
+        return (f"<MarketHoliday(id={self.id}, date={self.holiday_date}, "
+                f"name='{self.name}', market='{self.market}')>")
+
+    @property
+    def is_current_year(self) -> bool:
+        """Check if the holiday is in the current year."""
+        from datetime import datetime
+        return self.year == datetime.now().year
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src/models/init.py
+
+                                                                                                                                                                                                                                                                                                                                                                   
+<<<<<<< SEARCH
+"""
+Database models for the PTO and Market Calendar System.
+"""
+from src.database import Base
+
+# Import Base to make it available when importing from this module
+__all__ = ['Base']
+
+# TODO: Import actual model classes here as they are created
+# Example:
+# from .user import User
+# from .pto_request import PTORequest
+# from .market_calendar import MarketCalendar
+=======
+"""
+Database models for the PTO and Market Calendar System.
+"""
+from src.database import Base
+from .user import User
+from .department import Department
+from .pto_balance import PTOBalance
+from .pto_request import PTORequest
+from .market_holiday import MarketHoliday
+
+# Make all models available when importing from this module
+__all__ = [
+    'Base',
+    'User',
+    'Department',
+    'PTOBalance',
+    'PTORequest',
+    'MarketHoliday'
+]                                                                                                                                                                                                                                                                                                                                                                  
+>>>>>>> REPLACE
+
+
+
+python -c "from src.models import User, Department, PTOBalance, PTORequest, MarketHoliday; print('All models imported successfully')"
+
+
+
+python -c "from src.database import init_db; init_db(); print('Database tables created successfully')"
+
+
+
+Tokens: 12k sent, 3.4k received. Cost: $0.09 message, $0.18 session.
+
+src/models/user.py
+Create new file? (Y)es/(N)o [Yes]: y
+
+src/models/department.py
+Create new file? (Y)es/(N)o [Yes]: y
+
+src/models/pto_balance.py
+Create new file? (Y)es/(N)o [Yes]: y
+
+src/models/pto_request.py
+Create new file? (Y)es/(N)o [Yes]: y
+
+src/models/market_holiday.py
+Create new file? (Y)es/(N)o [Yes]: y
+Applied edit to src\models\__init__.py
+Applied edit to src/models/department.py
+Applied edit to src/models/user.py
+Applied edit to src/models/pto_request.py
+Applied edit to src/models/market_holiday.py
+Applied edit to src/models/pto_balance.py
+Commit b5c1b04 feat: Create SQLAlchemy models for PTO system with comprehensive model definitions
+
+# Fix any errors below, if possible.
+
+## Running: C:\Program Files\Python311\python.exe -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\models\department.py
+
+src\models\department.py:46:24: F821 undefined name 'User'
+    users: Mapped[List["User"]] = relationship(
+                       ^
+src\models\department.py:51:30: F821 undefined name 'User'
+    manager: Mapped[Optional["User"]] = relationship(
+                             ^
+
+## See relevant lines below marked with █.
+
+src\models\department.py:
+...⋮...
+ 12│class Department(Base):
+ 13│    """
+ 14│    Department model representing organizational departments.
+ 15│
+ 16│    This model stores department information including name, code,
+ 17│    manager assignment, and active status.
+...⋮...
+ 43│    )
+ 44│
+ 45│    # Relationships
+ 46█    users: Mapped[List["User"]] = relationship(
+ 47│        "User",
+ 48│        back_populates="department",
+ 49│        foreign_keys="User.department_id"
+ 50│    )
+ 51█    manager: Mapped[Optional["User"]] = relationship(
+ 52│        "User",
+ 53│        foreign_keys=[manager_id]
+ 54│    )
+ 55│
+...⋮...
+
+
+# Fix any errors below, if possible.
+
+## Running: C:\Program Files\Python311\python.exe -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\models\user.py
+
+src\models\user.py:59:33: F821 undefined name 'Department'
+    department: Mapped[Optional["Department"]] = relationship(
+                                ^
+src\models\user.py:64:31: F821 undefined name 'PTORequest'
+    pto_requests: Mapped[List["PTORequest"]] = relationship(
+                              ^
+src\models\user.py:69:36: F821 undefined name 'PTORequest'
+    approved_requests: Mapped[List["PTORequest"]] = relationship(
+                                   ^
+src\models\user.py:74:31: F821 undefined name 'PTOBalance'
+    pto_balances: Mapped[List["PTOBalance"]] = relationship(
+                              ^
+
+## See relevant lines below marked with █.
+
+src\models\user.py:
+...⋮...
+ 12│class User(Base):
+ 13│    """
+ 14│    User model representing employees in the PTO system.
+ 15│
+ 16│    This model stores user information including authentication details,
+ 17│    personal information, department association, and role-based access.
+...⋮...
+ 56│    )
+ 57│
+ 58│    # Relationships
+ 59█    department: Mapped[Optional["Department"]] = relationship(
+ 60│        "Department",
+ 61│        back_populates="users",
+ 62│        foreign_keys=[department_id]
+ 63│    )
+ 64█    pto_requests: Mapped[List["PTORequest"]] = relationship(
+ 65│        "PTORequest",
+ 66│        back_populates="user",
+ 67│        foreign_keys="PTORequest.user_id"
+ 68│    )
+ 69█    approved_requests: Mapped[List["PTORequest"]] = relationship(
+ 70│        "PTORequest",
+ 71│        back_populates="approver",
+ 72│        foreign_keys="PTORequest.approved_by"
+ 73│    )
+ 74█    pto_balances: Mapped[List["PTOBalance"]] = relationship(
+ 75│        "PTOBalance",
+ 76│        back_populates="user"
+ 77│    )
+ 78│
+...⋮...
+
+
+# Fix any errors below, if possible.
+
+## Running: C:\Program Files\Python311\python.exe -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\models\pto_request.py
+
+src\models\pto_request.py:74:18: F821 undefined name 'User'
+    user: Mapped["User"] = relationship(
+                 ^
+src\models\pto_request.py:79:31: F821 undefined name 'User'
+    approver: Mapped[Optional["User"]] = relationship(
+                              ^
+
+## See relevant lines below marked with █.
+
+src\models\pto_request.py:
+...⋮...
+ 13│class PTORequest(Base):
+ 14│    """
+ 15│    PTO Request model representing employee time-off requests.
+ 16│
+ 17│    This model stores PTO request information including dates, type,
+ 18│    approval status, and related metadata for tracking and approval workflow.
+...⋮...
+ 71│    )
+ 72│
+ 73│    # Relationships
+ 74█    user: Mapped["User"] = relationship(
+ 75│        "User",
+ 76│        back_populates="pto_requests",
+ 77│        foreign_keys=[user_id]
+ 78│    )
+ 79█    approver: Mapped[Optional["User"]] = relationship(
+ 80│        "User",
+ 81│        back_populates="approved_requests",
+ 82│        foreign_keys=[approved_by]
+...⋮...
+
+
+# Fix any errors below, if possible.
+
+## Running: C:\Program Files\Python311\python.exe -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\models\pto_balance.py
+
+src\models\pto_balance.py:96:18: F821 undefined name 'User'
+    user: Mapped["User"] = relationship("User", back_populates="pto_balances")
+                 ^
+
+## See relevant line below marked with █.
+
+src\models\pto_balance.py:
+...⋮...
+ 12│class PTOBalance(Base):
+ 13│    """
+ 14│    PTO Balance model representing employee PTO balances by year.
+ 15│
+ 16│    This model tracks various types of PTO balances including vacation,
+ 17│    sick leave, personal days, and remote work usage for each employee by year.
+...⋮...
+ 93│    )
+ 94│
+ 95│    # Relationships
+ 96█    user: Mapped["User"] = relationship("User", back_populates="pto_balances")
+ 97│
+ 98│    def __repr__(self) -> str:
+ 99│        """String representation of the PTOBalance model."""
+...⋮...
+
+
+Attempt to fix lint errors? (Y)es/(N)o [Yes]: y
+I need to fix the flake8 errors by adding the necessary imports for the forward references in the type hints. The issue is that the models are referencing each other but the classes aren't imported. I'll add the necessary imports using TYPE_CHECKING to avoid circular imports.
+
+src\models\department.py
+
+
+<<<<<<< SEARCH
+"""
+Department model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from typing import List, Optional
+from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+=======
+"""
+Department model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from typing import List, Optional, TYPE_CHECKING
+from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+if TYPE_CHECKING:
+    from .user import User
+>>>>>>> REPLACE
+
+
+src\models\user.py
+
+
+<<<<<<< SEARCH
+"""
+User model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from typing import List, Optional
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+=======
+"""
+User model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from typing import List, Optional, TYPE_CHECKING
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+if TYPE_CHECKING:
+    from .department import Department
+    from .pto_request import PTORequest
+    from .pto_balance import PTOBalance
+>>>>>>> REPLACE
+
+
+src\models\pto_request.py
+
+
+<<<<<<< SEARCH
+"""
+PTO Request model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional
+from sqlalchemy import String, Integer, Date, DateTime, Numeric, Text, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+=======
+"""
+PTO Request model for the PTO and Market Calendar System.
+"""
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional, TYPE_CHECKING
+from sqlalchemy import String, Integer, Date, DateTime, Numeric, Text, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+if TYPE_CHECKING:
+    from .user import User
+>>>>>>> REPLACE
+
+
+src\models\pto_balance.py
+
+
+<<<<<<< SEARCH
+"""
+PTO Balance model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from decimal import Decimal
+from sqlalchemy import Integer, Numeric, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+=======
+"""
+PTO Balance model for the PTO and Market Calendar System.
+"""
+from datetime import datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING
+from sqlalchemy import Integer, Numeric, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.database import Base
+
+if TYPE_CHECKING:
+    from .user import User
+>>>>>>> REPLACE
+
+
+
+python -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\models\
+
+
+
+Tokens: 20k sent, 755 received. Cost: $0.07 message, $0.25 session.
+Applied edit to src\models\pto_request.py
+Applied edit to src\models\user.py
+Applied edit to src\models\department.py                                                                                                                                                                                                                                                                                                                           
+Applied edit to src\models\pto_balance.py
+Commit 0a0f14d refactor: Add TYPE_CHECKING imports to resolve forward reference errors
+
+python -c "from src.models import User, Department, PTOBalance, PTORequest, MarketHoliday; print('All models imported successfully')"
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]:

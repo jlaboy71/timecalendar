@@ -1,0 +1,326 @@
+>  Create the database configuration and base model setup:
+>
+>  1. Create src/config.py with:
+>     - Load environment variables using python-dotenv
+>     - Define Config class with attributes:
+>       * DATABASE_URL (from env)
+>       * SECRET_KEY (from env)
+>       * ENVIRONMENT (from env, default='development')
+>     - Add validation that required vars are set
+>
+>  2. Create src/database.py with:
+>     - Import SQLAlchemy components
+>     - Import Config from src/config
+>     - Create engine using DATABASE_URL from config
+>     - Create SessionLocal (sessionmaker)
+>     - Create declarative_base() as Base
+>     - Add get_db() function that yields database sessions
+>     - Add init_db() function to create all tables
+>
+>  3. Create src/models/__init__.py with:
+>     - Import Base from src/database
+>     - Placeholder comment for future model imports
+>
+>  Use proper SQLAlchemy 2.0 syntax throughout.
+>  Add docstrings to all classes and functions.
+
+
+src\models\__init__.py
+Add file to the chat? (Y)es/(N)o/(D)on't ask again [Yes]: y
+I'll create the database configuration and base model setup with proper SQLAlchemy 2.0 syntax. Let me create the three files as requested:
+
+src/config.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Configuration module for the PTO and Market Calendar System.
+"""
+import os
+from dotenv import load_dotenv
+
+
+class Config:
+    """
+    Configuration class that loads and validates environment variables.
+    """
+
+    def __init__(self):
+        """Initialize configuration by loading environment variables."""
+        # Load environment variables from .env file
+        load_dotenv()
+
+        # Load required environment variables
+        self.DATABASE_URL = os.getenv('DATABASE_URL')
+        self.SECRET_KEY = os.getenv('SECRET_KEY')
+        self.ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+
+        # Validate required variables are set
+        self._validate_config()
+
+    def _validate_config(self):
+        """
+        Validate that all required configuration variables are set.
+        
+        Raises:
+            ValueError: If any required configuration variable is missing.
+        """
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL environment variable is required")
+
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY environment variable is required")
+
+        if not self.DATABASE_URL.strip():
+            raise ValueError("DATABASE_URL cannot be empty")
+
+        if not self.SECRET_KEY.strip():
+            raise ValueError("SECRET_KEY cannot be empty")
+
+
+# Create a global config instance
+config = Config()
+>>>>>>> REPLACE
+
+
+src/database.py
+
+
+<<<<<<< SEARCH
+=======
+"""
+Database configuration and session management for the PTO and Market Calendar System.
+"""
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm.session import Session
+from typing import Generator
+
+from src.config import config
+
+
+# Create database engine using SQLAlchemy 2.0 syntax
+engine = create_engine(
+    config.DATABASE_URL,
+    echo=config.ENVIRONMENT == 'development',  # Enable SQL logging in development
+    future=True  # Use SQLAlchemy 2.0 style
+)
+
+# Create SessionLocal class for database sessions
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+    future=True  # Use SQLAlchemy 2.0 style
+)
+
+# Create declarative base for model definitions
+Base = declarative_base()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency function that yields database sessions.
+    
+    This function creates a new database session, yields it for use,
+    and ensures it's properly closed after use.
+    
+    Yields:
+        Session: SQLAlchemy database session
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_db() -> None:
+    """
+    Initialize the database by creating all tables.
+    
+    This function creates all tables defined by models that inherit
+    from the Base class.
+    """
+    # Import all models here to ensure they are registered with Base
+    # This will be updated when we add actual models
+    from src.models import *  # noqa: F401, F403
+
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src/models/init.py
+
+
+<<<<<<< SEARCH
+"""
+Database models for the PTO and Market Calendar System.
+"""
+=======
+"""
+Database models for the PTO and Market Calendar System.
+"""
+from src.database import Base
+
+# Import Base to make it available when importing from this module
+__all__ = ['Base']
+
+# TODO: Import actual model classes here as they are created
+# Example:
+# from .user import User
+# from .pto_request import PTORequest
+# from .market_calendar import MarketCalendar
+>>>>>>> REPLACE
+
+
+
+python -c "from src.config import config; print('Config loaded successfully')"
+
+
+
+python -c "from src.database import engine, SessionLocal, Base; print('Database setup loaded successfully')"
+
+
+
+Tokens: 8.2k sent, 828 received. Cost: $0.04 message, $0.06 session.
+
+src/config.py
+Create new file? (Y)es/(N)o [Yes]: y
+
+src/database.py
+Create new file? (Y)es/(N)o [Yes]: y
+Applied edit to src\models\__init__.py
+Applied edit to src/database.py
+Applied edit to src/config.py
+Commit 0046be5 feat: add database configuration and base model setup
+
+# Fix any errors below, if possible.
+
+Traceback (most recent call last):
+  File "C:\Users\jlaboy\codelab\projects\TimeCalendar\src\database.py", line 57
+    from src.models import *  # noqa: F401, F403
+                           ^
+SyntaxError: import * only allowed at module level
+
+## Running: C:\Program Files\Python311\python.exe -m flake8 --select=E9,F821,F823,F831,F406,F407,F701,F702,F704,F706 --show-source --isolated src\database.py
+
+src\database.py:57:5: F406 'from src.models import *' only allowed at module level
+    from src.models import *  # noqa: F401, F403
+    ^
+
+## See relevant line below marked with █.
+
+src\database.py:
+...⋮...
+ 48│def init_db() -> None:
+ 49│    """
+ 50│    Initialize the database by creating all tables.
+ 51│
+ 52│    This function creates all tables defined by models that inherit
+ 53│    from the Base class.
+ 54│    """
+ 55│    # Import all models here to ensure they are registered with Base
+ 56│    # This will be updated when we add actual models
+ 57█    from src.models import *  # noqa: F401, F403
+ 58│
+ 59│    # Create all tables
+ 60│    Base.metadata.create_all(bind=engine)
+
+
+Attempt to fix lint errors? (Y)es/(N)o [Yes]: y
+I need to fix the syntax error in the init_db() function. The issue is that import * statements are only allowed at module level, not inside functions. I'll move the import to the top of the file and modify the function accordingly.
+
+src\database.py
+
+
+<<<<<<< SEARCH
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm.session import Session
+from typing import Generator
+
+from src.config import config
+=======
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm.session import Session
+from typing import Generator
+
+from src.config import config
+# Import models module to ensure all models are registered with Base
+import src.models  # noqa: F401
+>>>>>>> REPLACE
+                                                                                                                                                                                                                                                                                                                                                                   
+
+src\database.py
+
+
+<<<<<<< SEARCH
+def init_db() -> None:
+    """
+    Initialize the database by creating all tables.
+    
+    This function creates all tables defined by models that inherit
+    from the Base class.
+    """
+    # Import all models here to ensure they are registered with Base
+    # This will be updated when we add actual models
+    from src.models import *  # noqa: F401, F403
+
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+=======
+def init_db() -> None:
+    """
+    Initialize the database by creating all tables.
+    
+    This function creates all tables defined by models that inherit
+    from the Base class.
+    """
+    # Models are imported at module level to ensure they are registered with Base
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+>>>>>>> REPLACE
+
+
+
+python -c "from src.database import init_db; print('Database module imports successfully')"
+
+
+
+Tokens: 10k sent, 367 received. Cost: $0.04 message, $0.10 session.
+Applied edit to src\database.py
+Commit 4761c40 fix: move models import to module level and remove wildcard import
+                                                                                                                                                                                                                                                                                                                                                                   
+python -c "from src.config import config; print('Config loaded successfully')"
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]: y
+
+Running python -c "from src.config import config; print('Config loaded successfully')"
+  File "<string>", line 1
+    from
+        ^
+SyntaxError: invalid syntax
+Unable to initialize device PRN
+Add command output to the chat? (Y)es/(N)o/(D)on't ask again [Yes]: y
+Added 6 lines of output to the chat.
+
+python -c "from src.database import engine, SessionLocal, Base; print('Database setup loaded successfully')"
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]: n
+
+python -c "from src.database import init_db; print('Database module imports successfully')"
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]: y
+
+Running python -c "from src.database import init_db; print('Database module imports successfully')"
+  File "<string>", line 1
+    from
+        ^
+SyntaxError: invalid syntax
+Unable to initialize device PRN
+Add command output to the chat? (Y)es/(N)o/(D)on't ask again [Yes]: y
+Added 6 lines of output to the chat.
+You can use /undo to undo and discard each aider commit.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+src\config.py src\database.py src\models\__init__.py tests\test_environment.py
