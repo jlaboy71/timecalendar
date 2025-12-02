@@ -82,9 +82,9 @@ def dashboard_page():
             ui.label('Quick Actions').classes('text-xl font-semibold mb-4')
             
             with ui.row().classes('w-full gap-4'):
-                ui.button('Submit PTO Request', color='primary').classes('flex-1')
-                ui.button('View Calendar', color='secondary').classes('flex-1')
-                ui.button('Request History', color='secondary').classes('flex-1')
+                ui.button('Submit PTO Request', on_click=lambda: ui.navigate.to('/submit-request'), color='primary').classes('flex-1')
+                ui.button('View Calendar', on_click=lambda: ui.navigate.to('/calendar'), color='secondary').classes('flex-1')
+                ui.button('Request History', on_click=lambda: ui.navigate.to('/requests'), color='secondary').classes('flex-1')
         
         # Section C: Recent Requests
         with ui.card().classes('w-full mb-6'):
