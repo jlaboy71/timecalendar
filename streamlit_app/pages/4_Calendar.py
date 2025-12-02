@@ -4,6 +4,10 @@ Calendar View page for the PTO and Market Calendar System.
 This page displays a visual calendar showing market holidays and user PTO requests,
 with month/year navigation and detailed list views.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import streamlit as st
 import pandas as pd
 import calendar
