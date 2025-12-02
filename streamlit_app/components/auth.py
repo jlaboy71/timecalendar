@@ -41,6 +41,8 @@ def login(username: str, password: str) -> Optional[User]:
         user = user_service.authenticate_user(username, password)
         
         if user:
+            # Eagerly load department to avoid DetachedInstanceError
+            _ = user.department
             # Store user information in session state
             st.session_state['user'] = user
             st.session_state['role'] = user.role
