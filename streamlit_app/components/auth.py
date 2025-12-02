@@ -4,6 +4,10 @@ Streamlit authentication module for the PTO and Market Calendar System.
 This module provides authentication functions, decorators, and session management
 for the Streamlit web application.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import streamlit as st
 from functools import wraps
 from typing import Optional, Callable, Any
