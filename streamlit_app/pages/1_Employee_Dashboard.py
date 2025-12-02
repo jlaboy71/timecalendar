@@ -107,4 +107,4 @@ with col1:
 
 with col2:
     if st.button("📅 View Calendar", type="secondary", use_container_width=True):
-        st.switch_page("pages/3_Calendar.py")
+        st.switch_page("pages/4_Calendar.py")
