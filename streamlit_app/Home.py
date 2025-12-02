@@ -4,6 +4,10 @@ Main Streamlit application entry point for the PTO & Market Calendar System.
 This is the home page that handles user authentication and redirects
 authenticated users to the appropriate dashboard.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import streamlit as st
 from components.auth import is_authenticated, show_login_form
 
