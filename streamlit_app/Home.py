@@ -5,7 +5,7 @@ This is the home page that handles user authentication and redirects
 authenticated users to the appropriate dashboard.
 """
 import streamlit as st
-from streamlit_app.components.auth import is_authenticated, show_login_form
+from components.auth import is_authenticated, show_login_form
 
 
 def main():
