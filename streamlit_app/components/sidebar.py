@@ -6,7 +6,7 @@ role-based navigation, and logout functionality.
 """
 import streamlit as st
 from src.models.user import User
-from .auth import logout
+from components.auth import logout
 
 
 def render_sidebar(user: User) -> None:

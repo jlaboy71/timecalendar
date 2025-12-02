@@ -11,9 +11,9 @@ from typing import List, Optional
 from src.database import get_db
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
-from streamlit_app.components.auth import require_role, get_current_user
-from streamlit_app.components.sidebar import render_sidebar
-from streamlit_app.components.formatters import format_pto_request, status_badge
+from components.auth import require_role, get_current_user
+from components.sidebar import render_sidebar
+from components.formatters import format_pto_request, status_badge
 
 
 # Page configuration

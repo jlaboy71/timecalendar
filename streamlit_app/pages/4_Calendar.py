@@ -12,12 +12,12 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, extract
 
-from streamlit_app.components.auth import (
+from components.auth import (
     is_authenticated, 
     get_current_user, 
     show_login_form
 )
-from streamlit_app.components.sidebar import render_sidebar
+from components.sidebar import render_sidebar
 from src.database import get_db
 from src.models.market_holiday import MarketHoliday
 from src.models.pto_request import PTORequest

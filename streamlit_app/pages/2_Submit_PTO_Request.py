@@ -11,8 +11,8 @@ import pandas as pd
 from typing import Optional
 
 # Import components and services
-from streamlit_app.components.auth import get_current_user, is_authenticated
-from streamlit_app.components.sidebar import render_sidebar
+from components.auth import get_current_user, is_authenticated
+from components.sidebar import render_sidebar
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
 from src.schemas.pto_schemas import PTORequestCreate
