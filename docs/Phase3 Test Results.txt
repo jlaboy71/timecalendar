@@ -1,0 +1,363 @@
+PS C:\Users\jlaboy\codelab\projects\TimeCalendar> python scripts/test_phase2.py
+
+============================================================
+ Database Connection
+============================================================
+✓ Connected to database
+
+============================================================
+ Cleanup
+============================================================
+2025-12-01 14:27:23,025 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2025-12-01 14:27:23,025 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 14:27:23,026 INFO sqlalchemy.engine.Engine select current_schema()
+2025-12-01 14:27:23,026 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 14:27:23,026 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2025-12-01 14:27:23,026 INFO sqlalchemy.engine.Engine [raw sql] {}
+2025-12-01 14:27:23,027 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,028 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.username = %(username_1)s
+ LIMIT %(param_1)s
+2025-12-01 14:27:23,028 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'username_1': 'test_user_phase2', 'param_1': 1}
+✓ No existing test data to clean up
+
+============================================================
+ Creating Test User
+============================================================
+2025-12-01 14:27:23,220 INFO sqlalchemy.engine.Engine INSERT INTO users (username, email, password_hash, first_name, last_name, department_id, role, hire_date, is_active, created_at, updated_at) VALUES (%(username)s, %(email)s, %(password_hash)s, %(first_name)s, %(last_name)s, %(department_id)s, %(role)s, %(hire_date)s, %(is_active)s, now(), now()) RETURNING users.id, users.created_at, users.updated_at
+2025-12-01 14:27:23,220 INFO sqlalchemy.engine.Engine [generated in 0.00031s] {'username': 'test_user_phase2', 'email': 'testphase2@example.com', 'password_hash': '$2b$12$MDyoJtsy9CyaaxHqFs.nxuzHtkHT8CeteFjnmiAtjWTPRB5E88pNW', 'first_name': 'Test', 'last_name': 'User', 'department_id': None, 'role': 'employee', 'hire_date': datetime.date(2025, 12, 1), 'is_active': True}
+2025-12-01 14:27:23,222 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,223 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,224 INFO sqlalchemy.engine.Engine SELECT users.id, users.username, users.email, users.password_hash, users.first_name, users.last_name, users.department_id, users.role, users.hire_date, users.is_active, users.created_at, users.updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,224 INFO sqlalchemy.engine.Engine [generated in 0.00020s] {'pk_1': 8}
+✓ Created test user with ID: 8
+✓ Full name: Test User
+
+============================================================
+ Testing Balance Service
+============================================================
+2025-12-01 14:27:23,226 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,226 INFO sqlalchemy.engine.Engine [generated in 0.00019s] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,228 INFO sqlalchemy.engine.Engine INSERT INTO pto_balances (user_id, year, vacation_total, vacation_used, vacation_pending, sick_total, sick_used, personal_total, personal_used, remote_weekly_used, created_at, updated_at) VALUES (%(user_id)s, %(year)s, %(vacation_total)s, %(vacation_used)s, %(vacation_pending)s, %(sick_total)s, %(sick_used)s, %(personal_total)s, %(personal_used)s, %(remote_weekly_used)s, now(), now()) RETURNING pto_balances.id, pto_balances.created_at, pto_balances.updated_at
+2025-12-01 14:27:23,228 INFO sqlalchemy.engine.Engine [generated in 0.00021s] {'user_id': 8, 'year': 2025, 'vacation_total': Decimal('0.00'), 'vacation_used': Decimal('0.00'), 'vacation_pending': Decimal('0.00'), 'sick_total': Decimal('0.00'), 'sick_used': Decimal('0.00'), 'personal_total': Decimal('0.00'), 'personal_used': Decimal('0.00'), 'remote_weekly_used': 0}
+2025-12-01 14:27:23,228 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,230 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,230 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,230 INFO sqlalchemy.engine.Engine [generated in 0.00017s] {'pk_1': 2}
+✓ Created/retrieved balance for year 2025
+   Initial state - Vacation: 0.00, Sick: 0.00, Personal: 0.00
+2025-12-01 14:27:23,232 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(id_1)s
+2025-12-01 14:27:23,232 INFO sqlalchemy.engine.Engine [generated in 0.00019s] {'id_1': 2}
+2025-12-01 14:27:23,233 INFO sqlalchemy.engine.Engine UPDATE pto_balances SET vacation_total=%(vacation_total)s, sick_total=%(sick_total)s, personal_total=%(personal_total)s, updated_at=now() WHERE pto_balances.id = %(pto_balances_id)s
+2025-12-01 14:27:23,234 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'vacation_total': Decimal('15.00'), 'sick_total': Decimal('10.00'), 'personal_total': Decimal('5.00'), 'pto_balances_id': 2}
+2025-12-01 14:27:23,234 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,235 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,235 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,235 INFO sqlalchemy.engine.Engine [cached since 0.004958s ago] {'pk_1': 2}
+✓ Updated balance totals
+   Updated state - Vacation: 15.00, Sick: 10.00, Personal: 5.00
+2025-12-01 14:27:23,236 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,236 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'pk_1': 8}
+2025-12-01 14:27:23,238 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s ORDER BY pto_balances.year DESC
+2025-12-01 14:27:23,240 INFO sqlalchemy.engine.Engine [generated in 0.00128s] {'user_id_1': 8}
+✓ Retrieved user balances: 1 balance(s)
+2025-12-01 14:27:23,241 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,241 INFO sqlalchemy.engine.Engine [cached since 0.01472s ago] {'user_id_1': 8, 'year_1': 2025}
+✓ Retrieved current year balance
+   Available - Vacation: 15.00, Sick: 10.00, Personal: 5.00
+
+============================================================
+ Testing PTO Request Creation
+============================================================
+2025-12-01 14:27:23,242 INFO sqlalchemy.engine.Engine SELECT users.id, users.username, users.email, users.password_hash, users.first_name, users.last_name, users.department_id, users.role, users.hire_date, users.is_active, users.created_at, users.updated_at
+FROM users
+WHERE users.id = %(id_1)s
+2025-12-01 14:27:23,242 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'id_1': 8}
+2025-12-01 14:27:23,243 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,243 INFO sqlalchemy.engine.Engine [cached since 0.01686s ago] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,244 INFO sqlalchemy.engine.Engine INSERT INTO pto_requests (user_id, approved_by, pto_type, start_date, end_date, total_days, status, notes, denial_reason, submitted_at, approved_at, created_at, updated_at) VALUES (%(user_id)s, %(approved_by)s, %(pto_type)s, %(start_date)s, %(end_date)s, %(total_days)s, %(status)s, %(notes)s, %(denial_reason)s, %(submitted_at)s, %(approved_at)s, now(), now()) RETURNING pto_requests.id, pto_requests.created_at, pto_requests.updated_at
+2025-12-01 14:27:23,245 INFO sqlalchemy.engine.Engine [generated in 0.00019s] {'user_id': 8, 'approved_by': None, 'pto_type': 'vacation', 'start_date': datetime.date(2025, 12, 2), 'end_date': datetime.date(2025, 12, 6), 'total_days': Decimal('5.00'), 'status': 'pending', 'notes': 'Test vacation request', 'denial_reason': None, 'submitted_at': datetime.datetime(2025, 12, 1, 14, 27, 23, 243185), 'approved_at': None}
+2025-12-01 14:27:23,247 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,247 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,248 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,248 INFO sqlalchemy.engine.Engine [generated in 0.00020s] {'pk_1': 1}
+2025-12-01 14:27:23,250 INFO sqlalchemy.engine.Engine SELECT pto_balances.id AS pto_balances_id, pto_balances.user_id AS pto_balances_user_id, pto_balances.year AS pto_balances_year, pto_balances.vacation_total AS pto_balances_vacation_total, pto_balances.vacation_used AS pto_balances_vacation_used, pto_balances.vacation_pending AS pto_balances_vacation_pending, pto_balances.sick_total AS pto_balances_sick_total, pto_balances.sick_used AS pto_balances_sick_used, pto_balances.personal_total AS pto_balances_personal_total, pto_balances.personal_used AS pto_balances_personal_used, pto_balances.remote_weekly_used AS pto_balances_remote_weekly_used, pto_balances.created_at AS pto_balances_created_at, pto_balances.updated_at AS pto_balances_updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,250 INFO sqlalchemy.engine.Engine [generated in 0.00019s] {'pk_1': 2}
+2025-12-01 14:27:23,251 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(id_1)s
+2025-12-01 14:27:23,251 INFO sqlalchemy.engine.Engine [cached since 0.01902s ago] {'id_1': 2}
+2025-12-01 14:27:23,252 INFO sqlalchemy.engine.Engine UPDATE pto_balances SET vacation_pending=%(vacation_pending)s, updated_at=now() WHERE pto_balances.id = %(pto_balances_id)s
+2025-12-01 14:27:23,252 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'vacation_pending': Decimal('5.00'), 'pto_balances_id': 2}
+2025-12-01 14:27:23,252 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,253 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,253 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,253 INFO sqlalchemy.engine.Engine [cached since 0.02309s ago] {'pk_1': 2}
+2025-12-01 14:27:23,254 INFO sqlalchemy.engine.Engine SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,255 INFO sqlalchemy.engine.Engine [generated in 0.00089s] {'pk_1': 1}
+✓ Created vacation request with ID: 1
+   Status: pending
+   Duration: 5 days
+2025-12-01 14:27:23,256 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,256 INFO sqlalchemy.engine.Engine [cached since 0.02019s ago] {'pk_1': 8}
+2025-12-01 14:27:23,256 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,257 INFO sqlalchemy.engine.Engine [cached since 0.03101s ago] {'user_id_1': 8, 'year_1': 2025}
+✓ Vacation pending increased to: 5.00
+
+============================================================
+ Testing Approval Workflow
+============================================================
+2025-12-01 14:27:23,258 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s AND pto_requests.status = %(status_1)s ORDER BY pto_requests.submitted_at DESC
+2025-12-01 14:27:23,258 INFO sqlalchemy.engine.Engine [generated in 0.00017s] {'user_id_1': 8, 'status_1': 'pending'}
+✓ Found 1 pending request(s)
+2025-12-01 14:27:23,260 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(id_1)s
+2025-12-01 14:27:23,260 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'id_1': 1}
+2025-12-01 14:27:23,260 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,261 INFO sqlalchemy.engine.Engine [cached since 0.03448s ago] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,261 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(id_1)s
+2025-12-01 14:27:23,261 INFO sqlalchemy.engine.Engine [cached since 0.02932s ago] {'id_1': 2}
+2025-12-01 14:27:23,262 INFO sqlalchemy.engine.Engine UPDATE pto_balances SET vacation_used=%(vacation_used)s, vacation_pending=%(vacation_pending)s, updated_at=now() WHERE pto_balances.id = %(pto_balances_id)s
+2025-12-01 14:27:23,262 INFO sqlalchemy.engine.Engine [generated in 0.00013s] {'vacation_used': Decimal('5.00'), 'vacation_pending': Decimal('0.00'), 'pto_balances_id': 2}
+2025-12-01 14:27:23,263 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,263 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,263 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,263 INFO sqlalchemy.engine.Engine [cached since 0.03312s ago] {'pk_1': 2}
+2025-12-01 14:27:23,264 INFO sqlalchemy.engine.Engine SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,264 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'pk_1': 1}
+2025-12-01 14:27:23,265 INFO sqlalchemy.engine.Engine UPDATE pto_requests SET approved_by=%(approved_by)s, status=%(status)s, approved_at=%(approved_at)s, updated_at=now() WHERE pto_requests.id = %(pto_requests_id)s
+2025-12-01 14:27:23,265 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'approved_by': 8, 'status': 'approved', 'approved_at': datetime.datetime(2025, 12, 1, 14, 27, 23, 264234), 'pto_requests_id': 1}
+2025-12-01 14:27:23,266 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,266 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,266 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,266 INFO sqlalchemy.engine.Engine [cached since 0.01814s ago] {'pk_1': 1}
+✓ Approved vacation request
+   Status: approved
+   Approved by: 8
+2025-12-01 14:27:23,267 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,267 INFO sqlalchemy.engine.Engine [cached since 0.03148s ago] {'pk_1': 8}
+2025-12-01 14:27:23,268 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,268 INFO sqlalchemy.engine.Engine [cached since 0.04238s ago] {'user_id_1': 8, 'year_1': 2025}
+✓ Verified balance changes after approval
+   Vacation pending: 0.00
+   Vacation used: 5.00
+   Vacation available: 10.00
+
+============================================================
+ Testing Denial Workflow
+============================================================
+2025-12-01 14:27:23,268 INFO sqlalchemy.engine.Engine SELECT users.id, users.username, users.email, users.password_hash, users.first_name, users.last_name, users.department_id, users.role, users.hire_date, users.is_active, users.created_at, users.updated_at
+FROM users
+WHERE users.id = %(id_1)s
+2025-12-01 14:27:23,270 INFO sqlalchemy.engine.Engine [cached since 0.0276s ago] {'id_1': 8}
+2025-12-01 14:27:23,271 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,272 INFO sqlalchemy.engine.Engine [cached since 0.04548s ago] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,272 INFO sqlalchemy.engine.Engine INSERT INTO pto_requests (user_id, approved_by, pto_type, start_date, end_date, total_days, status, notes, denial_reason, submitted_at, approved_at, created_at, updated_at) VALUES (%(user_id)s, %(approved_by)s, %(pto_type)s, %(start_date)s, %(end_date)s, %(total_days)s, %(status)s, %(notes)s, %(denial_reason)s, %(submitted_at)s, %(approved_at)s, now(), now()) RETURNING pto_requests.id, pto_requests.created_at, pto_requests.updated_at
+2025-12-01 14:27:23,272 INFO sqlalchemy.engine.Engine [cached since 0.02801s ago] {'user_id': 8, 'approved_by': None, 'pto_type': 'vacation', 'start_date': datetime.date(2025, 12, 11), 'end_date': datetime.date(2025, 12, 13), 'total_days': Decimal('3.00'), 'status': 'pending', 'notes': 'Test vacation request for denial', 'denial_reason': None, 'submitted_at': datetime.datetime(2025, 12, 1, 14, 27, 23, 272257), 'approved_at': None}
+2025-12-01 14:27:23,273 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,273 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,274 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,274 INFO sqlalchemy.engine.Engine [cached since 0.0252s ago] {'pk_1': 2}
+2025-12-01 14:27:23,274 INFO sqlalchemy.engine.Engine SELECT pto_balances.id AS pto_balances_id, pto_balances.user_id AS pto_balances_user_id, pto_balances.year AS pto_balances_year, pto_balances.vacation_total AS pto_balances_vacation_total, pto_balances.vacation_used AS pto_balances_vacation_used, pto_balances.vacation_pending AS pto_balances_vacation_pending, pto_balances.sick_total AS pto_balances_sick_total, pto_balances.sick_used AS pto_balances_sick_used, pto_balances.personal_total AS pto_balances_personal_total, pto_balances.personal_used AS pto_balances_personal_used, pto_balances.remote_weekly_used AS pto_balances_remote_weekly_used, pto_balances.created_at AS pto_balances_created_at, pto_balances.updated_at AS pto_balances_updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,274 INFO sqlalchemy.engine.Engine [cached since 0.02459s ago] {'pk_1': 2}
+2025-12-01 14:27:23,275 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(id_1)s
+2025-12-01 14:27:23,275 INFO sqlalchemy.engine.Engine [cached since 0.04323s ago] {'id_1': 2}
+2025-12-01 14:27:23,276 INFO sqlalchemy.engine.Engine UPDATE pto_balances SET vacation_pending=%(vacation_pending)s, updated_at=now() WHERE pto_balances.id = %(pto_balances_id)s
+2025-12-01 14:27:23,276 INFO sqlalchemy.engine.Engine [cached since 0.02404s ago] {'vacation_pending': Decimal('3.00'), 'pto_balances_id': 2}
+2025-12-01 14:27:23,276 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,276 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,276 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,277 INFO sqlalchemy.engine.Engine [cached since 0.04684s ago] {'pk_1': 2}
+2025-12-01 14:27:23,277 INFO sqlalchemy.engine.Engine SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,277 INFO sqlalchemy.engine.Engine [cached since 0.0233s ago] {'pk_1': 2}
+✓ Created second vacation request with ID: 2
+   Status: pending
+2025-12-01 14:27:23,278 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,278 INFO sqlalchemy.engine.Engine [cached since 0.04231s ago] {'pk_1': 8}
+2025-12-01 14:27:23,278 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(id_1)s
+2025-12-01 14:27:23,278 INFO sqlalchemy.engine.Engine [cached since 0.01954s ago] {'id_1': 2}
+2025-12-01 14:27:23,280 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,280 INFO sqlalchemy.engine.Engine [cached since 0.05384s ago] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,280 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(id_1)s
+2025-12-01 14:27:23,281 INFO sqlalchemy.engine.Engine [cached since 0.04867s ago] {'id_1': 2}
+2025-12-01 14:27:23,281 INFO sqlalchemy.engine.Engine UPDATE pto_balances SET vacation_pending=%(vacation_pending)s, updated_at=now() WHERE pto_balances.id = %(pto_balances_id)s
+2025-12-01 14:27:23,281 INFO sqlalchemy.engine.Engine [cached since 0.02942s ago] {'vacation_pending': Decimal('0.00'), 'pto_balances_id': 2}
+2025-12-01 14:27:23,282 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,282 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,282 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.id = %(pk_1)s
+2025-12-01 14:27:23,282 INFO sqlalchemy.engine.Engine [cached since 0.05224s ago] {'pk_1': 2}
+2025-12-01 14:27:23,283 INFO sqlalchemy.engine.Engine SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.notes AS pto_requests_notes, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,283 INFO sqlalchemy.engine.Engine [generated in 0.00017s] {'pk_1': 2}
+2025-12-01 14:27:23,284 INFO sqlalchemy.engine.Engine UPDATE pto_requests SET approved_by=%(approved_by)s, status=%(status)s, denial_reason=%(denial_reason)s, approved_at=%(approved_at)s, updated_at=now() WHERE pto_requests.id = %(pto_requests_id)s
+2025-12-01 14:27:23,284 INFO sqlalchemy.engine.Engine [generated in 0.00016s] {'approved_by': 8, 'status': 'denied', 'denial_reason': 'Testing denial workflow', 'approved_at': datetime.datetime(2025, 12, 1, 14, 27, 23, 283285), 'pto_requests_id': 2}
+2025-12-01 14:27:23,285 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,286 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,286 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,287 INFO sqlalchemy.engine.Engine [cached since 0.0385s ago] {'pk_1': 2}
+✓ Denied vacation request
+   Status: denied
+   Denial reason: Testing denial workflow
+2025-12-01 14:27:23,287 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,287 INFO sqlalchemy.engine.Engine [cached since 0.05179s ago] {'pk_1': 8}
+2025-12-01 14:27:23,288 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,288 INFO sqlalchemy.engine.Engine [cached since 0.06265s ago] {'user_id_1': 8, 'year_1': 2025}
+✓ Verified balance after denial
+   Vacation pending: 0.00
+   Vacation used: 5.00 (unchanged)
+
+============================================================
+ Testing Overlapping Request Detection
+============================================================
+2025-12-01 14:27:23,290 INFO sqlalchemy.engine.Engine SELECT users.id, users.username, users.email, users.password_hash, users.first_name, users.last_name, users.department_id, users.role, users.hire_date, users.is_active, users.created_at, users.updated_at
+FROM users
+WHERE users.id = %(id_1)s
+2025-12-01 14:27:23,290 INFO sqlalchemy.engine.Engine [cached since 0.04778s ago] {'id_1': 8}
+2025-12-01 14:27:23,290 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,290 INFO sqlalchemy.engine.Engine [cached since 0.06439s ago] {'user_id_1': 8, 'year_1': 2025}
+2025-12-01 14:27:23,291 INFO sqlalchemy.engine.Engine INSERT INTO pto_requests (user_id, approved_by, pto_type, start_date, end_date, total_days, status, notes, denial_reason, submitted_at, approved_at, created_at, updated_at) VALUES (%(user_id)s, %(approved_by)s, %(pto_type)s, %(start_date)s, %(end_date)s, %(total_days)s, %(status)s, %(notes)s, %(denial_reason)s, %(submitted_at)s, %(approved_at)s, now(), now()) RETURNING pto_requests.id, pto_requests.created_at, pto_requests.updated_at
+2025-12-01 14:27:23,291 INFO sqlalchemy.engine.Engine [cached since 0.04686s ago] {'user_id': 8, 'approved_by': None, 'pto_type': 'personal', 'start_date': datetime.date(2025, 12, 8), 'end_date': datetime.date(2025, 12, 10), 'total_days': Decimal('3.00'), 'status': 'pending', 'notes': 'Test personal request', 'denial_reason': None, 'submitted_at': datetime.datetime(2025, 12, 1, 14, 27, 23, 291311), 'approved_at': None}
+2025-12-01 14:27:23,292 INFO sqlalchemy.engine.Engine COMMIT
+2025-12-01 14:27:23,292 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-01 14:27:23,292 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.id = %(pk_1)s
+2025-12-01 14:27:23,293 INFO sqlalchemy.engine.Engine [cached since 0.04408s ago] {'pk_1': 3}
+✓ Created personal request with ID: 3
+2025-12-01 14:27:23,293 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.id = %(pk_1)s
+2025-12-01 14:27:23,293 INFO sqlalchemy.engine.Engine [cached since 0.05717s ago] {'pk_1': 8}
+2025-12-01 14:27:23,294 INFO sqlalchemy.engine.Engine SELECT pto_requests.id, pto_requests.user_id, pto_requests.approved_by, pto_requests.pto_type, pto_requests.start_date, pto_requests.end_date, pto_requests.total_days, pto_requests.status, pto_requests.notes, pto_requests.denial_reason, pto_requests.submitted_at, pto_requests.approved_at, pto_requests.created_at, pto_requests.updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s AND pto_requests.status IN (%(status_1_1)s, %(status_1_2)s) AND pto_requests.start_date <= %(start_date_1)s AND pto_requests.end_date >= %(end_date_1)s
+2025-12-01 14:27:23,294 INFO sqlalchemy.engine.Engine [generated in 0.00021s] {'user_id_1': 8, 'start_date_1': datetime.date(2025, 12, 10), 'end_date_1': datetime.date(2025, 12, 8), 'status_1_1': 'pending', 'status_1_2': 'approved'}
+✓ Found 1 overlapping request(s)
+
+============================================================
+ Phase 2 Test Summary
+============================================================
+2025-12-01 14:27:23,297 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.department_id AS users_department_id, users.role AS users_role, users.hire_date AS users_hire_date, users.is_active AS users_is_active, users.created_at AS users_created_at, users.updated_at AS users_updated_at
+FROM users
+WHERE users.username = %(username_1)s) AS anon_1
+2025-12-01 14:27:23,297 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'username_1': 'test_user_phase2'}
+2025-12-01 14:27:23,300 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT pto_balances.id AS pto_balances_id, pto_balances.user_id AS pto_balances_user_id, pto_balances.year AS pto_balances_year, pto_balances.vacation_total AS pto_balances_vacation_total, pto_balances.vacation_used AS pto_balances_vacation_used, pto_balances.vacation_pending AS pto_balances_vacation_pending, pto_balances.sick_total AS pto_balances_sick_total, pto_balances.sick_used AS pto_balances_sick_used, pto_balances.personal_total AS pto_balances_personal_total, pto_balances.personal_used AS pto_balances_personal_used, pto_balances.remote_weekly_used AS pto_balances_remote_weekly_used, pto_balances.created_at AS pto_balances_created_at, pto_balances.updated_at AS pto_balances_updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s) AS anon_1
+2025-12-01 14:27:23,301 INFO sqlalchemy.engine.Engine [generated in 0.00022s] {'user_id_1': 8}
+2025-12-01 14:27:23,304 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s) AS anon_1
+2025-12-01 14:27:23,304 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'user_id_1': 8}
+2025-12-01 14:27:23,306 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s AND pto_requests.status = %(status_1)s) AS anon_1
+2025-12-01 14:27:23,306 INFO sqlalchemy.engine.Engine [generated in 0.00018s] {'user_id_1': 8, 'status_1': 'approved'}
+2025-12-01 14:27:23,306 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s AND pto_requests.status = %(status_1)s) AS anon_1
+2025-12-01 14:27:23,307 INFO sqlalchemy.engine.Engine [cached since 0.001079s ago] {'user_id_1': 8, 'status_1': 'denied'}
+2025-12-01 14:27:23,307 INFO sqlalchemy.engine.Engine SELECT count(*) AS count_1
+FROM (SELECT pto_requests.id AS pto_requests_id, pto_requests.user_id AS pto_requests_user_id, pto_requests.approved_by AS pto_requests_approved_by, pto_requests.pto_type AS pto_requests_pto_type, pto_requests.start_date AS pto_requests_start_date, pto_requests.end_date AS pto_requests_end_date, pto_requests.total_days AS pto_requests_total_days, pto_requests.status AS pto_requests_status, pto_requests.notes AS pto_requests_notes, pto_requests.denial_reason AS pto_requests_denial_reason, pto_requests.submitted_at AS pto_requests_submitted_at, pto_requests.approved_at AS pto_requests_approved_at, pto_requests.created_at AS pto_requests_created_at, pto_requests.updated_at AS pto_requests_updated_at
+FROM pto_requests
+WHERE pto_requests.user_id = %(user_id_1)s AND pto_requests.status = %(status_1)s) AS anon_1
+2025-12-01 14:27:23,307 INFO sqlalchemy.engine.Engine [cached since 0.00196s ago] {'user_id_1': 8, 'status_1': 'pending'}
+✓ All Phase 2 services tested successfully!
+   Total users: 1
+   Total balances: 1
+   Total requests: 3 (1 approved, 1 denied, 1 pending)
+2025-12-01 14:27:23,308 INFO sqlalchemy.engine.Engine SELECT pto_balances.id, pto_balances.user_id, pto_balances.year, pto_balances.vacation_total, pto_balances.vacation_used, pto_balances.vacation_pending, pto_balances.sick_total, pto_balances.sick_used, pto_balances.personal_total, pto_balances.personal_used, pto_balances.remote_weekly_used, pto_balances.created_at, pto_balances.updated_at
+FROM pto_balances
+WHERE pto_balances.user_id = %(user_id_1)s AND pto_balances.year = %(year_1)s
+2025-12-01 14:27:23,308 INFO sqlalchemy.engine.Engine [cached since 0.08312s ago] {'user_id_1': 8, 'year_1': 2025}
+   Final balance state:
+     Vacation: 5.00/15.00 used
+     Sick: 0.00/10.00 used
+     Personal: 0.00/5.00 used
+2025-12-01 14:27:23,310 INFO sqlalchemy.engine.Engine ROLLBACK
+✓ Database connection closed
+PS C:\Users\jlaboy\codelab\projects\TimeCalendar>
