@@ -11,10 +11,10 @@ def login_page():
             ui.label('Login').classes('text-2xl font-bold text-center mb-6')
             
             # Username input
-            username_input = ui.input('Username', placeholder='Enter your username').classes('w-full mb-4')
+            username_input = ui.input(label='Username').classes('w-full mb-4')
             
             # Password input
-            password_input = ui.input('Password', placeholder='Enter your password', password=True).classes('w-full mb-4')
+            password_input = ui.input(label='Password', password=True).classes('w-full mb-4')
             
             # Error message area (hidden by default)
             error_message = ui.label('').classes('text-red-500 text-sm mb-4')
