@@ -4,6 +4,10 @@ Sidebar component for the PTO and Market Calendar System.
 This module provides a sidebar component that displays user information,
 role-based navigation, and logout functionality.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import streamlit as st
 from src.models.user import User
 from components.auth import logout
