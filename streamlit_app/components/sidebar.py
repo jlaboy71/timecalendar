@@ -44,13 +44,13 @@ def render_sidebar(user: User) -> None:
     st.sidebar.markdown("### 🧭 Navigation")
     
     # Common navigation for all users
-    st.sidebar.page_link("pages/dashboard.py", label="📊 Dashboard")
-    st.sidebar.page_link("pages/submit_pto.py", label="📝 Submit PTO")
-    st.sidebar.page_link("pages/calendar.py", label="📅 Calendar")
+    st.sidebar.page_link("pages/1_Employee_Dashboard.py", label="📊 Dashboard")
+    st.sidebar.page_link("pages/2_Submit_PTO_Request.py", label="📝 Submit PTO")
+    st.sidebar.page_link("pages/4_Calendar.py", label="📅 Calendar")
     
     # Manager-only navigation
     if user.role == "Manager":
-        st.sidebar.page_link("pages/manager_dashboard.py", label="👔 Manager Dashboard")
+        st.sidebar.page_link("pages/3_Manager_Dashboard.py", label="👔 Manager Dashboard")
     
     st.sidebar.markdown("---")
     
