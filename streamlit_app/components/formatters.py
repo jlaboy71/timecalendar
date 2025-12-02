@@ -4,6 +4,10 @@ Formatting helpers for Streamlit displays in the PTO and Market Calendar System.
 This module provides utility functions to format and display various data objects
 in a consistent and visually appealing way using Streamlit components.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from typing import Optional
 import streamlit as st
 from src.models.pto_balance import PTOBalance
