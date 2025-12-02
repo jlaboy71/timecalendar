@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   PTO & Market Calendar System
+echo   PTO and Market Calendar System
 echo ========================================
 echo.
 echo Starting Streamlit application...
