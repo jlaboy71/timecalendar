@@ -4,6 +4,10 @@ Submit PTO Request page for the PTO and Market Calendar System.
 This page allows authenticated users to submit new PTO requests with proper
 validation, balance checking, and form handling.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import streamlit as st
 from datetime import datetime, date
 from decimal import Decimal
