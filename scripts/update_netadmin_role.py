@@ -6,6 +6,10 @@ This script connects to the database, finds the user with username 'netadmin',
 updates their role to 'Manager', and commits the changes.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.database import get_db
 from src.models.user import User
 
