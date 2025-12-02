@@ -4,6 +4,10 @@ Manager Dashboard page for the PTO and Market Calendar System.
 This page provides managers with functionality to view and approve/deny
 pending PTO requests from their team members.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import streamlit as st
 from datetime import datetime
 from typing import List, Optional
