@@ -1,0 +1,55 @@
+"""
+Sidebar component for the PTO and Market Calendar System.
+
+This module provides a sidebar component that displays user information,
+role-based navigation, and logout functionality.
+"""
+import streamlit as st
+from src.models.user import User
+from .auth import logout
+
+
+def render_sidebar(user: User) -> None:
+    """
+    Render the sidebar with user info, navigation, and logout.
+    
+    Args:
+        user: The authenticated user object
+        
+    Side Effects:
+        - Displays user information in sidebar
+        - Shows role-based navigation links
+        - Provides logout functionality
+    """
+    # User Info Section
+    st.sidebar.markdown("### 👤 User Information")
+    st.sidebar.markdown(f"**Welcome, {user.full_name}!**")
+    st.sidebar.markdown(f"📧 {user.email}")
+    
+    # Show department if it exists
+    if user.department:
+        st.sidebar.markdown(f"🏢 {user.department.name}")
+    
+    # Role badge with emoji
+    role_emoji = "👔" if user.role == "Manager" else "👤"
+    st.sidebar.markdown(f"{role_emoji} **{user.role}**")
+    
+    st.sidebar.markdown("---")
+    
+    # Navigation Section
+    st.sidebar.markdown("### 🧭 Navigation")
+    
+    # Common navigation for all users
+    st.sidebar.page_link("pages/dashboard.py", label="📊 Dashboard")
+    st.sidebar.page_link("pages/submit_pto.py", label="📝 Submit PTO")
+    st.sidebar.page_link("pages/calendar.py", label="📅 Calendar")
+    
+    # Manager-only navigation
+    if user.role == "Manager":
+        st.sidebar.page_link("pages/manager_dashboard.py", label="👔 Manager Dashboard")
+    
+    st.sidebar.markdown("---")
+    
+    # Logout Section
+    if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
+        logout()
