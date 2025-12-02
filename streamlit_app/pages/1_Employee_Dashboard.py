@@ -4,6 +4,10 @@ Employee Dashboard page for the PTO and Market Calendar System.
 This page provides employees with an overview of their PTO balances,
 recent requests, and quick actions for managing their time off.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import streamlit as st
 from datetime import datetime
 from src.database import get_db
