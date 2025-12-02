@@ -14,5 +14,5 @@ def home():
         ui.label('TJM Time Calendar System').classes('text-4xl font-bold mb-8')
         ui.button('Login').classes('px-8 py-3 text-lg')
 
-if __name__ == '__main__':
+if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0')
