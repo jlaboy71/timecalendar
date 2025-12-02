@@ -17,7 +17,8 @@ def login_page():
             password_input = ui.input('Password', placeholder='Enter your password', password=True).classes('w-full mb-4')
             
             # Error message area (hidden by default)
-            error_message = ui.label('').classes('text-red-500 text-sm mb-4 hidden')
+            error_message = ui.label('').classes('text-red-500 text-sm mb-4')
+            error_message.set_visibility(False)
             
             # Login button
             ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message)).classes('w-full bg-blue-500 text-white')
@@ -26,14 +27,18 @@ def login_page():
 def authenticate(username_input, password_input, error_message):
     """Authenticate user credentials and handle login."""
     
+    print("Attempting login...")
+    
     # Get values from inputs
     username = username_input.value.strip()
     password = password_input.value
     
+    print(f"Username: {username}, Password length: {len(password)}")
+    
     # Validate inputs
     if not username or not password:
         error_message.text = 'Please enter both username and password'
-        error_message.classes(remove='hidden')
+        error_message.set_visibility(True)
         return
     
     # Get database session
@@ -45,8 +50,9 @@ def authenticate(username_input, password_input, error_message):
         user = user_service.authenticate_user(username, password)
         
         if user:
+            print("User authenticated successfully!")
             # Store user in app storage and redirect
-            app.storage.user = {
+            app.storage.general['user'] = {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
@@ -59,11 +65,12 @@ def authenticate(username_input, password_input, error_message):
         else:
             # Show error message
             error_message.text = 'Invalid credentials'
-            error_message.classes(remove='hidden')
+            error_message.set_visibility(True)
             
     except Exception as e:
         # Handle any database or service errors
+        print(f"Authentication failed: {e}")
         error_message.text = 'Login failed. Please try again.'
-        error_message.classes(remove='hidden')
+        error_message.set_visibility(True)
     finally:
         db.close()
