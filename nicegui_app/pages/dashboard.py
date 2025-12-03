@@ -29,7 +29,7 @@ def dashboard_page():
         balance = balance_service.get_or_create_balance(user_id, 2025)
         
         # Get user's recent requests (last 5)
-        recent_requests = pto_service.get_user_requests(user_id)[:5]
+        recent_requests = PTOService.get_user_requests(db, user_id)[:5]
         
         ui.label(f'Welcome, {user_first_name}!').classes('text-3xl font-bold mb-6')
         
