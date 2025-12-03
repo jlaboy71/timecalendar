@@ -33,9 +33,55 @@ def calendar():
 
 @ui.page('/requests')
 def requests():
-    """Request history page."""
-    ui.label('Request History - Coming Soon').classes('text-2xl')
-    ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
+    """User's PTO request history page."""
+    if not app.storage.general.get('user'):
+        ui.navigate.to('/')
+        return
+    
+    user = app.storage.general.get('user')
+    
+    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+        ui.label('My PTO Request History').classes('text-3xl font-bold mb-6')
+        
+        db = next(get_db())
+        try:
+            from src.services.pto_service import PTOService
+            user_requests = PTOService.get_user_requests(db, user['id'])
+            
+            if not user_requests:
+                ui.label('No requests yet').classes('text-xl text-gray-500 text-center mt-8')
+            else:
+                columns = [
+                    {'name': 'type', 'label': 'Type', 'field': 'type', 'align': 'left'},
+                    {'name': 'start_date', 'label': 'Start Date', 'field': 'start_date', 'align': 'left'},
+                    {'name': 'end_date', 'label': 'End Date', 'field': 'end_date', 'align': 'left'},
+                    {'name': 'days', 'label': 'Days', 'field': 'days', 'align': 'center'},
+                    {'name': 'status', 'label': 'Status', 'field': 'status', 'align': 'left'},
+                    {'name': 'submitted', 'label': 'Submitted', 'field': 'submitted', 'align': 'left'}
+                ]
+                
+                rows = []
+                for req in user_requests:
+                    status_display = req.status.title()
+                    if req.status == 'denied' and req.denial_reason:
+                        status_display += f' ({req.denial_reason})'
+                    
+                    rows.append({
+                        'id': req.id,
+                        'type': req.pto_type.title(),
+                        'start_date': req.start_date.strftime('%Y-%m-%d'),
+                        'end_date': req.end_date.strftime('%Y-%m-%d'),
+                        'days': req.total_days,
+                        'status': status_display,
+                        'submitted': req.submitted_at.strftime('%Y-%m-%d %H:%M')
+                    })
+                
+                ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+        
+        finally:
+            db.close()
+        
+        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
 
 @ui.page('/manager')
 def manager():
