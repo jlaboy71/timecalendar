@@ -17,6 +17,7 @@ def dashboard_page():
     user_data = app.storage.general.get('user')
     user_first_name = user_data.get('first_name', 'User')
     user_id = user_data.get('id')
+    user_role = user_data.get('role')
     
     db = None
     try:
@@ -89,6 +90,10 @@ def dashboard_page():
                 # Add manager button if user has manager role
                 if user_data.get('role') == 'manager':
                     ui.button('Manager Dashboard', on_click=lambda: ui.navigate.to('/manager'), color='accent').classes('flex-1')
+                
+                # Admin button (only for admin users)
+                if user_role == 'admin':
+                    ui.button('Admin Panel', on_click=lambda: ui.navigate.to('/admin/departments'), color='red').classes('flex-1')
         
         # Section C: Recent Requests
         with ui.card().classes('w-full mb-6'):
