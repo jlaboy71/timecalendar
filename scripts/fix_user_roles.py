@@ -22,14 +22,20 @@ def main():
         # Query all users
         users = db.query(User).all()
         
+        print("=== ALL USERS AND THEIR CURRENT ROLES ===")
+        for user in users:
+            print(f"User: {user.username}, Role: '{user.role}' (type: {type(user.role)})")
+        print("=" * 50)
+        
         updated_count = 0
         
-        # Process each user
+        # Process each user - forcibly update ALL users with non-None roles
         for user in users:
-            # Check if user has a role and it's not None
-            if user.role and user.role != user.role.lower():
-                print(f"Updating user {user.username}: '{user.role}' -> '{user.role.lower()}'")
-                user.role = user.role.lower()
+            if user.role is not None:
+                old_role = user.role
+                new_role = user.role.lower()
+                print(f"Updated {user.username}: {old_role} -> {new_role}")
+                user.role = new_role
                 updated_count += 1
         
         # Commit changes
