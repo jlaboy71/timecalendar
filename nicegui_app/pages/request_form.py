@@ -94,6 +94,11 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         # Create PTO service and submit request
         pto_service = PTOService(db)
 
+        # Calculate total days
+        total_days = (end_date - start_date).days + 1
+        if half_day:
+            total_days = 0.5
+
         # Create request data
         from src.schemas.pto_schemas import PTORequestCreate
         request_data = PTORequestCreate(
@@ -101,6 +106,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             pto_type=pto_type,
             start_date=start_date,
             end_date=end_date,
+            total_days=total_days,
             half_day=half_day,
             description=description if pto_type == 'other' else None
         )
