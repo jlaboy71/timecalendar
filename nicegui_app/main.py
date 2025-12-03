@@ -97,5 +97,81 @@ def manager():
 
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
 
+@ui.page('/manager/request/{request_id}')
+def manager_request_detail(request_id: int):
+    """Request detail page for approval/denial"""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'manager':
+        ui.label('Access denied').classes('text-red-500')
+        return
+    
+    db = next(get_db())
+    try:
+        from src.services.pto_service import PTOService
+        detail = PTOService.get_request_detail(db, request_id)
+        
+        if not detail:
+            ui.label('Request not found').classes('text-red-500')
+            return
+        
+        request = detail['request']
+        balance = detail['balance']
+        
+        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+            ui.label('PTO Request Detail').classes('text-3xl font-bold mb-6')
+            
+            # Employee Info Card
+            with ui.card().classes('w-full p-4 mb-4'):
+                ui.label('Employee Information').classes('text-xl font-bold mb-2')
+                ui.label(f"Name: {detail['employee_name']}")
+                ui.label(f"Email: {detail['employee_email']}")
+            
+            # Request Details Card
+            with ui.card().classes('w-full p-4 mb-4'):
+                ui.label('Request Details').classes('text-xl font-bold mb-2')
+                ui.label(f"Type: {request.pto_type.title()}")
+                ui.label(f"Start Date: {request.start_date.strftime('%Y-%m-%d')}")
+                ui.label(f"End Date: {request.end_date.strftime('%Y-%m-%d')}")
+                ui.label(f"Total Days: {request.total_days}")
+                ui.label(f"Status: {request.status.title()}")
+                ui.label(f"Submitted: {request.submitted_at.strftime('%Y-%m-%d %H:%M')}")
+                if request.notes:
+                    ui.label(f"Notes: {request.notes}")
+            
+            # Current Balance Card
+            with ui.card().classes('w-full p-4 mb-4'):
+                ui.label('Current PTO Balance').classes('text-xl font-bold mb-2')
+                ui.label(f"Vacation: {balance.vacation_total - balance.vacation_used:.1f} available")
+                ui.label(f"Sick: {balance.sick_total - balance.sick_used:.1f} available")
+                ui.label(f"Personal: {balance.personal_total - balance.personal_used:.1f} available")
+            
+            # Approval Actions
+            if request.status == 'pending':
+                with ui.row().classes('gap-4 mt-6'):
+                    def approve():
+                        user_id = app.storage.general.get('user').get('id')
+                        if PTOService.approve_request(db, request_id, user_id):
+                            ui.notify('Request approved!', type='positive')
+                            ui.navigate.to('/manager')
+                        else:
+                            ui.notify('Error approving request', type='negative')
+                    
+                    def deny():
+                        reason = denial_input.value or 'No reason provided'
+                        user_id = app.storage.general.get('user').get('id')
+                        if PTOService.deny_request(db, request_id, user_id, reason):
+                            ui.notify('Request denied', type='warning')
+                            ui.navigate.to('/manager')
+                        else:
+                            ui.notify('Error denying request', type='negative')
+                    
+                    ui.button('Approve', on_click=approve, color='positive')
+                    denial_input = ui.input('Denial Reason (optional)').classes('flex-1')
+                    ui.button('Deny', on_click=deny, color='negative')
+            
+            ui.button('Back to Manager Dashboard', on_click=lambda: ui.navigate.to('/manager')).classes('mt-4')
+    
+    finally:
+        db.close()
+
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')

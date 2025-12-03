@@ -169,6 +169,80 @@ class PTOService:
         
         return [dict(row._mapping) for row in results]
     
+    @staticmethod
+    def get_request_detail(db: Session, request_id: int):
+        """Get detailed request info with employee data"""
+        from ..models.pto_request import PTORequest
+        from ..models.user import User
+        from ..models.pto_balance import PTOBalance
+        
+        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        if not request:
+            return None
+        
+        user = db.query(User).filter(User.id == request.user_id).first()
+        balance = db.query(PTOBalance).filter(
+            PTOBalance.user_id == request.user_id,
+            PTOBalance.year == 2025
+        ).first()
+        
+        return {
+            'request': request,
+            'employee_name': f"{user.first_name} {user.last_name}",
+            'employee_email': user.email,
+            'balance': balance
+        }
+
+    @staticmethod
+    def approve_request(db: Session, request_id: int, approver_id: int):
+        """Approve a PTO request and deduct from balance"""
+        from ..models.pto_request import PTORequest
+        from ..models.pto_balance import PTOBalance
+        from datetime import datetime
+        
+        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        if not request or request.status != 'pending':
+            return False
+        
+        # Update request status
+        request.status = 'approved'
+        request.approved_by = approver_id
+        request.approved_at = datetime.now()
+        
+        # Deduct from balance
+        balance = db.query(PTOBalance).filter(
+            PTOBalance.user_id == request.user_id,
+            PTOBalance.year == 2025
+        ).first()
+        
+        if request.pto_type == 'vacation':
+            balance.vacation_used += request.total_days
+        elif request.pto_type == 'sick':
+            balance.sick_used += request.total_days
+        elif request.pto_type == 'personal':
+            balance.personal_used += request.total_days
+        
+        db.commit()
+        return True
+
+    @staticmethod
+    def deny_request(db: Session, request_id: int, approver_id: int, reason: str):
+        """Deny a PTO request"""
+        from ..models.pto_request import PTORequest
+        from datetime import datetime
+        
+        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        if not request or request.status != 'pending':
+            return False
+        
+        request.status = 'denied'
+        request.approved_by = approver_id
+        request.approved_at = datetime.now()
+        request.denial_reason = reason
+        
+        db.commit()
+        return True
+    
     def approve_request(self, request_id: int, approved_by: int) -> PTORequest:
         """
         Approve a PTO request.
