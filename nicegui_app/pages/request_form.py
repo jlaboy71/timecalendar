@@ -23,15 +23,11 @@ def request_form_page():
             value='vacation'
         ).classes('w-full mb-4')
 
-        start_date = ui.date(
-            label='Start Date',
-            value=date.today()
-        ).classes('w-full mb-4')
+        ui.label('Start Date').classes('text-sm font-medium mb-1')
+        start_date = ui.date(value=date.today()).classes('w-full mb-4')
 
-        end_date = ui.date(
-            label='End Date',
-            value=date.today()
-        ).classes('w-full mb-4')
+        ui.label('End Date').classes('text-sm font-medium mb-1')
+        end_date = ui.date(value=date.today()).classes('w-full mb-4')
 
         half_day = ui.switch(
             'Half Day',
