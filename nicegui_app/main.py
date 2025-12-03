@@ -148,21 +148,29 @@ def manager_request_detail(request_id: int):
             if request.status == 'pending':
                 with ui.row().classes('gap-4 mt-6'):
                     def approve():
-                        user_id = app.storage.general.get('user').get('id')
-                        if PTOService.approve_request(db, request_id, user_id):
-                            ui.notify('Request approved!', type='positive')
-                            ui.navigate.to('/manager')
-                        else:
-                            ui.notify('Error approving request', type='negative')
+                        db = next(get_db())
+                        try:
+                            user_id = app.storage.general.get('user').get('id')
+                            if PTOService.approve_request(db, request_id, user_id):
+                                ui.notify('Request approved!', type='positive')
+                                ui.navigate.to('/manager')
+                            else:
+                                ui.notify('Error approving request', type='negative')
+                        finally:
+                            db.close()
                     
                     def deny():
-                        reason = denial_input.value or 'No reason provided'
-                        user_id = app.storage.general.get('user').get('id')
-                        if PTOService.deny_request(db, request_id, user_id, reason):
-                            ui.notify('Request denied', type='warning')
-                            ui.navigate.to('/manager')
-                        else:
-                            ui.notify('Error denying request', type='negative')
+                        db = next(get_db())
+                        try:
+                            reason = denial_input.value or 'No reason provided'
+                            user_id = app.storage.general.get('user').get('id')
+                            if PTOService.deny_request(db, request_id, user_id, reason):
+                                ui.notify('Request denied', type='warning')
+                                ui.navigate.to('/manager')
+                            else:
+                                ui.notify('Error denying request', type='negative')
+                        finally:
+                            db.close()
                     
                     ui.button('Approve', on_click=approve, color='positive')
                     denial_input = ui.input('Denial Reason (optional)').classes('flex-1')
