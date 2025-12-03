@@ -170,6 +170,17 @@ class PTOService:
         return [dict(row._mapping) for row in results]
     
     @staticmethod
+    def get_user_requests(db: Session, user_id: int):
+        """Get all PTO requests for a specific user"""
+        from ..models.pto_request import PTORequest
+        
+        requests = db.query(PTORequest).filter(
+            PTORequest.user_id == user_id
+        ).order_by(PTORequest.submitted_at.desc()).all()
+        
+        return requests
+    
+    @staticmethod
     def get_request_detail(db: Session, request_id: int):
         """Get detailed request info with employee data"""
         from ..models.pto_request import PTORequest
