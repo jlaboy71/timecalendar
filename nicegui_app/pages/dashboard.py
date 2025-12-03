@@ -15,6 +15,13 @@ def dashboard_page():
     
     # Get user info
     user_data = app.storage.general.get('user')
+    print("=" * 50)
+    print(f"DEBUG: Full user_data = {user_data}")
+    print(f"DEBUG: user_data keys = {user_data.keys() if user_data else 'None'}")
+    print(f"DEBUG: role value = '{user_data.get('role')}'")
+    print(f"DEBUG: role type = {type(user_data.get('role'))}")
+    print(f"DEBUG: role == 'manager': {user_data.get('role') == 'manager'}")
+    print("=" * 50)
     user_first_name = user_data.get('first_name', 'User')
     user_id = user_data.get('id')
     
