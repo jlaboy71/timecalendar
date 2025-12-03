@@ -85,6 +85,10 @@ def dashboard_page():
                 ui.button('Submit PTO Request', on_click=lambda: ui.navigate.to('/submit-request'), color='primary').classes('flex-1')
                 ui.button('View Calendar', on_click=lambda: ui.navigate.to('/calendar'), color='secondary').classes('flex-1')
                 ui.button('Request History', on_click=lambda: ui.navigate.to('/requests'), color='secondary').classes('flex-1')
+                
+                # Add manager button if user has manager role
+                if user_data.get('role') == 'manager':
+                    ui.button('Manager Dashboard', on_click=lambda: ui.navigate.to('/manager'), color='accent').classes('flex-1')
         
         # Section C: Recent Requests
         with ui.card().classes('w-full mb-6'):
