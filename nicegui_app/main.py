@@ -227,5 +227,92 @@ def manager_request_detail(request_id: int):
     finally:
         db.close()
 
+@ui.page('/admin/departments')
+def admin_departments():
+    """Admin page for managing departments."""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'admin':
+        ui.navigate.to('/')
+        return
+    
+    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+        ui.label('Department Management').classes('text-3xl font-bold mb-6')
+        
+        with ui.card().classes('w-full mb-6 p-4'):
+            ui.label('Create New Department').classes('text-xl font-semibold mb-4')
+            
+            with ui.row().classes('w-full gap-4'):
+                name_input = ui.input('Department Name').classes('flex-1')
+                code_input = ui.input('Department Code').classes('flex-1')
+            
+            with ui.row().classes('w-full gap-4 mt-4'):
+                db = next(get_db())
+                try:
+                    from src.services.user_service import UserService
+                    managers = UserService.get_users_by_role(db, 'manager')
+                    manager_options = {0: 'No Manager'}
+                    manager_options.update({m.id: f'{m.first_name} {m.last_name}' for m in managers})
+                finally:
+                    db.close()
+                
+                manager_select = ui.select(manager_options, label='Manager', value=0).classes('flex-1')
+                
+                def create_dept():
+                    if not name_input.value or not code_input.value:
+                        ui.notify('Name and code are required', type='negative')
+                        return
+                    
+                    db = next(get_db())
+                    try:
+                        from src.services.department_service import DepartmentService
+                        mgr_id = None if manager_select.value == 0 else manager_select.value
+                        DepartmentService.create_department(db, name_input.value, code_input.value, mgr_id)
+                        ui.notify(f'Department "{name_input.value}" created successfully', type='positive')
+                        ui.navigate.to('/admin/departments')
+                    except ValueError as e:
+                        ui.notify(str(e), type='negative')
+                    finally:
+                        db.close()
+                
+                ui.button('Create Department', on_click=create_dept, color='primary')
+        
+        db = next(get_db())
+        try:
+            from src.services.department_service import DepartmentService
+            departments = DepartmentService.get_all_departments(db)
+            
+            if not departments:
+                ui.label('No departments yet').classes('text-xl text-gray-500 text-center mt-8')
+            else:
+                columns = [
+                    {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
+                    {'name': 'code', 'label': 'Code', 'field': 'code', 'align': 'left'},
+                    {'name': 'manager', 'label': 'Manager', 'field': 'manager', 'align': 'left'},
+                    {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center'},
+                ]
+                
+                rows = []
+                for dept in departments:
+                    manager_name = 'No Manager'
+                    if dept.manager_id:
+                        from src.services.user_service import UserService
+                        manager = UserService(db).get_user_by_id(dept.manager_id)
+                        if manager:
+                            manager_name = f'{manager.first_name} {manager.last_name}'
+                    
+                    rows.append({
+                        'id': dept.id,
+                        'name': dept.name,
+                        'code': dept.code,
+                        'manager': manager_name,
+                        'active': 'Yes' if dept.is_active else 'No'
+                    })
+                
+                ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+        
+        finally:
+            db.close()
+        
+        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
