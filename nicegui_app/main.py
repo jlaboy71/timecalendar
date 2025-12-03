@@ -41,7 +41,7 @@ def requests():
 def manager():
     """Manager dashboard page for viewing pending PTO requests."""
     # Check if user is logged in and has manager role
-    if not app.storage.user.get('id') or app.storage.user.get('role') != 'manager':
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'manager':
         with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
             ui.label('Access denied. Manager role required.').classes('text-xl text-red-500')
             ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
