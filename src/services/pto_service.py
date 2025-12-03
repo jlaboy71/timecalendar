@@ -257,7 +257,7 @@ class PTOService:
         Raises:
             ValueError: If request not found or not pending
         """
-        request = self.get_request_by_id(request_id)
+        request = self.db.query(PTORequest).filter(PTORequest.id == request_id).first()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
         
@@ -302,7 +302,7 @@ class PTOService:
         Raises:
             ValueError: If request not found or not pending
         """
-        request = self.get_request_by_id(request_id)
+        request = self.db.query(PTORequest).filter(PTORequest.id == request_id).first()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
         
