@@ -9,6 +9,7 @@
 - [x] Set up basic app configuration (title, port, host)
 - [x] Create home route with header and login button
 - [x] Add main execution block
+- [x] Add manager dashboard with pending PTO requests view
 
 ### Requirements:
 1. Import NiceGUI: from nicegui import ui, app
@@ -40,3 +41,10 @@
 - Used NiceGUI's built-in styling classes for layout
 - Database import is ready for future use
 - Login button is placeholder for future authentication implementation
+
+**Manager Dashboard Addition (Commit b26888b)**:
+- Added `get_pending_requests_with_employee_info()` static method to PTOService
+- Created `/manager` route with role-based access control
+- Added interactive table showing pending requests with employee details
+- Added conditional "Manager Dashboard" button to employee dashboard
+- Maintained existing authentication patterns and database session management
