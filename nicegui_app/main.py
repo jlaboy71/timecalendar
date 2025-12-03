@@ -98,4 +98,4 @@ def manager():
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(port=8080, host='0.0.0.0')
+    ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
