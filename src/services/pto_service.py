@@ -243,11 +243,13 @@ class PTOService:
         db.commit()
         return True
     
-    def approve_request(self, request_id: int, approved_by: int) -> PTORequest:
+    @staticmethod
+    def approve_request(db: Session, request_id: int, approved_by: int) -> PTORequest:
         """
         Approve a PTO request.
         
         Args:
+            db: SQLAlchemy database session
             request_id: ID of the request to approve
             approved_by: ID of the user approving the request
             
@@ -257,7 +259,7 @@ class PTOService:
         Raises:
             ValueError: If request not found or not pending
         """
-        request = self.db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
         
@@ -268,30 +270,33 @@ class PTOService:
         year = request.start_date.year
         
         # Get balance
-        balance = self.balance_service.get_or_create_balance(request.user_id, year)
+        balance_service = BalanceService(db)
+        balance = balance_service.get_or_create_balance(request.user_id, year)
         
         # Adjust balances based on PTO type
         if request.pto_type == 'vacation':
-            self.balance_service.move_pending_to_used(balance.id, request.total_days)
+            balance_service.move_pending_to_used(balance.id, request.total_days)
         elif request.pto_type == 'sick':
-            self.balance_service.adjust_sick_used(balance.id, request.total_days)
+            balance_service.adjust_sick_used(balance.id, request.total_days)
         elif request.pto_type == 'personal':
-            self.balance_service.adjust_personal_used(balance.id, request.total_days)
+            balance_service.adjust_personal_used(balance.id, request.total_days)
         
         # Update request
         request.status = 'approved'
         request.approved_by = approved_by
         request.approved_at = datetime.now()
         
-        self.db.commit()
-        self.db.refresh(request)
+        db.commit()
+        db.refresh(request)
         return request
     
-    def deny_request(self, request_id: int, approved_by: int, denial_reason: str) -> PTORequest:
+    @staticmethod
+    def deny_request(db: Session, request_id: int, approved_by: int, denial_reason: str) -> PTORequest:
         """
         Deny a PTO request.
         
         Args:
+            db: SQLAlchemy database session
             request_id: ID of the request to deny
             approved_by: ID of the user denying the request
             denial_reason: Reason for denial
@@ -302,7 +307,7 @@ class PTOService:
         Raises:
             ValueError: If request not found or not pending
         """
-        request = self.db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
         
@@ -314,8 +319,9 @@ class PTOService:
         
         # Remove pending vacation days if needed
         if request.pto_type == 'vacation':
-            balance = self.balance_service.get_or_create_balance(request.user_id, year)
-            self.balance_service.remove_pending(balance.id, request.total_days)
+            balance_service = BalanceService(db)
+            balance = balance_service.get_or_create_balance(request.user_id, year)
+            balance_service.remove_pending(balance.id, request.total_days)
         
         # Update request
         request.status = 'denied'
@@ -323,8 +329,8 @@ class PTOService:
         request.denial_reason = denial_reason
         request.approved_at = datetime.now()
         
-        self.db.commit()
-        self.db.refresh(request)
+        db.commit()
+        db.refresh(request)
         return request
     
     def cancel_request(self, request_id: int, user_id: int) -> PTORequest:
