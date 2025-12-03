@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import get_db
 from nicegui_app.pages.login import login_page
 from nicegui_app.pages.dashboard import dashboard_page
+from nicegui_app.pages.request_form import request_form_page
 
 # Set up basic app configuration
 app.title = "TJM Time Calendar"
@@ -22,8 +23,7 @@ def dashboard():
 @ui.page('/submit-request')
 def submit_request():
     """PTO Request submission page."""
-    ui.label('Submit PTO Request - Coming in Session 3').classes('text-2xl')
-    ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
+    request_form_page()
 
 @ui.page('/calendar')
 def calendar():
