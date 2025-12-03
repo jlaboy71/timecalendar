@@ -127,6 +127,21 @@ class UserService:
         stmt = stmt.offset(skip).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
     
+    @staticmethod
+    def get_users_by_role(db: Session, role: str) -> List[User]:
+        """
+        Retrieve all users with a specific role.
+        
+        Args:
+            db: Database session
+            role: Role to filter by (e.g., 'manager', 'admin', 'employee')
+            
+        Returns:
+            List of User instances with the specified role
+        """
+        stmt = select(User).where(User.role == role, User.is_active == True)
+        return list(db.execute(stmt).scalars().all())
+    
     def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
         """
         Update user information.
