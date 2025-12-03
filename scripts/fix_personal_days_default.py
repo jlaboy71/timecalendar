@@ -10,6 +10,13 @@ This script:
 5. Commits changes
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from decimal import Decimal
 from src.database import get_db
 from src.models.pto_balance import PTOBalance
