@@ -4,7 +4,7 @@ PTO Request model for the PTO and Market Calendar System.
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Integer, Date, DateTime, Numeric, Text, ForeignKey, func
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, Numeric, Text, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -43,6 +43,7 @@ class PTORequest(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     total_days: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     
     # Status and approval
     status: Mapped[str] = mapped_column(

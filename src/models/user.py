@@ -3,7 +3,7 @@ User model for the PTO and Market Calendar System.
 """
 from datetime import date, datetime
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, func
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -45,6 +45,8 @@ class User(Base):
     
     # Employment information
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
+    anniversary_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    remote_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     
     # Timestamps
