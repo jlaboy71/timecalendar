@@ -149,6 +149,26 @@ class PTOService:
         result = self.db.execute(stmt)
         return list(result.scalars().all())
     
+    @staticmethod
+    def get_pending_requests_with_employee_info(db: Session):
+        """Get all pending PTO requests with employee information"""
+        from ..models.pto_request import PTORequest
+        from ..models.user import User
+        
+        results = db.query(
+            PTORequest.id.label('request_id'),
+            (User.first_name + ' ' + User.last_name).label('employee_name'),
+            PTORequest.pto_type,
+            PTORequest.start_date,
+            PTORequest.end_date,
+            PTORequest.total_days,
+            PTORequest.submitted_at
+        ).join(User, PTORequest.user_id == User.id
+        ).filter(PTORequest.status == 'pending'
+        ).order_by(PTORequest.submitted_at.desc()).all()
+        
+        return [dict(row._mapping) for row in results]
+    
     def approve_request(self, request_id: int, approved_by: int) -> PTORequest:
         """
         Approve a PTO request.
