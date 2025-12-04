@@ -314,5 +314,72 @@ def admin_departments():
         
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
 
+@ui.page('/admin/employees')
+def admin_employees():
+    """Admin page for managing employees."""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'admin':
+        ui.navigate.to('/')
+        return
+    
+    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+        ui.label('Employee Management').classes('text-3xl font-bold mb-6')
+        
+        # Add New Employee button
+        ui.button('Add New Employee', on_click=lambda: ui.navigate.to('/admin/employees/add'), color='primary').classes('mb-6')
+        
+        db = next(get_db())
+        try:
+            from src.services.user_service import UserService
+            from src.services.department_service import DepartmentService
+            
+            # Get all users and departments
+            users = UserService(db).get_all_users()
+            departments = DepartmentService.get_all_departments(db)
+            
+            # Create department lookup
+            dept_lookup = {dept.id: dept.name for dept in departments}
+            
+            if not users:
+                ui.label('No employees yet').classes('text-xl text-gray-500 text-center mt-8')
+            else:
+                columns = [
+                    {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
+                    {'name': 'email', 'label': 'Email', 'field': 'email', 'align': 'left'},
+                    {'name': 'department', 'label': 'Department', 'field': 'department', 'align': 'left'},
+                    {'name': 'role', 'label': 'Role', 'field': 'role', 'align': 'left'},
+                    {'name': 'hire_date', 'label': 'Hire Date', 'field': 'hire_date', 'align': 'left'},
+                    {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center'},
+                ]
+                
+                rows = []
+                for user in users:
+                    department_name = 'No Department'
+                    if user.department_id:
+                        department_name = dept_lookup.get(user.department_id, 'Unknown Department')
+                    
+                    rows.append({
+                        'id': user.id,
+                        'name': f'{user.first_name} {user.last_name}',
+                        'email': user.email,
+                        'department': department_name,
+                        'role': user.role.title(),
+                        'hire_date': user.hire_date.strftime('%Y-%m-%d') if user.hire_date else 'Not Set',
+                        'active': 'Yes' if user.is_active else 'No'
+                    })
+                
+                table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+                
+                # Make rows clickable
+                def on_row_click(e):
+                    user_id = e.args[1]['id']
+                    ui.navigate.to(f'/admin/employees/edit/{user_id}')
+                
+                table.on('rowClick', on_row_click)
+        
+        finally:
+            db.close()
+        
+        ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
