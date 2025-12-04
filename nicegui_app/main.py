@@ -584,5 +584,177 @@ def admin_employees_add():
                 ui.button('Create Employee', on_click=create_employee, color='positive')
                 ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees'), color='secondary')
 
+@ui.page('/admin/employees/edit/{user_id}')
+def admin_employees_edit(user_id: int):
+    """Admin page for editing an existing employee."""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'admin':
+        ui.navigate.to('/')
+        return
+    
+    # Fetch the user by ID
+    db = next(get_db())
+    try:
+        from src.services.user_service import UserService
+        user_service = UserService(db)
+        user = user_service.get_user_by_id(user_id)
+        
+        if not user:
+            ui.notify('Employee not found', type='negative')
+            ui.navigate.to('/admin/employees')
+            return
+        
+        # Parse remote schedule if it exists
+        import json
+        remote_schedule = {}
+        if user.remote_schedule:
+            try:
+                remote_schedule = json.loads(user.remote_schedule)
+            except:
+                remote_schedule = {}
+        
+        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+            ui.label('Edit Employee').classes('text-3xl font-bold mb-6')
+            
+            with ui.card().classes('w-full p-6'):
+                ui.label('Employee Information').classes('text-xl font-semibold mb-4')
+                
+                # Row 1: First Name | Last Name
+                with ui.row().classes('w-full gap-4'):
+                    first_name_input = ui.input('First Name', value=user.first_name).classes('flex-1')
+                    last_name_input = ui.input('Last Name', value=user.last_name).classes('flex-1')
+                
+                # Row 2: Username | Email
+                with ui.row().classes('w-full gap-4'):
+                    username_input = ui.input('Username', value=user.username).classes('flex-1')
+                    email_input = ui.input('Email', value=user.email, validation={'Invalid email format': lambda v: bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v)) if v else False}).classes('flex-1')
+                
+                # Row 3: Password (with note below)
+                password_input = ui.input('Password', password=True).classes('w-full')
+                ui.label('Leave blank to keep current password. Minimum 8 characters if changing.').classes('text-sm text-gray-500 -mt-2 mb-2')
+                
+                # Row 4: Hire Date
+                with ui.row().classes('w-full gap-2'):
+                    ui.label('Hire Date').classes('font-semibold mb-2')
+                with ui.row().classes('w-full gap-2'):
+                    hire_month_select = ui.select({1:'January', 2:'February', 3:'March', 4:'April', 5:'May', 6:'June', 7:'July', 8:'August', 9:'September', 10:'October', 11:'November', 12:'December'}, label='Month', value=user.hire_date.month if user.hire_date else None).classes('flex-1')
+                    hire_day_select = ui.select({i:str(i) for i in range(1, 32)}, label='Day', value=user.hire_date.day if user.hire_date else None).classes('flex-1')
+                    hire_year_select = ui.select({i:str(i) for i in range(1980, 2051)}, label='Year', value=user.hire_date.year if user.hire_date else None).classes('flex-1')
+                
+                # Row 5: Department | Role
+                with ui.row().classes('w-full gap-4'):
+                    # Get departments for dropdown
+                    from src.services.department_service import DepartmentService
+                    departments = DepartmentService.get_all_departments(db)
+                    dept_options = {None: 'No Department'}
+                    dept_options.update({dept.id: dept.name for dept in departments})
+                    
+                    department_select = ui.select(dept_options, label='Department', value=user.department_id).classes('flex-1')
+                    
+                    role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin'}
+                    role_select = ui.select(role_options, label='Role', value=user.role).classes('flex-1')
+                
+                # Remote Work Days Section
+                ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
+                with ui.row().classes('gap-4'):
+                    monday_check = ui.checkbox('Monday', value=remote_schedule.get('monday', False))
+                    tuesday_check = ui.checkbox('Tuesday', value=remote_schedule.get('tuesday', False))
+                    wednesday_check = ui.checkbox('Wednesday', value=remote_schedule.get('wednesday', False))
+                    thursday_check = ui.checkbox('Thursday', value=remote_schedule.get('thursday', False))
+                    friday_check = ui.checkbox('Friday', value=remote_schedule.get('friday', False))
+                
+                is_active_check = ui.checkbox('Is Active', value=user.is_active).classes('mt-4')
+                
+                # Action buttons
+                with ui.row().classes('gap-4 mt-6'):
+                    def save_changes():
+                        # Validate required fields
+                        if not username_input.value:
+                            ui.notify('Username is required', type='negative')
+                            return
+                        if password_input.value and len(password_input.value) < 8:
+                            ui.notify('Password must be at least 8 characters if changing', type='negative')
+                            return
+                        if not email_input.value:
+                            ui.notify('Email is required', type='negative')
+                            return
+                        
+                        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                        if not re.match(email_pattern, email_input.value):
+                            ui.notify('Please enter a valid email address (e.g., user@domain.com)', type='negative')
+                            return
+                        if not first_name_input.value:
+                            ui.notify('First Name is required', type='negative')
+                            return
+                        if not last_name_input.value:
+                            ui.notify('Last Name is required', type='negative')
+                            return
+                        if not hire_month_select.value or not hire_day_select.value or not hire_year_select.value:
+                            ui.notify('All hire date fields (Month, Day, Year) are required', type='negative')
+                            return
+                        
+                        # Validate and create hire date
+                        from datetime import datetime
+                        
+                        try:
+                            hire_date_str = f"{hire_year_select.value}-{hire_month_select.value:02d}-{hire_day_select.value:02d}"
+                            hire_date = datetime.strptime(hire_date_str, '%Y-%m-%d').date()
+                        except ValueError:
+                            ui.notify('Invalid hire date - please check the date is valid', type='negative')
+                            return
+                        
+                        # Build remote schedule JSON
+                        import json
+                        remote_schedule = {
+                            "monday": monday_check.value,
+                            "tuesday": tuesday_check.value,
+                            "wednesday": wednesday_check.value,
+                            "thursday": thursday_check.value,
+                            "friday": friday_check.value
+                        }
+                        
+                        db = next(get_db())
+                        try:
+                            from src.services.user_service import UserService
+                            from src.schemas.user_schemas import UserUpdate
+                            
+                            # Build update data - only include password if provided
+                            update_data = {
+                                'username': username_input.value,
+                                'email': email_input.value,
+                                'first_name': first_name_input.value,
+                                'last_name': last_name_input.value,
+                                'department_id': department_select.value,
+                                'role': role_select.value,
+                                'hire_date': hire_date,
+                                'remote_schedule': json.dumps(remote_schedule),
+                                'is_active': is_active_check.value
+                            }
+                            
+                            # Only include password if provided
+                            if password_input.value:
+                                update_data['password'] = password_input.value
+                            
+                            user_update = UserUpdate(**update_data)
+                            
+                            user_service = UserService(db)
+                            updated_user = user_service.update_user(user_id, user_update)
+                            
+                            if updated_user:
+                                ui.notify(f'Employee "{updated_user.first_name} {updated_user.last_name}" updated successfully', type='positive')
+                                ui.navigate.to('/admin/employees')
+                            else:
+                                ui.notify('Error updating employee', type='negative')
+                            
+                        except Exception as e:
+                            ui.notify(f'Error updating employee: {str(e)}', type='negative')
+                        finally:
+                            db.close()
+                    
+                    ui.button('Save Changes', on_click=save_changes, color='positive')
+                    ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees'), color='secondary')
+    
+    finally:
+        db.close()
+
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
