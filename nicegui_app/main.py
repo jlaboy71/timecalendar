@@ -381,39 +381,54 @@ def admin_employees():
             if not users:
                 ui.label('No employees yet').classes('text-xl text-gray-500 text-center mt-8')
             else:
-                columns = [
-                    {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
-                    {'name': 'email', 'label': 'Email', 'field': 'email', 'align': 'left'},
-                    {'name': 'department', 'label': 'Department', 'field': 'department', 'align': 'left'},
-                    {'name': 'role', 'label': 'Role', 'field': 'role', 'align': 'left'},
-                    {'name': 'hire_date', 'label': 'Hire Date', 'field': 'hire_date', 'align': 'left'},
-                    {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center'},
-                ]
+                def confirm_delete(user):
+                    with ui.dialog() as dialog, ui.card():
+                        ui.label(f'Are you sure you want to delete {user.first_name} {user.last_name}?').classes('text-lg mb-4')
+                        with ui.row().classes('gap-4'):
+                            def delete_user():
+                                db = next(get_db())
+                                try:
+                                    user_service = UserService(db)
+                                    if user_service.delete_user(user.id):
+                                        ui.notify(f'Employee "{user.first_name} {user.last_name}" deleted successfully', type='positive')
+                                        dialog.close()
+                                        ui.navigate.to('/admin/employees')
+                                    else:
+                                        ui.notify('Error deleting employee', type='negative')
+                                finally:
+                                    db.close()
+                            
+                            ui.button('Yes', on_click=delete_user, color='red')
+                            ui.button('No', on_click=dialog.close, color='secondary')
+                    dialog.open()
                 
-                rows = []
-                for user in users:
-                    department_name = 'No Department'
-                    if user.department_id:
-                        department_name = dept_lookup.get(user.department_id, 'Unknown Department')
+                with ui.card().classes('w-full'):
+                    # Header row
+                    with ui.row().classes('w-full bg-gray-100 p-3 font-bold'):
+                        ui.label('Name').classes('w-1/6')
+                        ui.label('Email').classes('w-1/5')
+                        ui.label('Department').classes('w-1/6')
+                        ui.label('Role').classes('w-1/12')
+                        ui.label('Hire Date').classes('w-1/8')
+                        ui.label('Active').classes('w-1/12')
+                        ui.label('Actions').classes('w-1/6')
                     
-                    rows.append({
-                        'id': user.id,
-                        'name': f'{user.first_name} {user.last_name}',
-                        'email': user.email,
-                        'department': department_name,
-                        'role': user.role.title(),
-                        'hire_date': user.hire_date.strftime('%Y-%m-%d') if user.hire_date else 'Not Set',
-                        'active': 'Yes' if user.is_active else 'No'
-                    })
-                
-                table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                
-                # Make rows clickable
-                def on_row_click(e):
-                    user_id = e.args[1]['id']
-                    ui.navigate.to(f'/admin/employees/edit/{user_id}')
-                
-                table.on('rowClick', on_row_click)
+                    # Data rows
+                    for user in users:
+                        department_name = 'No Department'
+                        if user.department_id:
+                            department_name = dept_lookup.get(user.department_id, 'Unknown Department')
+                        
+                        with ui.row().classes('w-full p-3 border-b items-center'):
+                            ui.label(f'{user.first_name} {user.last_name}').classes('w-1/6')
+                            ui.label(user.email).classes('w-1/5')
+                            ui.label(department_name).classes('w-1/6')
+                            ui.label(user.role.title()).classes('w-1/12')
+                            ui.label(user.hire_date.strftime('%Y-%m-%d') if user.hire_date else 'Not Set').classes('w-1/8')
+                            ui.label('Yes' if user.is_active else 'No').classes('w-1/12')
+                            with ui.row().classes('w-1/6 gap-2'):
+                                ui.button('Edit', on_click=lambda u=user: ui.navigate.to(f'/admin/employees/edit/{u.id}'), color='primary').props('size=sm')
+                                ui.button('Delete', on_click=lambda u=user: confirm_delete(u), color='red').props('size=sm')
         
         finally:
             db.close()
