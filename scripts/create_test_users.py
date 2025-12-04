@@ -44,7 +44,7 @@ def main():
             print("Creating netuser...")
             netuser_data = UserCreate(
                 username="netuser",
-                password="netpass",
+                password="netpass1",
                 email="netuser@tjmbrokerag.com",
                 first_name="Net",
                 last_name="User",
@@ -66,7 +66,7 @@ def main():
             print("Creating netmanager...")
             netmanager_data = UserCreate(
                 username="netmanager",
-                password="netpass",
+                password="netpass1",
                 email="netmanager@tjmbrokerag.com",
                 first_name="Net",
                 last_name="Manager",
