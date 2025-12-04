@@ -419,5 +419,130 @@ def admin_employees():
         
         ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/admin')).classes('mt-4')
 
+@ui.page('/admin/employees/add')
+def admin_employees_add():
+    """Admin page for adding a new employee."""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'admin':
+        ui.navigate.to('/')
+        return
+    
+    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+        ui.label('Add New Employee').classes('text-3xl font-bold mb-6')
+        
+        with ui.card().classes('w-full p-6'):
+            ui.label('Employee Information').classes('text-xl font-semibold mb-4')
+            
+            # Basic Information
+            with ui.row().classes('w-full gap-4'):
+                username_input = ui.input('Username').classes('flex-1')
+                password_input = ui.input('Password', password=True).classes('flex-1')
+            
+            ui.label('Minimum 8 characters required').classes('text-sm text-gray-500 -mt-2 mb-2')
+            
+            with ui.row().classes('w-full gap-4'):
+                email_input = ui.input('Email', validation={'Email is required': lambda value: value}).classes('flex-1')
+                first_name_input = ui.input('First Name').classes('flex-1')
+            
+            with ui.row().classes('w-full gap-4'):
+                last_name_input = ui.input('Last Name').classes('flex-1')
+                
+                # Get departments for dropdown
+                db = next(get_db())
+                try:
+                    from src.services.department_service import DepartmentService
+                    departments = DepartmentService.get_all_departments(db)
+                    dept_options = {None: 'No Department'}
+                    dept_options.update({dept.id: dept.name for dept in departments})
+                finally:
+                    db.close()
+                
+                department_select = ui.select(dept_options, label='Department', value=None).classes('flex-1')
+            
+            with ui.row().classes('w-full gap-4'):
+                role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin'}
+                role_select = ui.select(role_options, label='Role', value='employee').classes('flex-1')
+                
+                from datetime import date
+                hire_date_input = ui.date('Hire Date', value=date.today()).classes('flex-1')
+            
+            anniversary_date_input = ui.date('Anniversary Date (Optional)').classes('w-full')
+            
+            # Remote Work Days Section
+            ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
+            with ui.row().classes('gap-4'):
+                monday_check = ui.checkbox('Monday')
+                tuesday_check = ui.checkbox('Tuesday')
+                wednesday_check = ui.checkbox('Wednesday')
+                thursday_check = ui.checkbox('Thursday')
+                friday_check = ui.checkbox('Friday')
+            
+            is_active_check = ui.checkbox('Is Active', value=True).classes('mt-4')
+            
+            # Action buttons
+            with ui.row().classes('gap-4 mt-6'):
+                def create_employee():
+                    # Validate required fields
+                    if not username_input.value:
+                        ui.notify('Username is required', type='negative')
+                        return
+                    if not password_input.value:
+                        ui.notify('Password is required', type='negative')
+                        return
+                    if len(password_input.value) < 8:
+                        ui.notify('Password must be at least 8 characters', type='negative')
+                        return
+                    if not email_input.value:
+                        ui.notify('Email is required', type='negative')
+                        return
+                    if not first_name_input.value:
+                        ui.notify('First Name is required', type='negative')
+                        return
+                    if not last_name_input.value:
+                        ui.notify('Last Name is required', type='negative')
+                        return
+                    
+                    # Build remote schedule JSON
+                    import json
+                    remote_schedule = {
+                        "monday": monday_check.value,
+                        "tuesday": tuesday_check.value,
+                        "wednesday": wednesday_check.value,
+                        "thursday": thursday_check.value,
+                        "friday": friday_check.value
+                    }
+                    
+                    db = next(get_db())
+                    try:
+                        from src.services.user_service import UserService
+                        from src.schemas.user_schemas import UserCreate
+                        
+                        user_data = UserCreate(
+                            username=username_input.value,
+                            password=password_input.value,
+                            email=email_input.value,
+                            first_name=first_name_input.value,
+                            last_name=last_name_input.value,
+                            department_id=department_select.value,
+                            role=role_select.value,
+                            hire_date=hire_date_input.value,
+                            anniversary_date=anniversary_date_input.value,
+                            remote_schedule=json.dumps(remote_schedule),
+                            is_active=is_active_check.value
+                        )
+                        
+                        user_service = UserService(db)
+                        new_user = user_service.create_user(user_data)
+                        
+                        ui.notify(f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', type='positive')
+                        ui.navigate.to('/admin/employees')
+                        
+                    except Exception as e:
+                        ui.notify(f'Error creating employee: {str(e)}', type='negative')
+                    finally:
+                        db.close()
+                
+                ui.button('Create Employee', on_click=create_employee, color='positive')
+                ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees'), color='secondary')
+
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
