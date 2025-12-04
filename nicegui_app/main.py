@@ -1,5 +1,6 @@
 from nicegui import ui, app
 import sys
+import re
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import get_db
@@ -440,7 +441,7 @@ def admin_employees_add():
             # Row 2: Username | Email
             with ui.row().classes('w-full gap-4'):
                 username_input = ui.input('Username').classes('flex-1')
-                email_input = ui.input('Email', validation={'Email is required': lambda value: value}).classes('flex-1')
+                email_input = ui.input('Email', validation={'Invalid email format': lambda v: bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v)) if v else False}).classes('flex-1')
             
             # Row 3: Password (with note below)
             password_input = ui.input('Password', password=True).classes('w-full')
@@ -497,6 +498,11 @@ def admin_employees_add():
                         return
                     if not email_input.value:
                         ui.notify('Email is required', type='negative')
+                        return
+                    
+                    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                    if not re.match(email_pattern, email_input.value):
+                        ui.notify('Please enter a valid email address (e.g., user@domain.com)', type='negative')
                         return
                     if not first_name_input.value:
                         ui.notify('First Name is required', type='negative')
