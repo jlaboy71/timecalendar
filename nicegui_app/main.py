@@ -446,10 +446,8 @@ def admin_employees_add():
             password_input = ui.input('Password', password=True).classes('w-full')
             ui.label('Minimum 8 characters required').classes('text-sm text-gray-500 -mt-2 mb-2')
             
-            # Row 4: Hire Date | Anniversary Date
-            with ui.row().classes('w-full gap-4'):
-                hire_date_input = ui.input('Hire Date (YYYY-MM-DD)', placeholder='2025-12-04').classes('flex-1')
-                anniversary_date_input = ui.input('Anniversary Date (YYYY-MM-DD) - Optional', placeholder='2025-12-04').classes('flex-1')
+            # Row 4: Hire Date
+            hire_date_input = ui.input('Hire Date (YYYY-MM-DD)', placeholder='2025-12-04').classes('w-full')
             
             # Row 5: Department | Role
             with ui.row().classes('w-full gap-4'):
@@ -522,15 +520,6 @@ def admin_employees_add():
                         return
                     
                     anniversary_date = None
-                    if anniversary_date_input.value:
-                        if not re.match(date_pattern, anniversary_date_input.value):
-                            ui.notify('Anniversary Date must be in YYYY-MM-DD format', type='negative')
-                            return
-                        try:
-                            anniversary_date = datetime.strptime(anniversary_date_input.value, '%Y-%m-%d').date()
-                        except ValueError:
-                            ui.notify('Invalid anniversary date', type='negative')
-                            return
                     
                     # Build remote schedule JSON
                     import json
