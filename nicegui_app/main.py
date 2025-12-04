@@ -141,7 +141,7 @@ def manager():
         finally:
             db.close()
 
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+        ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/admin')).classes('mt-4')
 
 @ui.page('/manager/request/{request_id}')
 def manager_request_detail(request_id: int):
