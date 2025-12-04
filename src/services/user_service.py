@@ -175,21 +175,49 @@ class UserService:
         self.db.refresh(user)
         return user
     
-    def delete_user(self, user_id: int) -> bool:
+    def deactivate_user(self, user_id: int) -> bool:
         """
         Soft delete a user by setting is_active to False.
-        
+        This preserves historical PTO data linked to the user.
+
         Args:
-            user_id: ID of user to delete
-            
+            user_id: ID of user to deactivate
+
         Returns:
-            True if user was found and deleted, False otherwise
+            True if user was found and deactivated, False otherwise
         """
         user = self.get_user_by_id(user_id)
         if not user:
             return False
-        
+
         user.is_active = False
+        self.db.commit()
+        return True
+
+    def delete_user(self, user_id: int) -> bool:
+        """
+        Hard delete a user and all related records from the database.
+        Use this for permanently removing terminated/quit employees.
+
+        Args:
+            user_id: ID of user to delete
+
+        Returns:
+            True if user was found and deleted, False otherwise
+        """
+        from src.models.pto_balance import PTOBalance
+        from src.models.pto_request import PTORequest
+
+        user = self.get_user_by_id(user_id)
+        if not user:
+            return False
+
+        # Delete related PTO records first (cascade)
+        self.db.query(PTORequest).filter(PTORequest.user_id == user_id).delete()
+        self.db.query(PTOBalance).filter(PTOBalance.user_id == user_id).delete()
+
+        # Delete the user
+        self.db.delete(user)
         self.db.commit()
         return True
     
