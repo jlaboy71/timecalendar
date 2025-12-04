@@ -447,7 +447,12 @@ def admin_employees_add():
             ui.label('Minimum 8 characters required').classes('text-sm text-gray-500 -mt-2 mb-2')
             
             # Row 4: Hire Date
-            hire_date_input = ui.input('Hire Date (YYYY-MM-DD)', placeholder='2025-12-04').classes('w-full')
+            with ui.row().classes('w-full gap-2'):
+                ui.label('Hire Date').classes('font-semibold mb-2')
+            with ui.row().classes('w-full gap-2'):
+                hire_month_select = ui.select({1:'January', 2:'February', 3:'March', 4:'April', 5:'May', 6:'June', 7:'July', 8:'August', 9:'September', 10:'October', 11:'November', 12:'December'}, label='Month', value=None).classes('flex-1')
+                hire_day_select = ui.select({i:str(i) for i in range(1, 32)}, label='Day', value=None).classes('flex-1')
+                hire_year_select = ui.select({i:str(i) for i in range(2020, 2031)}, label='Year', value=None).classes('flex-1')
             
             # Row 5: Department | Role
             with ui.row().classes('w-full gap-4'):
@@ -499,24 +504,18 @@ def admin_employees_add():
                     if not last_name_input.value:
                         ui.notify('Last Name is required', type='negative')
                         return
-                    if not hire_date_input.value:
-                        ui.notify('Hire Date is required', type='negative')
+                    if not hire_month_select.value or not hire_day_select.value or not hire_year_select.value:
+                        ui.notify('All hire date fields (Month, Day, Year) are required', type='negative')
                         return
                     
-                    # Validate date formats
-                    import re
+                    # Validate and create hire date
                     from datetime import datetime
                     
-                    date_pattern = r'^\d{4}-\d{2}-\d{2}$'
-                    
-                    if not re.match(date_pattern, hire_date_input.value):
-                        ui.notify('Hire Date must be in YYYY-MM-DD format', type='negative')
-                        return
-                    
                     try:
-                        hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
+                        hire_date_str = f"{hire_year_select.value}-{hire_month_select.value:02d}-{hire_day_select.value:02d}"
+                        hire_date = datetime.strptime(hire_date_str, '%Y-%m-%d').date()
                     except ValueError:
-                        ui.notify('Invalid hire date', type='negative')
+                        ui.notify('Invalid hire date - please check the date is valid', type='negative')
                         return
                     
                     anniversary_date = None
