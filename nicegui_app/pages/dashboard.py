@@ -93,7 +93,7 @@ def dashboard_page():
                 
                 # Admin button (only for admin users)
                 if user_role == 'admin':
-                    ui.button('Admin Panel', on_click=lambda: ui.navigate.to('/admin/departments'), color='red').classes('flex-1')
+                    ui.button('Admin Panel', on_click=lambda: ui.navigate.to('/admin'), color='red').classes('flex-1')
         
         # Section C: Recent Requests
         with ui.card().classes('w-full mb-6'):

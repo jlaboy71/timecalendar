@@ -81,7 +81,7 @@ def requests():
         finally:
             db.close()
         
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+        ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/admin')).classes('mt-4')
 
 @ui.page('/manager')
 def manager():
@@ -226,6 +226,44 @@ def manager_request_detail(request_id: int):
     
     finally:
         db.close()
+
+@ui.page('/admin')
+def admin_panel():
+    """Admin panel landing page with navigation to admin functions."""
+    if not app.storage.general.get('user') or app.storage.general.get('user').get('role') != 'admin':
+        ui.navigate.to('/')
+        return
+    
+    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+        ui.label('Admin Panel').classes('text-3xl font-bold mb-6')
+        
+        # Navigation cards
+        with ui.row().classes('w-full gap-6 justify-center'):
+            # Manage Departments card
+            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('business', size='3rem').classes('text-primary')
+                    ui.label('Manage Departments').classes('text-xl font-semibold')
+                    ui.label('Create and manage organizational departments').classes('text-gray-600 text-center')
+                    ui.button('Go to Departments', on_click=lambda: ui.navigate.to('/admin/departments'), color='primary')
+            
+            # Manage Employees card
+            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('people', size='3rem').classes('text-primary')
+                    ui.label('Manage Employees').classes('text-xl font-semibold')
+                    ui.label('Add, edit, and manage employee accounts').classes('text-gray-600 text-center')
+                    ui.button('Go to Employees', on_click=lambda: ui.navigate.to('/admin/employees'), color='primary')
+            
+            # Reports card (disabled)
+            with ui.card().classes('p-6 opacity-50'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('assessment', size='3rem').classes('text-gray-400')
+                    ui.label('Reports').classes('text-xl font-semibold text-gray-400')
+                    ui.label('View PTO usage and analytics').classes('text-gray-400 text-center')
+                    ui.button('Coming Soon', color='gray', disabled=True)
+        
+        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
 
 @ui.page('/admin/departments')
 def admin_departments():
@@ -379,7 +417,7 @@ def admin_employees():
         finally:
             db.close()
         
-        ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+        ui.button('Back to Admin Panel', on_click=lambda: ui.navigate.to('/admin')).classes('mt-4')
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
