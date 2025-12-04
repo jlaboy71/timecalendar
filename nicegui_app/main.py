@@ -261,7 +261,7 @@ def admin_panel():
                     ui.icon('assessment', size='3rem').classes('text-gray-400')
                     ui.label('Reports').classes('text-xl font-semibold text-gray-400')
                     ui.label('View PTO usage and analytics').classes('text-gray-400 text-center')
-                    ui.button('Coming Soon', color='gray', disabled=True)
+                    ui.label('Coming Soon').classes('text-gray-400 font-semibold')
         
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
 
