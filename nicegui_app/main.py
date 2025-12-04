@@ -463,9 +463,9 @@ def admin_employees_add():
                 role_select = ui.select(role_options, label='Role', value='employee').classes('flex-1')
                 
                 from datetime import date
-                hire_date_input = ui.date('Hire Date', value=date.today()).classes('flex-1')
+                hire_date_input = ui.date(value=date.today()).props('label="Hire Date"').classes('flex-1')
             
-            anniversary_date_input = ui.date('Anniversary Date (Optional)').classes('w-full')
+            anniversary_date_input = ui.date().props('label="Anniversary Date (Optional)"').classes('w-full')
             
             # Remote Work Days Section
             ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
