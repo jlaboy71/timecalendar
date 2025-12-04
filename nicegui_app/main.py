@@ -432,20 +432,27 @@ def admin_employees_add():
         with ui.card().classes('w-full p-6'):
             ui.label('Employee Information').classes('text-xl font-semibold mb-4')
             
-            # Basic Information
+            # Row 1: First Name | Last Name
+            with ui.row().classes('w-full gap-4'):
+                first_name_input = ui.input('First Name').classes('flex-1')
+                last_name_input = ui.input('Last Name').classes('flex-1')
+            
+            # Row 2: Username | Email
             with ui.row().classes('w-full gap-4'):
                 username_input = ui.input('Username').classes('flex-1')
-                password_input = ui.input('Password', password=True).classes('flex-1')
+                email_input = ui.input('Email', validation={'Email is required': lambda value: value}).classes('flex-1')
             
+            # Row 3: Password (with note below)
+            password_input = ui.input('Password', password=True).classes('w-full')
             ui.label('Minimum 8 characters required').classes('text-sm text-gray-500 -mt-2 mb-2')
             
+            # Row 4: Hire Date | Anniversary Date
             with ui.row().classes('w-full gap-4'):
-                email_input = ui.input('Email', validation={'Email is required': lambda value: value}).classes('flex-1')
-                first_name_input = ui.input('First Name').classes('flex-1')
+                hire_date_input = ui.input('Hire Date (YYYY-MM-DD)', placeholder='2025-12-04').classes('flex-1')
+                anniversary_date_input = ui.input('Anniversary Date (YYYY-MM-DD) - Optional', placeholder='2025-12-04').classes('flex-1')
             
+            # Row 5: Department | Role
             with ui.row().classes('w-full gap-4'):
-                last_name_input = ui.input('Last Name').classes('flex-1')
-                
                 # Get departments for dropdown
                 db = next(get_db())
                 try:
@@ -457,15 +464,9 @@ def admin_employees_add():
                     db.close()
                 
                 department_select = ui.select(dept_options, label='Department', value=None).classes('flex-1')
-            
-            with ui.row().classes('w-full gap-4'):
+                
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin'}
                 role_select = ui.select(role_options, label='Role', value='employee').classes('flex-1')
-                
-                from datetime import date
-                hire_date_input = ui.date(value=date.today()).props('label="Hire Date"').classes('flex-1')
-            
-            anniversary_date_input = ui.date().props('label="Anniversary Date (Optional)"').classes('w-full')
             
             # Remote Work Days Section
             ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
@@ -500,6 +501,36 @@ def admin_employees_add():
                     if not last_name_input.value:
                         ui.notify('Last Name is required', type='negative')
                         return
+                    if not hire_date_input.value:
+                        ui.notify('Hire Date is required', type='negative')
+                        return
+                    
+                    # Validate date formats
+                    import re
+                    from datetime import datetime
+                    
+                    date_pattern = r'^\d{4}-\d{2}-\d{2}$'
+                    
+                    if not re.match(date_pattern, hire_date_input.value):
+                        ui.notify('Hire Date must be in YYYY-MM-DD format', type='negative')
+                        return
+                    
+                    try:
+                        hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
+                    except ValueError:
+                        ui.notify('Invalid hire date', type='negative')
+                        return
+                    
+                    anniversary_date = None
+                    if anniversary_date_input.value:
+                        if not re.match(date_pattern, anniversary_date_input.value):
+                            ui.notify('Anniversary Date must be in YYYY-MM-DD format', type='negative')
+                            return
+                        try:
+                            anniversary_date = datetime.strptime(anniversary_date_input.value, '%Y-%m-%d').date()
+                        except ValueError:
+                            ui.notify('Invalid anniversary date', type='negative')
+                            return
                     
                     # Build remote schedule JSON
                     import json
@@ -524,8 +555,8 @@ def admin_employees_add():
                             last_name=last_name_input.value,
                             department_id=department_select.value,
                             role=role_select.value,
-                            hire_date=hire_date_input.value,
-                            anniversary_date=anniversary_date_input.value,
+                            hire_date=hire_date,
+                            anniversary_date=anniversary_date,
                             remote_schedule=json.dumps(remote_schedule),
                             is_active=is_active_check.value
                         )
