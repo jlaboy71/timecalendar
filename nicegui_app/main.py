@@ -452,7 +452,7 @@ def admin_employees_add():
             with ui.row().classes('w-full gap-2'):
                 hire_month_select = ui.select({1:'January', 2:'February', 3:'March', 4:'April', 5:'May', 6:'June', 7:'July', 8:'August', 9:'September', 10:'October', 11:'November', 12:'December'}, label='Month', value=None).classes('flex-1')
                 hire_day_select = ui.select({i:str(i) for i in range(1, 32)}, label='Day', value=None).classes('flex-1')
-                hire_year_select = ui.select({i:str(i) for i in range(2020, 2031)}, label='Year', value=None).classes('flex-1')
+                hire_year_select = ui.select({i:str(i) for i in range(1980, 2031)}, label='Year', value=None).classes('flex-1')
             
             # Row 5: Department | Role
             with ui.row().classes('w-full gap-4'):
