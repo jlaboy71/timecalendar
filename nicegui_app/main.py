@@ -7,6 +7,9 @@ from src.database import get_db
 from nicegui_app.pages.login import login_page
 from nicegui_app.pages.dashboard import dashboard_page
 from nicegui_app.pages.request_form import request_form_page
+from nicegui_app.pages.carryover import carryover_page
+from nicegui_app.pages.manager_carryover import manager_carryover_page
+from nicegui_app.pages.calendar import calendar_page
 
 # Set up basic app configuration
 app.title = "TJM Time Calendar"
@@ -29,8 +32,17 @@ def submit_request():
 @ui.page('/calendar')
 def calendar():
     """Calendar view page."""
-    ui.label('Calendar View - Coming in Session 5').classes('text-2xl')
-    ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
+    calendar_page()
+
+@ui.page('/carryover')
+def carryover():
+    """Carryover request page."""
+    carryover_page()
+
+@ui.page('/manager/carryover')
+def manager_carryover():
+    """Manager carryover approval page."""
+    manager_carryover_page()
 
 @ui.page('/requests')
 def requests():
@@ -95,7 +107,13 @@ def manager():
         return
 
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
-        ui.label('Manager Dashboard - Pending PTO Requests').classes('text-3xl font-bold mb-6')
+        ui.label('Manager Dashboard').classes('text-3xl font-bold mb-6')
+
+        # Quick Actions
+        with ui.row().classes('w-full gap-4 mb-6'):
+            ui.button('Carryover Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='secondary')
+
+        ui.label('Pending PTO Requests').classes('text-xl font-semibold mb-4')
 
         # Get pending requests
         db = next(get_db())
@@ -256,6 +274,14 @@ def admin_panel():
                     ui.label('Add, edit, and manage employee accounts').classes('text-gray-600 text-center')
                     ui.button('Go to Employees', on_click=lambda: ui.navigate.to('/admin/employees'), color='primary')
             
+            # Carryover Approvals card
+            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('approval', size='3rem').classes('text-primary')
+                    ui.label('Carryover Approvals').classes('text-xl font-semibold')
+                    ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
+                    ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
+
             # Reports card (disabled)
             with ui.card().classes('p-6 opacity-50'):
                 with ui.column().classes('items-center gap-4'):
@@ -515,7 +541,35 @@ def admin_employees_add():
                 
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin'}
                 role_select = ui.select(role_options, label='Role', value='employee').classes('flex-1')
-            
+
+            # Row 6: Location State | Location City
+            ui.label('Work Location').classes('text-lg font-semibold mt-4 mb-2')
+            with ui.row().classes('w-full gap-4'):
+                state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
+                location_state_select = ui.select(state_options, label='State', value=None).classes('flex-1')
+
+                # City options depend on state
+                city_options = {None: 'Select City'}
+                location_city_select = ui.select(city_options, label='City', value=None).classes('flex-1')
+
+                def update_city_options():
+                    """Update city dropdown based on selected state."""
+                    state = location_state_select.value
+                    if state == 'IL':
+                        location_city_select.options = {None: 'Select City', 'Chicago': 'Chicago', 'Springfield': 'Springfield', 'Other': 'Other'}
+                    elif state == 'NY':
+                        location_city_select.options = {None: 'Select City', 'New York City': 'New York City', 'Buffalo': 'Buffalo', 'Other': 'Other'}
+                    elif state == 'CT':
+                        location_city_select.options = {None: 'Select City', 'Hartford': 'Hartford', 'New Haven': 'New Haven', 'Other': 'Other'}
+                    elif state == 'FL':
+                        location_city_select.options = {None: 'Select City', 'Miami': 'Miami', 'Orlando': 'Orlando', 'Tampa': 'Tampa', 'Other': 'Other'}
+                    else:
+                        location_city_select.options = {None: 'Select City'}
+                    location_city_select.value = None
+                    location_city_select.update()
+
+                location_state_select.on('update:model-value', lambda e: update_city_options())
+
             # Remote Work Days Section
             ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
             with ui.row().classes('gap-4'):
@@ -596,7 +650,9 @@ def admin_employees_add():
                             hire_date=hire_date,
                             anniversary_date=anniversary_date,
                             remote_schedule=json.dumps(remote_schedule),
-                            is_active=is_active_check.value
+                            is_active=is_active_check.value,
+                            location_state=location_state_select.value,
+                            location_city=location_city_select.value if location_city_select.value != 'Other' else None
                         )
                         
                         user_service = UserService(db)
@@ -681,7 +737,38 @@ def admin_employees_edit(user_id: int):
                     
                     role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin'}
                     role_select = ui.select(role_options, label='Role', value=user.role).classes('flex-1')
-                
+
+                # Row 6: Location State | Location City
+                ui.label('Work Location').classes('text-lg font-semibold mt-4 mb-2')
+                with ui.row().classes('w-full gap-4'):
+                    state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
+                    location_state_select = ui.select(state_options, label='State', value=user.location_state).classes('flex-1')
+
+                    # City options depend on state - initialize based on current user state
+                    def get_city_options_for_state(state):
+                        if state == 'IL':
+                            return {None: 'Select City', 'Chicago': 'Chicago', 'Springfield': 'Springfield', 'Other': 'Other'}
+                        elif state == 'NY':
+                            return {None: 'Select City', 'New York City': 'New York City', 'Buffalo': 'Buffalo', 'Other': 'Other'}
+                        elif state == 'CT':
+                            return {None: 'Select City', 'Hartford': 'Hartford', 'New Haven': 'New Haven', 'Other': 'Other'}
+                        elif state == 'FL':
+                            return {None: 'Select City', 'Miami': 'Miami', 'Orlando': 'Orlando', 'Tampa': 'Tampa', 'Other': 'Other'}
+                        else:
+                            return {None: 'Select City'}
+
+                    initial_city_options = get_city_options_for_state(user.location_state)
+                    location_city_select = ui.select(initial_city_options, label='City', value=user.location_city).classes('flex-1')
+
+                    def update_city_options_edit():
+                        """Update city dropdown based on selected state."""
+                        state = location_state_select.value
+                        location_city_select.options = get_city_options_for_state(state)
+                        location_city_select.value = None
+                        location_city_select.update()
+
+                    location_state_select.on('update:model-value', lambda e: update_city_options_edit())
+
                 # Remote Work Days Section
                 ui.label('Remote Work Days').classes('text-lg font-semibold mt-6 mb-2')
                 with ui.row().classes('gap-4'):
@@ -756,7 +843,9 @@ def admin_employees_edit(user_id: int):
                                 'role': role_select.value,
                                 'hire_date': hire_date,
                                 'remote_schedule': json.dumps(remote_schedule),
-                                'is_active': is_active_check.value
+                                'is_active': is_active_check.value,
+                                'location_state': location_state_select.value,
+                                'location_city': location_city_select.value if location_city_select.value != 'Other' else None
                             }
                             
                             # Only include password if provided
