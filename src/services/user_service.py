@@ -62,7 +62,9 @@ class UserService:
             hire_date=user_data.hire_date,
             is_active=user_data.is_active,
             location_state=user_data.location_state,
-            location_city=user_data.location_city
+            location_city=user_data.location_city,
+            remote_schedule=user_data.remote_schedule,
+            anniversary_date=user_data.anniversary_date
         )
         
         self.db.add(user)
@@ -162,17 +164,28 @@ class UserService:
         if not user:
             return None
         
-        # Check for email uniqueness if email is being updated
+        # Check for username uniqueness if username is being updated
         update_data = user_data.model_dump(exclude_unset=True)
+        if 'username' in update_data and update_data['username'] != user.username:
+            existing_user = self.get_user_by_username(update_data['username'])
+            if existing_user and existing_user.id != user_id:
+                raise ValueError(f"Username '{update_data['username']}' already exists")
+
+        # Check for email uniqueness if email is being updated
         if 'email' in update_data and update_data['email'] != user.email:
             existing_user = self.get_user_by_email(update_data['email'])
             if existing_user and existing_user.id != user_id:
                 raise ValueError(f"Email '{update_data['email']}' already exists")
-        
+
+        # Handle password update separately (needs hashing)
+        if 'password' in update_data and update_data['password']:
+            user.password_hash = hash_password(update_data['password'])
+            del update_data['password']
+
         # Update user attributes
         for field, value in update_data.items():
             setattr(user, field, value)
-        
+
         self.db.commit()
         self.db.refresh(user)
         return user

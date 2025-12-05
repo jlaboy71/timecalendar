@@ -17,32 +17,35 @@ class UserBase(BaseModel):
     is_active: bool = True
     location_state: Optional[str] = None
     location_city: Optional[str] = None
+    remote_schedule: Optional[str] = None
+    anniversary_date: Optional[date] = None
 
 
 class UserCreate(UserBase):
     """Schema for creating a new user."""
     password: str
-    
+
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
         """Validate password requirements."""
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
-        
+
         has_letter = any(c.isalpha() for c in v)
         has_number = any(c.isdigit() for c in v)
-        
+
         if not has_letter:
             raise ValueError('Password must contain at least one letter')
         if not has_number:
             raise ValueError('Password must contain at least one number')
-            
+
         return v
 
 
 class UserUpdate(BaseModel):
     """Schema for updating user information."""
+    username: Optional[str] = None
     email: Optional[EmailStr] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -51,6 +54,10 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     location_state: Optional[str] = None
     location_city: Optional[str] = None
+    hire_date: Optional[date] = None
+    remote_schedule: Optional[str] = None
+    anniversary_date: Optional[date] = None
+    password: Optional[str] = None
 
 
 class UserResponse(UserBase):

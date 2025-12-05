@@ -9,10 +9,17 @@ from src.models.user import User
 from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
+from nicegui_app.logo import LOGO_DATA_URL
 
 
 def manager_carryover_page():
     """Manager page for reviewing and approving/denying carryover requests."""
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
 
     # Check if user is logged in and has manager/admin role
     user = app.storage.general.get('user')
@@ -20,17 +27,20 @@ def manager_carryover_page():
         ui.navigate.to('/')
         return
 
-    if user.get('role') not in ['manager', 'admin']:
+    if user.get('role') not in ['manager', 'admin', 'superadmin']:
         ui.notify('Access denied. Manager or Admin role required.', type='negative')
         ui.navigate.to('/dashboard')
         return
 
-    is_admin = user.get('role') == 'admin'
+    # Superadmin and admin have full access to all departments
+    is_admin = user.get('role') in ['admin', 'superadmin']
     current_year = date.today().year
 
     with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-        ui.label('Carryover Request Approvals').classes('text-2xl font-bold mb-2')
-        ui.label(f'Review carryover requests from {current_year} to {current_year + 1}').classes('text-gray-600 mb-6')
+        with ui.column().classes('gap-2 mb-2'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            ui.label('CARRYOVER REQUEST APPROVALS').classes('text-xl font-bold').style('color: #5a6a72;')
+        ui.label(f'Review carryover requests from {current_year} to {current_year + 1}').classes('opacity-70 mb-6')
 
         # Container for pending requests - will be refreshed
         pending_container = ui.column().classes('w-full mb-6')
@@ -102,27 +112,27 @@ def manager_carryover_page():
                                 # Get employee's current balance for context
                                 balance = balance_service.get_or_create_balance(employee.id, current_year)
 
-                                with ui.card().classes('w-full mb-4 p-4 bg-yellow-50'):
+                                with ui.card().classes('w-full mb-4 p-4 border-l-4 border-amber-500'):
                                     # Header row with employee info
                                     with ui.row().classes('w-full justify-between items-start mb-4'):
                                         with ui.column():
                                             ui.label(f'{employee.full_name}').classes('font-semibold text-lg')
-                                            ui.label(f'{leave_type.name} • {req.hours_requested} hours requested').classes('text-gray-600')
+                                            ui.label(f'{leave_type.name} • {req.hours_requested} hours requested').classes('opacity-70')
                                             if employee.department:
-                                                ui.label(f'Department: {employee.department.name}').classes('text-sm text-gray-500')
+                                                ui.label(f'Department: {employee.department.name}').classes('text-sm opacity-60')
                                             location = f'{employee.location_city}, {employee.location_state}' if employee.location_city else employee.location_state or 'Not set'
-                                            ui.label(f'Location: {location}').classes('text-sm text-gray-500')
+                                            ui.label(f'Location: {location}').classes('text-sm opacity-60')
 
-                                        ui.label(f'Submitted: {req.created_at.strftime("%m/%d/%Y")}').classes('text-sm text-gray-500')
+                                        ui.label(f'Submitted: {req.created_at.strftime("%m/%d/%Y")}').classes('text-sm opacity-60')
 
                                     # Policy context
                                     with ui.row().classes('w-full gap-4 mb-4'):
-                                        with ui.card().classes('flex-1 p-3 bg-white'):
+                                        with ui.card().classes('flex-1 p-3'):
                                             ui.label('Policy Context').classes('font-medium text-sm')
                                             if max_auto_carryover > 0:
                                                 ui.label(f'Auto carryover limit: {max_auto_carryover} hrs').classes('text-sm')
                                             else:
-                                                ui.label('No auto carryover allowed').classes('text-sm text-amber-600')
+                                                ui.label('No auto carryover allowed').classes('text-sm text-amber-500')
 
                                         # Show current unused balance
                                         if balance:
@@ -134,15 +144,15 @@ def manager_carryover_page():
                                             elif leave_type.code == 'PERSONAL':
                                                 unused = float(balance.personal_total) - float(balance.personal_used)
 
-                                            with ui.card().classes('flex-1 p-3 bg-white'):
+                                            with ui.card().classes('flex-1 p-3'):
                                                 ui.label('Current Balance').classes('font-medium text-sm')
                                                 ui.label(f'{unused:.1f} hrs unused').classes('text-sm')
 
                                     # Employee notes
                                     if req.employee_notes:
-                                        with ui.card().classes('w-full p-3 bg-white mb-4'):
+                                        with ui.card().classes('w-full p-3 mb-4'):
                                             ui.label('Employee Notes:').classes('font-medium text-sm')
-                                            ui.label(req.employee_notes).classes('text-sm text-gray-700')
+                                            ui.label(req.employee_notes).classes('text-sm opacity-80')
 
                                     # Approval form
                                     with ui.row().classes('w-full gap-4 items-end'):
@@ -180,7 +190,7 @@ def manager_carryover_page():
                                             color='negative'
                                         )
                         else:
-                            ui.label('No pending carryover requests').classes('text-gray-600')
+                            ui.label('No pending carryover requests').classes('opacity-70')
 
                 # Display processed requests
                 with processed_container:
@@ -213,7 +223,7 @@ def manager_carryover_page():
 
                             ui.table(columns=columns, rows=rows).classes('w-full')
                         else:
-                            ui.label('No processed requests').classes('text-gray-600')
+                            ui.label('No processed requests').classes('opacity-70')
 
             finally:
                 db.close()

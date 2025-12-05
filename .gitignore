@@ -80,3 +80,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# NiceGUI storage (session data)
+.nicegui/

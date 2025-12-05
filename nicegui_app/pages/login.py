@@ -1,14 +1,24 @@
 from nicegui import ui, app
 from src.services.user_service import UserService
 from src.database import get_db
+from nicegui_app.logo import LOGO_DATA_URL
 
 
 def login_page():
     """Create a centered login page with Material Design styling."""
-    
-    with ui.column().classes('w-full h-screen flex items-center justify-center bg-gray-50'):
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    with ui.column().classes('w-full h-screen flex items-center justify-center'):
         with ui.card().classes('w-96 p-8'):
-            ui.label('Login').classes('text-2xl font-bold text-center mb-6')
+            # Logo and title
+            with ui.column().classes('w-full items-center mb-6'):
+                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto; margin-bottom: 16px;')
+                ui.label('TJM TIME CALENDAR').classes('text-xl font-bold text-center').style('color: #5a6a72;')
             
             # Username input
             username_input = ui.input(label='Username').classes('w-full mb-4')

@@ -10,10 +10,17 @@ from src.services.department_service import DepartmentService
 from datetime import date, timedelta
 from calendar import monthcalendar, month_name
 from collections import defaultdict
+from nicegui_app.logo import LOGO_DATA_URL
 
 
 def calendar_page():
     """Team calendar page with monthly view of holidays and PTO."""
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
 
     # Check if user is logged in
     user = app.storage.general.get('user')
@@ -33,7 +40,7 @@ def calendar_page():
 
     # State for filters with persistence
     selected_department = {'id': calendar_prefs.get('department_id', None)}
-    view_mode = {'mode': calendar_prefs.get('view_mode', 'team' if user_role in ['manager', 'admin'] else 'my')}
+    view_mode = {'mode': calendar_prefs.get('view_mode', 'team' if user_role in ['manager', 'admin', 'superadmin'] else 'my')}
     show_holidays = {'value': calendar_prefs.get('show_holidays', True)}
     show_weekends = {'value': calendar_prefs.get('show_weekends', True)}
     leave_type_filters = {
@@ -63,10 +70,12 @@ def calendar_page():
 
     # Main container
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
-        ui.label('Team Calendar').classes('text-3xl font-bold mb-4')
+        with ui.column().classes('gap-2 mb-4'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            ui.label('TEAM CALENDAR').classes('text-xl font-bold').style('color: #5a6a72;')
 
-        # ===== VIEW TOGGLE (managers/admins only) =====
-        if user_role in ['manager', 'admin']:
+        # ===== VIEW TOGGLE (managers/admins/superadmins only) =====
+        if user_role in ['manager', 'admin', 'superadmin']:
             with ui.row().classes('w-full mb-4 gap-2'):
                 ui.label('View:').classes('font-medium self-center')
 
@@ -92,10 +101,10 @@ def calendar_page():
         # ===== FILTERS ROW =====
         with ui.expansion('Filters & Options', icon='filter_list').classes('w-full mb-4'):
             with ui.column().classes('w-full gap-4 p-2'):
-                # Row 1: Department filter (admin only) and Leave Type filters
+                # Row 1: Department filter (admin/superadmin only) and Leave Type filters
                 with ui.row().classes('w-full gap-6 flex-wrap'):
-                    # Department filter (admin only, team view only)
-                    if user_role == 'admin':
+                    # Department filter (admin/superadmin only, team view only)
+                    if user_role in ['admin', 'superadmin']:
                         with ui.column().classes('gap-1'):
                             ui.label('Department').classes('text-sm font-medium')
                             db = next(get_db())
@@ -151,7 +160,7 @@ def calendar_page():
                                 'Other',
                                 value=leave_type_filters['other'],
                                 on_change=create_leave_filter_handler('other')
-                            ).classes('text-gray-600')
+                            )
 
                 # Row 2: Show/Hide options
                 with ui.row().classes('w-full gap-6'):
@@ -223,23 +232,23 @@ def calendar_page():
             ui.label('Legend:').classes('font-semibold')
             if show_holidays['value']:
                 with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-red-200 border border-red-400 rounded')
+                    ui.element('div').classes('w-4 h-4 bg-red-500/20 border border-red-500 rounded')
                     ui.label('Market Holiday').classes('text-sm')
             if leave_type_filters['vacation']:
                 with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-blue-200 border border-blue-400 rounded')
+                    ui.element('div').classes('w-4 h-4 bg-blue-500/20 border border-blue-500 rounded')
                     ui.label('Vacation').classes('text-sm')
             if leave_type_filters['sick']:
                 with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-green-200 border border-green-400 rounded')
+                    ui.element('div').classes('w-4 h-4 bg-green-500/20 border border-green-500 rounded')
                     ui.label('Sick').classes('text-sm')
             if leave_type_filters['personal']:
                 with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-purple-200 border border-purple-400 rounded')
+                    ui.element('div').classes('w-4 h-4 bg-purple-500/20 border border-purple-500 rounded')
                     ui.label('Personal').classes('text-sm')
             if leave_type_filters['other']:
                 with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-gray-200 border border-gray-400 rounded')
+                    ui.element('div').classes('w-4 h-4 bg-gray-500/20 border border-gray-500 rounded')
                     ui.label('Other').classes('text-sm')
 
         # Back button
@@ -272,12 +281,12 @@ def calendar_page():
                         if pto_request.notes:
                             ui.separator()
                             ui.label('Notes:').classes('font-medium')
-                            ui.label(pto_request.notes).classes('text-gray-600')
+                            ui.label(pto_request.notes).classes('opacity-70')
 
                     ui.separator()
 
                     with ui.row().classes('w-full justify-end gap-2'):
-                        if user_role in ['manager', 'admin'] and pto_request.user_id != user_id:
+                        if user_role in ['manager', 'admin', 'superadmin'] and pto_request.user_id != user_id:
                             ui.button(
                                 'View Full Request',
                                 on_click=lambda: (dialog.close(), ui.navigate.to(f'/manager/request/{request_id}'))
@@ -304,19 +313,19 @@ def calendar_page():
                     ui.label(f'Date: {holiday_date.strftime("%A, %B %d, %Y")}').classes('font-medium')
 
                     for h_name, markets in holiday_info.items():
-                        with ui.card().classes('w-full bg-red-50 p-3'):
-                            ui.label(h_name).classes('font-semibold text-red-800')
+                        with ui.card().classes('w-full border-l-4 border-red-500 p-3'):
+                            ui.label(h_name).classes('font-semibold text-red-500')
 
                             major_exchanges = {'NYSE', 'CME', 'CBOE'}
                             closed_exchanges = set(markets)
 
                             if major_exchanges.issubset(closed_exchanges):
-                                ui.label('All major exchanges closed').classes('text-sm text-red-700')
+                                ui.label('All major exchanges closed').classes('text-sm text-red-500')
                             else:
-                                ui.label(f'Exchanges closed: {", ".join(markets)}').classes('text-sm text-red-700')
+                                ui.label(f'Exchanges closed: {", ".join(markets)}').classes('text-sm text-red-500')
 
                     ui.separator()
-                    ui.label('Company offices may be closed on this day.').classes('text-sm text-gray-600 italic')
+                    ui.label('Company offices may be closed on this day.').classes('text-sm opacity-70 italic')
 
                 with ui.row().classes('w-full justify-end mt-4'):
                     ui.button('Close', on_click=dialog.close).props('flat')
@@ -355,7 +364,7 @@ def calendar_page():
 
             with ui.dialog() as dialog, ui.card().classes('min-w-80'):
                 ui.label('Request Time Off').classes('text-xl font-bold mb-2')
-                ui.label(f'{click_date.strftime("%A, %B %d, %Y")}').classes('text-gray-600 mb-4')
+                ui.label(f'{click_date.strftime("%A, %B %d, %Y")}').classes('opacity-70 mb-4')
 
                 ui.label('Would you like to submit a PTO request for this date?').classes('mb-4')
 
@@ -398,13 +407,13 @@ def calendar_page():
             """Get color class based on PTO type."""
             pto_type_lower = pto_type.lower()
             if 'vacation' in pto_type_lower:
-                return 'bg-blue-200 border-blue-400 text-blue-800'
+                return 'bg-blue-500/20 border-blue-500 text-blue-600'
             elif 'sick' in pto_type_lower:
-                return 'bg-green-200 border-green-400 text-green-800'
+                return 'bg-green-500/20 border-green-500 text-green-600'
             elif 'personal' in pto_type_lower:
-                return 'bg-purple-200 border-purple-400 text-purple-800'
+                return 'bg-purple-500/20 border-purple-500 text-purple-600'
             else:
-                return 'bg-gray-200 border-gray-400 text-gray-800'
+                return 'bg-gray-500/20 border-gray-500'
 
         def get_leave_type_category(pto_type: str) -> str:
             """Categorize leave type for filtering."""
@@ -470,13 +479,15 @@ def calendar_page():
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                elif user_role == 'admin' and view_mode['mode'] == 'team':
+                elif user_role in ['admin', 'superadmin'] and view_mode['mode'] == 'team':
+                    # Superadmin sees ALL departments, admin can filter
                     if selected_department['id']:
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == selected_department['id'],
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
+                    # If no department selected, superadmin/admin sees all
 
                 approved_pto = pto_query.all()
 
@@ -571,13 +582,15 @@ def calendar_page():
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                elif user_role == 'admin' and view_mode['mode'] == 'team':
+                elif user_role in ['admin', 'superadmin'] and view_mode['mode'] == 'team':
+                    # Superadmin sees ALL departments, admin can filter
                     if selected_department['id']:
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == selected_department['id'],
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
+                    # If no department selected, superadmin/admin sees all
 
                 approved_pto = pto_query.all()
 
@@ -623,11 +636,11 @@ def calendar_page():
                 day_indices = [1, 2, 3, 4, 5]  # Monday=0 in Python, but our week starts Sun
 
             with calendar_container:
-                with ui.element('div').classes('w-full border border-gray-300 rounded-lg overflow-hidden'):
+                with ui.element('div').classes('w-full rounded-lg overflow-hidden').style('border: 1px solid rgba(128,128,128,0.3)'):
                     # Header row
-                    with ui.row().classes('w-full bg-gray-100'):
+                    with ui.row().classes('w-full').style('background: rgba(128,128,128,0.1)'):
                         for day_name in day_names:
-                            with ui.element('div').classes('flex-1 p-2 text-center font-semibold border-r border-gray-300 last:border-r-0'):
+                            with ui.element('div').classes('flex-1 p-2 text-center font-semibold last:border-r-0').style('border-right: 1px solid rgba(128,128,128,0.3)'):
                                 ui.label(day_name).classes('text-sm')
 
                     # Calendar weeks
@@ -643,13 +656,14 @@ def calendar_page():
                         if all(d == 0 for d in display_days):
                             continue
 
-                        with ui.row().classes('w-full border-t border-gray-300'):
+                        with ui.row().classes('w-full').style('border-top: 1px solid rgba(128,128,128,0.3)'):
                             for idx, day_num in enumerate(display_days):
-                                cell_classes = 'flex-1 min-h-24 p-1 border-r border-gray-300 last:border-r-0 relative'
+                                cell_classes = 'flex-1 min-h-24 p-1 last:border-r-0 relative'
+                                cell_style = 'border-right: 1px solid rgba(128,128,128,0.3);'
 
                                 if day_num == 0:
-                                    cell_classes += ' bg-gray-50'
-                                    with ui.element('div').classes(cell_classes):
+                                    cell_style += ' background: rgba(128,128,128,0.05);'
+                                    with ui.element('div').classes(cell_classes).style(cell_style):
                                         pass
                                 else:
                                     current_date = date(year, month, day_num)
@@ -659,19 +673,17 @@ def calendar_page():
                                     has_pto = current_date in pto_by_date
 
                                     if has_holiday:
-                                        cell_classes += ' bg-red-50'
+                                        cell_style += ' background: rgba(239,68,68,0.1);'  # red-500 with opacity
                                     elif is_weekend:
-                                        cell_classes += ' bg-gray-50'
-                                    else:
-                                        cell_classes += ' bg-white'
+                                        cell_style += ' background: rgba(128,128,128,0.05);'
 
                                     if user_role == 'employee' and not has_holiday and not has_pto:
-                                        cell_classes += ' cursor-pointer hover:bg-blue-50'
+                                        cell_classes += ' cursor-pointer hover:bg-blue-500/10'
 
                                     def create_empty_day_handler(d):
                                         return lambda: show_quick_request_popup(d)
 
-                                    cell_element = ui.element('div').classes(cell_classes)
+                                    cell_element = ui.element('div').classes(cell_classes).style(cell_style)
 
                                     if user_role == 'employee' and not has_holiday and not has_pto:
                                         cell_element.on('click', create_empty_day_handler(current_date))
@@ -683,7 +695,7 @@ def calendar_page():
                                                 ui.label(str(day_num)).classes('text-white text-sm font-bold')
                                         else:
                                             if is_weekend:
-                                                day_classes += ' text-gray-400'
+                                                day_classes += ' opacity-50'
                                             ui.label(str(day_num)).classes(day_classes)
 
                                         # Show holidays
@@ -701,7 +713,7 @@ def calendar_page():
                                             for h_name, markets in holiday_names_map.items():
                                                 tooltip_text = f"{h_name} ({', '.join(markets)}) - Click for details"
                                                 holiday_el = ui.element('div').classes(
-                                                    'text-xs bg-red-200 text-red-800 px-1 rounded mt-1 truncate cursor-pointer hover:bg-red-300'
+                                                    'text-xs bg-red-500/20 text-red-500 px-1 rounded mt-1 truncate cursor-pointer hover:bg-red-500/30'
                                                 ).tooltip(tooltip_text)
                                                 holiday_el.on('click', create_holiday_handler(current_date, holiday_list))
                                                 with holiday_el:
@@ -731,7 +743,7 @@ def calendar_page():
                                                     return lambda e: (e.stop_propagation(), show_all_pto_modal(d, entries))
 
                                                 more_el = ui.element('div').classes(
-                                                    'text-xs text-gray-500 mt-1 cursor-pointer hover:text-blue-600 hover:underline'
+                                                    'text-xs opacity-60 mt-1 cursor-pointer hover:text-blue-600 hover:underline'
                                                 )
                                                 more_el.on('click', create_more_handler(current_date, pto_entries))
                                                 with more_el:
