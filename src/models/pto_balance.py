@@ -65,16 +65,36 @@ class PTOBalance(Base):
     
     # Personal day balances
     personal_total: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), 
-        default=Decimal('0.00'), 
+        Numeric(5, 2),
+        default=Decimal('0.00'),
         nullable=False
     )
     personal_used: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), 
-        default=Decimal('0.00'), 
+        Numeric(5, 2),
+        default=Decimal('0.00'),
         nullable=False
     )
-    
+
+    # Carryover balances (hours carried from previous year)
+    vacation_carryover: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Vacation hours carried over from previous year'
+    )
+    sick_carryover: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Sick hours carried over from previous year'
+    )
+    personal_carryover: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Personal hours carried over from previous year'
+    )
+
     # Remote work tracking
     remote_weekly_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
@@ -105,15 +125,15 @@ class PTOBalance(Base):
     
     @property
     def vacation_available(self) -> Decimal:
-        """Calculate available vacation days."""
-        return self.vacation_total - self.vacation_used - self.vacation_pending
-    
+        """Calculate available vacation days (including carryover)."""
+        return self.vacation_total + self.vacation_carryover - self.vacation_used - self.vacation_pending
+
     @property
     def sick_available(self) -> Decimal:
-        """Calculate available sick days."""
-        return self.sick_total - self.sick_used
-    
+        """Calculate available sick days (including carryover)."""
+        return self.sick_total + self.sick_carryover - self.sick_used
+
     @property
     def personal_available(self) -> Decimal:
-        """Calculate available personal days."""
-        return self.personal_total - self.personal_used
+        """Calculate available personal days (including carryover)."""
+        return self.personal_total + self.personal_carryover - self.personal_used

@@ -60,7 +60,9 @@ class UserService:
             role=user_data.role,
             department_id=user_data.department_id,
             hire_date=user_data.hire_date,
-            is_active=user_data.is_active
+            is_active=user_data.is_active,
+            location_state=user_data.location_state,
+            location_city=user_data.location_city
         )
         
         self.db.add(user)

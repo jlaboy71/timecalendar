@@ -15,6 +15,8 @@ class UserBase(BaseModel):
     department_id: Optional[int] = None
     hire_date: date
     is_active: bool = True
+    location_state: Optional[str] = None
+    location_city: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -47,6 +49,8 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     department_id: Optional[int] = None
     is_active: Optional[bool] = None
+    location_state: Optional[str] = None
+    location_city: Optional[str] = None
 
 
 class UserResponse(UserBase):

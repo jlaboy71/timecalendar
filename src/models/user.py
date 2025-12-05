@@ -48,6 +48,19 @@ class User(Base):
     anniversary_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     remote_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Location information (for state-specific leave policies)
+    location_state: Mapped[Optional[str]] = mapped_column(
+        String(2),
+        nullable=True,
+        index=True,
+        comment="State code: IL, NY, CT, FL"
+    )
+    location_city: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="City name (e.g., Chicago for IL-specific rules)"
+    )
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
