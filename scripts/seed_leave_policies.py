@@ -13,7 +13,7 @@ from src.models.leave_policy import LeavePolicy
 
 
 def seed_leave_policies():
-    """Insert leave policies for IL, NY, CT, FL."""
+    """Insert leave policies for IL, NY, NJ, CT, FL."""
     db = next(get_db())
 
     # Get leave type IDs
@@ -109,6 +109,20 @@ def seed_leave_policies():
             "accrual_rate": Decimal("1"),
             "accrual_period": "per_hours_worked",
             "accrual_hours_divisor": 40,  # 1 hr per 40 hrs worked
+            "max_annual_hours": Decimal("40"),
+            "max_carryover_hours": Decimal("60"),
+            "waiting_period_days": 90,
+            "min_increment_hours": Decimal("4"),
+            "effective_date": date(2024, 1, 1),
+        },
+        # New Jersey
+        {
+            "leave_type_id": sick.id,
+            "location_state": "NJ",
+            "location_city": None,
+            "accrual_rate": Decimal("1"),
+            "accrual_period": "per_hours_worked",
+            "accrual_hours_divisor": 30,  # 1 hr per 30 hrs worked
             "max_annual_hours": Decimal("40"),
             "max_carryover_hours": Decimal("60"),
             "waiting_period_days": 90,

@@ -227,29 +227,27 @@ def calendar_page():
         # Calendar container
         calendar_container = ui.column().classes('w-full')
 
-        # Legend
-        with ui.row().classes('w-full gap-6 mt-6 flex-wrap'):
-            ui.label('Legend:').classes('font-semibold')
-            if show_holidays['value']:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-red-500/20 border border-red-500 rounded')
-                    ui.label('Market Holiday').classes('text-sm')
-            if leave_type_filters['vacation']:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-blue-500/20 border border-blue-500 rounded')
-                    ui.label('Vacation').classes('text-sm')
-            if leave_type_filters['sick']:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-green-500/20 border border-green-500 rounded')
-                    ui.label('Sick').classes('text-sm')
-            if leave_type_filters['personal']:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-purple-500/20 border border-purple-500 rounded')
-                    ui.label('Personal').classes('text-sm')
-            if leave_type_filters['other']:
-                with ui.row().classes('gap-1 items-center'):
-                    ui.element('div').classes('w-4 h-4 bg-gray-500/20 border border-gray-500 rounded')
-                    ui.label('Other').classes('text-sm')
+        # Legend - Always visible with card styling
+        with ui.card().classes('w-full p-4 mt-2'):
+            with ui.row().classes('w-full gap-8 flex-wrap items-center'):
+                ui.label('Calendar Legend').classes('font-bold text-lg')
+                ui.element('div').classes('flex-grow')
+                with ui.row().classes('gap-6 flex-wrap'):
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 bg-red-500/20 border-2 border-red-500 rounded')
+                        ui.label('Market Holiday').classes('text-sm font-medium')
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 bg-blue-500/20 border-2 border-blue-500 rounded')
+                        ui.label('Vacation').classes('text-sm font-medium text-blue-600')
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 bg-green-500/20 border-2 border-green-500 rounded')
+                        ui.label('Sick').classes('text-sm font-medium text-green-600')
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 bg-purple-500/20 border-2 border-purple-500 rounded')
+                        ui.label('Personal').classes('text-sm font-medium text-purple-600')
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 bg-gray-500/20 border-2 border-gray-500 rounded')
+                        ui.label('Other').classes('text-sm font-medium')
 
         # Back button
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-6')
@@ -268,31 +266,138 @@ def calendar_page():
                 pto_user = db.query(User).filter(User.id == pto_request.user_id).first()
                 employee_name = f"{pto_user.first_name} {pto_user.last_name}" if pto_user else "Unknown"
 
-                with ui.dialog() as dialog, ui.card().classes('min-w-96'):
-                    ui.label('PTO Request Details').classes('text-xl font-bold mb-4')
+                # Get approver info if approved
+                approver_name = None
+                if pto_request.approved_by:
+                    approver = db.query(User).filter(User.id == pto_request.approved_by).first()
+                    if approver:
+                        approver_name = f"{approver.first_name} {approver.last_name}"
 
-                    with ui.column().classes('gap-2'):
-                        ui.label(f'Employee: {employee_name}').classes('font-medium')
-                        ui.label(f'Leave Type: {pto_request.pto_type.title()}')
-                        ui.label(f'Date Range: {pto_request.start_date.strftime("%m/%d/%Y")} - {pto_request.end_date.strftime("%m/%d/%Y")}')
-                        ui.label(f'Total Days: {pto_request.total_days}')
-                        ui.label(f'Status: {pto_request.status.title()}')
+                # Only the owner can edit their own notes - managers should not edit employee notes
+                can_edit_notes = (pto_request.user_id == user_id)
 
-                        if pto_request.notes:
+                # Get color for leave type
+                pto_type_lower = pto_request.pto_type.lower()
+                if 'vacation' in pto_type_lower:
+                    accent_color = 'blue'
+                    icon_name = 'beach_access'
+                elif 'sick' in pto_type_lower:
+                    accent_color = 'green'
+                    icon_name = 'local_hospital'
+                elif 'personal' in pto_type_lower:
+                    accent_color = 'purple'
+                    icon_name = 'person'
+                else:
+                    accent_color = 'gray'
+                    icon_name = 'event'
+
+                with ui.dialog() as dialog, ui.card().classes('min-w-[420px] p-0 overflow-hidden'):
+                    # Header with accent color
+                    with ui.element('div').classes(f'w-full bg-{accent_color}-500 p-4'):
+                        with ui.row().classes('items-center gap-3'):
+                            ui.icon(icon_name).classes('text-white text-3xl')
+                            with ui.column().classes('gap-0'):
+                                ui.label('Time Off Request').classes('text-white text-lg font-bold')
+                                ui.label(pto_request.pto_type.title()).classes('text-white/80 text-sm')
+
+                    # Content
+                    with ui.column().classes('p-5 gap-4'):
+                        # Employee info
+                        with ui.row().classes('items-center gap-3'):
+                            with ui.element('div').classes(f'w-10 h-10 rounded-full bg-{accent_color}-100 flex items-center justify-center'):
+                                initials = f"{pto_user.first_name[0]}{pto_user.last_name[0]}" if pto_user else "?"
+                                ui.label(initials).classes(f'text-{accent_color}-600 font-bold')
+                            with ui.column().classes('gap-0'):
+                                ui.label(employee_name).classes('font-semibold text-lg')
+                                ui.label(f'Status: {pto_request.status.title()}').classes('text-sm opacity-70')
+
+                        ui.separator()
+
+                        # Date details in a nice grid
+                        with ui.element('div').classes('grid grid-cols-2 gap-4'):
+                            with ui.column().classes('gap-1'):
+                                ui.label('Start Date').classes('text-xs opacity-60 uppercase tracking-wide')
+                                ui.label(pto_request.start_date.strftime("%B %d, %Y")).classes('font-medium')
+                            with ui.column().classes('gap-1'):
+                                ui.label('End Date').classes('text-xs opacity-60 uppercase tracking-wide')
+                                ui.label(pto_request.end_date.strftime("%B %d, %Y")).classes('font-medium')
+                            with ui.column().classes('gap-1'):
+                                ui.label('Total Days').classes('text-xs opacity-60 uppercase tracking-wide')
+                                ui.label(str(pto_request.total_days)).classes('font-medium text-xl')
+                            with ui.column().classes('gap-1'):
+                                ui.label('Leave Type').classes('text-xs opacity-60 uppercase tracking-wide')
+                                with ui.element('div').classes(f'inline-flex items-center gap-1 bg-{accent_color}-100 text-{accent_color}-700 px-2 py-1 rounded'):
+                                    ui.label(pto_request.pto_type.title()).classes('font-medium text-sm')
+
+                        # Approval info section (if approved or denied)
+                        if pto_request.status in ['approved', 'denied'] and (approver_name or pto_request.approved_at):
                             ui.separator()
-                            ui.label('Notes:').classes('font-medium')
-                            ui.label(pto_request.notes).classes('opacity-70')
+                            with ui.column().classes('gap-2 w-full'):
+                                status_label = 'Approved' if pto_request.status == 'approved' else 'Denied'
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.icon('check_circle' if pto_request.status == 'approved' else 'cancel').classes(
+                                        'text-green-600' if pto_request.status == 'approved' else 'text-red-600'
+                                    )
+                                    ui.label(f'{status_label} By').classes('text-xs opacity-60 uppercase tracking-wide')
+                                with ui.element('div').classes('grid grid-cols-2 gap-4 ml-7'):
+                                    with ui.column().classes('gap-1'):
+                                        ui.label('Manager').classes('text-xs opacity-60')
+                                        ui.label(approver_name or 'N/A').classes('font-medium')
+                                    with ui.column().classes('gap-1'):
+                                        ui.label('Date').classes('text-xs opacity-60')
+                                        approval_date = pto_request.approved_at.strftime("%B %d, %Y") if pto_request.approved_at else 'N/A'
+                                        ui.label(approval_date).classes('font-medium')
 
-                    ui.separator()
+                        # Notes section - only show if user owns the request (managers don't see employee notes)
+                        if can_edit_notes:
+                            ui.separator()
+                            with ui.column().classes('gap-2 w-full'):
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.label('Notes').classes('text-xs opacity-60 uppercase tracking-wide')
+                                    ui.label('(editable)').classes('text-xs text-blue-500')
 
-                    with ui.row().classes('w-full justify-end gap-2'):
-                        if user_role in ['manager', 'admin', 'superadmin'] and pto_request.user_id != user_id:
-                            ui.button(
-                                'View Full Request',
-                                on_click=lambda: (dialog.close(), ui.navigate.to(f'/manager/request/{request_id}'))
-                            ).props('color=primary')
+                                # Editable textarea
+                                notes_input = ui.textarea(
+                                    value=pto_request.notes or '',
+                                    placeholder='Add notes about this time off request...'
+                                ).props('outlined autogrow').classes('w-full')
 
-                        ui.button('Close', on_click=dialog.close).props('flat')
+                                # Save notes button
+                                def save_notes():
+                                    save_db = next(get_db())
+                                    try:
+                                        req = save_db.query(PTORequest).filter(PTORequest.id == request_id).first()
+                                        if req:
+                                            req.notes = notes_input.value if notes_input.value.strip() else None
+                                            save_db.commit()
+                                            ui.notify('Notes saved successfully', type='positive')
+                                        else:
+                                            ui.notify('Request not found', type='negative')
+                                    except Exception as e:
+                                        ui.notify(f'Error saving notes: {str(e)}', type='negative')
+                                    finally:
+                                        save_db.close()
+
+                                with ui.row().classes('w-full justify-end'):
+                                    ui.button('Save Notes', on_click=save_notes, icon='save').props('flat color=primary').classes('text-sm')
+
+                        # Denial reason (if denied)
+                        if pto_request.status == 'denied' and pto_request.denial_reason:
+                            with ui.column().classes('gap-2 w-full'):
+                                ui.label('Denial Reason').classes('text-xs opacity-60 uppercase tracking-wide')
+                                with ui.card().classes('w-full p-3 bg-red-50 border-l-4 border-red-500'):
+                                    ui.label(pto_request.denial_reason).classes('text-sm text-red-700')
+
+                        ui.separator()
+
+                        # Action buttons
+                        with ui.row().classes('w-full justify-end gap-2'):
+                            if user_role in ['manager', 'admin', 'superadmin'] and pto_request.user_id != user_id:
+                                ui.button(
+                                    'View Full Request',
+                                    on_click=lambda: (dialog.close(), ui.navigate.to(f'/manager/request/{request_id}'))
+                                ).props('color=primary')
+                            ui.button('Close', on_click=dialog.close).props('flat')
 
                 dialog.open()
             finally:
@@ -724,17 +829,20 @@ def calendar_page():
                                             pto_entries = pto_by_date[current_date]
 
                                             def create_pto_handler(req_id):
-                                                return lambda e: (e.stop_propagation(), show_pto_detail_modal(req_id))
+                                                return lambda: show_pto_detail_modal(req_id)
 
                                             for pto_entry in pto_entries[:3]:
                                                 color_class = get_pto_color(pto_entry['type'])
+                                                # More descriptive label: First name + leave type
+                                                first_name = pto_entry['full_name'].split()[0]
+                                                leave_label = pto_entry['type'].title()
+                                                display_text = f"{first_name} - {leave_label}"
                                                 tooltip_text = f"{pto_entry['full_name']} - {pto_entry['type'].title()} - Click for details"
-                                                pto_el = ui.element('div').classes(
-                                                    f'text-xs {color_class} px-1 rounded mt-1 truncate border cursor-pointer hover:opacity-80'
-                                                ).tooltip(tooltip_text)
-                                                pto_el.on('click', create_pto_handler(pto_entry['request_id']))
-                                                with pto_el:
-                                                    ui.label(f"{pto_entry['initials']} {pto_entry['type'][:3].upper()}").classes('text-xs')
+
+                                                # Use a button styled as a div for reliable click handling
+                                                pto_btn = ui.button(display_text, on_click=create_pto_handler(pto_entry['request_id'])).props('flat dense no-caps').classes(
+                                                    f'text-xs {color_class} px-1 py-0 rounded mt-1 w-full justify-start'
+                                                ).tooltip(tooltip_text).style('min-height: 20px; font-size: 11px;')
 
                                             if len(pto_entries) > 3:
                                                 extra_count = len(pto_entries) - 3

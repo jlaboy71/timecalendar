@@ -34,13 +34,13 @@ class PTOService:
     def create_request(self, request_data: PTORequestCreate) -> PTORequest:
         """
         Create a new PTO request.
-        
+
         Args:
             request_data: PTO request creation data
-            
+
         Returns:
             PTORequest: The created request
-            
+
         Raises:
             ValueError: If user doesn't exist, dates are invalid, or insufficient balance
         """
@@ -49,26 +49,29 @@ class PTOService:
         user = self.db.execute(stmt).scalar_one_or_none()
         if user is None:
             raise ValueError(f"User with ID {request_data.user_id} not found")
-        
+
         # Validate start_date is not in the past
         if request_data.start_date < datetime.now().date():
             raise ValueError("Start date cannot be in the past")
-        
+
         # Validate start_date <= end_date
         if request_data.start_date > request_data.end_date:
             raise ValueError("Start date must be before or equal to end date")
-        
+
         # Extract year from start_date
         year = request_data.start_date.year
-        
+
         # Get/create balance
         balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
-        
+
         # Check vacation balance if needed
         if request_data.pto_type == 'vacation':
             if balance.vacation_available < request_data.total_days:
                 raise ValueError("Insufficient vacation balance")
-        
+
+        # Auto-approve for managers/admins (they don't need approval)
+        is_auto_approve = user.role in ['manager', 'admin', 'superadmin']
+
         # Create PTORequest
         request = PTORequest(
             user_id=request_data.user_id,
@@ -77,22 +80,38 @@ class PTOService:
             end_date=request_data.end_date,
             total_days=request_data.total_days,
             notes=request_data.notes,
-            status='pending',
-            submitted_at=datetime.now()
+            status='approved' if is_auto_approve else 'pending',
+            submitted_at=datetime.now(),
+            approved_by=user.id if is_auto_approve else None,
+            approved_at=datetime.now() if is_auto_approve else None
         )
-        
+
         self.db.add(request)
         self.db.commit()
         self.db.refresh(request)
-        
-        # Adjust vacation pending if needed
-        if request_data.pto_type == 'vacation':
-            self.balance_service.adjust_vacation_used(
-                balance.id, 
-                request_data.total_days, 
-                is_pending=True
-            )
-        
+
+        # Handle balance adjustments based on auto-approval status
+        if is_auto_approve:
+            # For auto-approved requests, directly deduct from used (not pending)
+            if request_data.pto_type == 'vacation':
+                self.balance_service.adjust_vacation_used(
+                    balance.id,
+                    request_data.total_days,
+                    is_pending=False
+                )
+            elif request_data.pto_type == 'sick':
+                self.balance_service.adjust_sick_used(balance.id, request_data.total_days)
+            elif request_data.pto_type == 'personal':
+                self.balance_service.adjust_personal_used(balance.id, request_data.total_days)
+        else:
+            # For regular employees, add to pending
+            if request_data.pto_type == 'vacation':
+                self.balance_service.adjust_vacation_used(
+                    balance.id,
+                    request_data.total_days,
+                    is_pending=True
+                )
+
         return request
     
     def get_request_by_id(self, request_id: int) -> Optional[PTORequest]:
@@ -154,9 +173,10 @@ class PTOService:
         """Get all pending PTO requests with employee information"""
         from ..models.pto_request import PTORequest
         from ..models.user import User
-        
+
         results = db.query(
             PTORequest.id.label('request_id'),
+            PTORequest.user_id,
             (User.first_name + ' ' + User.last_name).label('employee_name'),
             PTORequest.pto_type,
             PTORequest.start_date,
@@ -166,7 +186,7 @@ class PTOService:
         ).join(User, PTORequest.user_id == User.id
         ).filter(PTORequest.status == 'pending'
         ).order_by(PTORequest.submitted_at.desc()).all()
-        
+
         return [dict(row._mapping) for row in results]
     
     @staticmethod
@@ -411,6 +431,75 @@ class PTOService:
         
         if exclude_request_id is not None:
             stmt = stmt.where(PTORequest.id != exclude_request_id)
-        
+
         result = self.db.execute(stmt)
         return list(result.scalars().all())
+
+    def get_department_conflicts(
+        self,
+        user_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_request_id: Optional[int] = None
+    ) -> List[dict]:
+        """
+        Get conflicting time-off requests from other employees in the same department.
+
+        Args:
+            user_id: ID of the user making the request
+            start_date: Start date of the requested time off
+            end_date: End date of the requested time off
+            exclude_request_id: Optional request ID to exclude (for editing existing requests)
+
+        Returns:
+            List of dicts with conflict info: user name, dates, type, status
+        """
+        # Get the user's department
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user or not user.department_id:
+            return []
+
+        # Find other users in the same department
+        dept_users = self.db.query(User).filter(
+            User.department_id == user.department_id,
+            User.id != user_id,
+            User.is_active == True
+        ).all()
+
+        if not dept_users:
+            return []
+
+        dept_user_ids = [u.id for u in dept_users]
+
+        # Find overlapping requests from department colleagues
+        stmt = select(PTORequest).where(
+            PTORequest.user_id.in_(dept_user_ids),
+            PTORequest.status.in_(['pending', 'approved']),
+            PTORequest.start_date <= end_date,
+            PTORequest.end_date >= start_date
+        )
+
+        if exclude_request_id is not None:
+            stmt = stmt.where(PTORequest.id != exclude_request_id)
+
+        conflicts = self.db.execute(stmt).scalars().all()
+
+        # Build conflict details with user info
+        conflict_details = []
+        user_map = {u.id: u for u in dept_users}
+
+        for conflict in conflicts:
+            conflict_user = user_map.get(conflict.user_id)
+            if conflict_user:
+                conflict_details.append({
+                    'request_id': conflict.id,
+                    'user_id': conflict.user_id,
+                    'user_name': f"{conflict_user.first_name} {conflict_user.last_name}",
+                    'start_date': conflict.start_date,
+                    'end_date': conflict.end_date,
+                    'pto_type': conflict.pto_type,
+                    'status': conflict.status,
+                    'total_days': float(conflict.total_days)
+                })
+
+        return conflict_details

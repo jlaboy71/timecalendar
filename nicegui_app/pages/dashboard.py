@@ -3,6 +3,7 @@ from src.services.balance_service import BalanceService
 from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
 from src.services.user_service import UserService
+from src.services.department_service import DepartmentService
 from src.database import get_db
 from datetime import datetime, date
 import pytz
@@ -75,7 +76,14 @@ def dashboard_page():
         # Get user's requests
         all_requests = PTOService.get_user_requests(db, user_id)
         pending_requests = [r for r in all_requests if r.status == 'pending']
-        recent_requests = all_requests[:5]
+        # Only show approved requests in Recent Requests section (denied/cancelled visible in View All)
+        approved_requests = [r for r in all_requests if r.status == 'approved']
+        recent_requests = approved_requests[:5]
+
+        # Get team pending requests for managers/admins
+        team_pending_requests = []
+        if user_role in ['manager', 'admin', 'superadmin']:
+            team_pending_requests = PTOService.get_pending_requests_with_employee_info(db)
 
         # ============ MAIN LAYOUT ============
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
@@ -114,11 +122,10 @@ def dashboard_page():
 
                     ui.button('Logout', icon='logout', on_click=lambda: logout()).props('flat')
 
-            # ============ PTO BALANCES CARD ============
-            with ui.card().classes('w-full mb-4'):
-                with ui.row().classes('w-full justify-between items-center mb-4'):
-                    ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold')
-                    ui.button('Request Time Off', icon='add', on_click=lambda: ui.navigate.to('/submit-request')).props('color=primary')
+            # ============ PTO BALANCES CARD (not for admin/superadmin - they don't take PTO) ============
+            if user_role not in ['admin', 'superadmin']:
+              with ui.card().classes('w-full mb-4'):
+                ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold mb-4')
 
                 if balance:
                     with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
@@ -200,8 +207,8 @@ def dashboard_page():
                 else:
                     ui.label(f'No balance data for {current_year}').classes('opacity-70')
 
-            # ============ PENDING REQUESTS (if any) ============
-            if pending_requests:
+            # ============ PENDING REQUESTS (if any) - employees only ============
+            if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:
                 with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
@@ -232,28 +239,255 @@ def dashboard_page():
 
                                     ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id)).props('flat dense color=red size=sm')
 
-            # ============ QUICK ACTIONS ============
-            with ui.card().classes('w-full mb-4'):
-                ui.label('Quick Actions').classes('text-lg font-semibold mb-3')
+            # ============ TEAM PENDING REQUESTS (Managers only - admins don't approve requests) ============
+            if user_role == 'manager' and team_pending_requests:
+                # Pre-compute conflicts for each pending request
+                pto_service = PTOService(db)
+                request_conflicts = {}
+                for req in team_pending_requests:
+                    conflicts = pto_service.get_department_conflicts(
+                        req['user_id'],
+                        req['start_date'],
+                        req['end_date'],
+                        exclude_request_id=req['request_id']
+                    )
+                    if conflicts:
+                        request_conflicts[req['request_id']] = len(conflicts)
 
-                with ui.row().classes('w-full gap-3 flex-wrap'):
-                    ui.button('View Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline')
-                    ui.button('Request History', icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline')
-                    ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline')
+                with ui.card().classes('w-full mb-4 border-l-4 border-indigo-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-3'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('supervisor_account', color='indigo').classes('text-xl')
+                            ui.label('Team Requests Awaiting Approval').classes('text-lg font-semibold')
+                        with ui.row().classes('items-center gap-2'):
+                            if request_conflicts:
+                                ui.badge(f'{len(request_conflicts)} conflicts', color='amber').props('outline').tooltip('Some requests have scheduling conflicts')
+                            ui.badge(f'{len(team_pending_requests)} pending', color='indigo').props('outline')
 
-                    # Manager/Admin buttons
-                    if user_role in ['manager', 'admin', 'superadmin']:
-                        ui.button('Manager Dashboard', icon='supervisor_account', on_click=lambda: ui.navigate.to('/manager')).props('color=accent')
+                    # Type colors for border
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
 
-                    if user_role in ['admin', 'superadmin']:
-                        ui.button('Admin Panel', icon='admin_panel_settings', on_click=lambda: ui.navigate.to('/admin')).props('color=negative')
+                    for req in team_pending_requests[:5]:  # Show first 5
+                        pto_type_lower = req['pto_type'].lower()
+                        border_color = type_colors.get(pto_type_lower, 'gray')
+                        has_conflict = req['request_id'] in request_conflicts
 
-            # ============ RECENT REQUESTS ============
-            with ui.card().classes('w-full mb-4'):
-                with ui.row().classes('w-full justify-between items-center mb-3'):
-                    ui.label('Recent Requests').classes('text-lg font-semibold')
-                    if all_requests:
-                        ui.button('View All', on_click=lambda: ui.navigate.to('/requests')).props('flat dense')
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                with ui.row().classes('gap-3 items-center'):
+                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                    with ui.column().classes('gap-0'):
+                                        with ui.row().classes('items-center gap-2'):
+                                            ui.label(req['employee_name']).classes('font-medium')
+                                            # Show conflict warning icon
+                                            if has_conflict:
+                                                conflict_count = request_conflicts[req['request_id']]
+                                                ui.icon('warning', color='amber').classes('text-lg').tooltip(
+                                                    f'{conflict_count} other team member(s) off on same date(s)'
+                                                )
+                                        with ui.row().classes('gap-2 items-center'):
+                                            ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                            ui.label('•').classes('text-xs opacity-50')
+                                            if req['start_date'] == req['end_date']:
+                                                ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                            else:
+                                                ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+
+                                with ui.row().classes('items-center gap-3'):
+                                    days = float(req['total_days'])
+                                    ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+
+                                    def create_review_handler(request_id):
+                                        def review():
+                                            ui.navigate.to(f'/manager/request/{request_id}')
+                                        return review
+
+                                    ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=indigo size=sm')
+
+                    if len(team_pending_requests) > 5:
+                        with ui.row().classes('w-full justify-center mt-2'):
+                            ui.label(f'+ {len(team_pending_requests) - 5} more pending requests').classes('text-sm opacity-60')
+
+            # ============ QUICK ACTIONS (employees and managers only) ============
+            if user_role not in ['admin', 'superadmin']:
+                with ui.card().classes('w-full mb-4 p-4'):
+                    # Row 1: My Time Off Actions
+                    with ui.column().classes('w-full gap-3'):
+                        ui.label('My Time Off').classes('text-xs font-semibold uppercase opacity-60')
+                        with ui.row().classes('w-full gap-3 flex-wrap'):
+                            # Managers auto-approve, so show "Submit" instead of "Request"
+                            time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
+                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit')
+                            # For managers: "My Time Off History" shows their submitted time with color-coded view
+                            # For employees: "My Requests" shows pending/approved requests
+                            history_label = 'My Time Off History' if user_role == 'manager' else 'My Requests'
+                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit')
+                            # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
+                            if user_role != 'manager':
+                                ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit')
+
+                    ui.separator().classes('my-2')
+
+                    # Row 2: Resources
+                    with ui.column().classes('w-full gap-3'):
+                        ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                        with ui.row().classes('w-full gap-3 flex-wrap'):
+                            ui.button('Company Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                            ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+
+                    # Row 3: Manager Tools (managers only)
+                    if user_role == 'manager':
+                        ui.separator().classes('my-2')
+                        with ui.column().classes('w-full gap-3'):
+                            ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
+                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                                def go_to_team_calendar():
+                                    # Pre-set calendar to team view before navigating
+                                    app.storage.general['calendar_prefs'] = {
+                                        **app.storage.general.get('calendar_prefs', {}),
+                                        'view_mode': 'team'
+                                    }
+                                    ui.navigate.to('/calendar')
+
+                                ui.button('Team Calendar', icon='groups', on_click=go_to_team_calendar).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Carryover Approvals', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Handbook AI', icon='smart_toy', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.notify('Reports coming soon!', type='info')).props('outline color=indigo disabled').classes('flex-1 min-w-fit opacity-50')
+
+            # ============ ADMIN DASHBOARD (admin/superadmin only) ============
+            if user_role in ['admin', 'superadmin']:
+                # Admin Overview Stats
+                with ui.card().classes('w-full mb-4 p-4 border-l-4 border-red-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-4'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('admin_panel_settings', color='red').classes('text-2xl')
+                            ui.label('Administration Dashboard').classes('text-lg font-semibold')
+                        ui.badge('Admin', color='red').props('outline')
+
+                    # Get stats
+                    all_users = user_service.get_all_users()
+                    all_departments = DepartmentService.get_all_departments(db)
+                    active_users = [u for u in all_users if u.is_active]
+
+                    with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
+                        # Total Employees
+                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
+                            ui.label(str(len(active_users))).classes('text-3xl font-bold text-blue-600')
+                            ui.label('Active Employees').classes('text-xs opacity-60')
+
+                        # Total Departments
+                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
+                            ui.label(str(len(all_departments))).classes('text-3xl font-bold text-indigo-600')
+                            ui.label('Departments').classes('text-xs opacity-60')
+
+                        # Pending Requests
+                        pending_count = len(PTOService.get_pending_requests_with_employee_info(db))
+                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
+                            ui.label(str(pending_count)).classes('text-3xl font-bold text-amber-600')
+                            ui.label('Pending Requests').classes('text-xs opacity-60')
+
+                # Department Management Section
+                with ui.card().classes('w-full mb-4'):
+                    with ui.row().classes('w-full justify-between items-center mb-4 p-4 pb-0'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('business', color='indigo').classes('text-xl')
+                            ui.label('Department Management').classes('text-lg font-semibold')
+                        ui.button('Manage Departments', icon='settings',
+                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('flat dense')
+
+                    # Quick department list
+                    if all_departments:
+                        with ui.column().classes('w-full px-4 pb-4'):
+                            for dept in all_departments[:5]:
+                                manager_name = 'No Manager'
+                                if dept.manager_id:
+                                    manager = user_service.get_user_by_id(dept.manager_id)
+                                    if manager:
+                                        manager_name = f'{manager.first_name} {manager.last_name}'
+
+                                with ui.row().classes('w-full justify-between items-center py-2 border-b last:border-0'):
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(dept.name).classes('font-medium')
+                                        ui.label(f'Code: {dept.code} • Manager: {manager_name}').classes('text-xs opacity-60')
+                                    if dept.is_active:
+                                        ui.badge('Active', color='green').props('outline')
+                                    else:
+                                        ui.badge('Inactive', color='grey').props('outline')
+
+                            if len(all_departments) > 5:
+                                ui.label(f'+ {len(all_departments) - 5} more departments').classes('text-sm opacity-60 mt-2 text-center w-full')
+                    else:
+                        with ui.row().classes('w-full justify-center py-4'):
+                            ui.label('No departments created yet').classes('opacity-60')
+
+                # Employee Management Section
+                with ui.card().classes('w-full mb-4'):
+                    with ui.row().classes('w-full justify-between items-center mb-4 p-4 pb-0'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('people', color='blue').classes('text-xl')
+                            ui.label('Employee Management').classes('text-lg font-semibold')
+                        with ui.row().classes('gap-2'):
+                            ui.button('Add Employee', icon='person_add',
+                                      on_click=lambda: ui.navigate.to('/admin/employees/add')).props('flat dense color=primary')
+                            ui.button('View All', icon='list',
+                                      on_click=lambda: ui.navigate.to('/admin/employees')).props('flat dense')
+
+                    # Quick employee list (recent or first 5)
+                    if all_users:
+                        # Create department lookup
+                        dept_lookup = {dept.id: dept.name for dept in all_departments}
+
+                        with ui.column().classes('w-full px-4 pb-4'):
+                            for user in all_users[:5]:
+                                dept_name = dept_lookup.get(user.department_id, 'No Department') if user.department_id else 'No Department'
+
+                                with ui.row().classes('w-full justify-between items-center py-2 border-b last:border-0'):
+                                    with ui.row().classes('items-center gap-3'):
+                                        # Role indicator
+                                        role_colors = {'employee': 'blue', 'manager': 'indigo', 'admin': 'red', 'superadmin': 'red'}
+                                        role_icons = {'employee': 'person', 'manager': 'supervisor_account', 'admin': 'admin_panel_settings', 'superadmin': 'security'}
+                                        ui.icon(role_icons.get(user.role, 'person'),
+                                               color=role_colors.get(user.role, 'grey')).classes('text-lg')
+
+                                        with ui.column().classes('gap-0'):
+                                            ui.label(f'{user.first_name} {user.last_name}').classes('font-medium')
+                                            ui.label(f'{dept_name} • {user.role.title()}').classes('text-xs opacity-60')
+
+                                    with ui.row().classes('items-center gap-2'):
+                                        if user.is_active:
+                                            ui.badge('Active', color='green').props('outline')
+                                        else:
+                                            ui.badge('Inactive', color='grey').props('outline')
+
+                                        def create_edit_handler(user_id):
+                                            def edit():
+                                                ui.navigate.to(f'/admin/employees/edit/{user_id}')
+                                            return edit
+
+                                        ui.button(icon='edit', on_click=create_edit_handler(user.id)).props('flat round dense size=sm')
+
+                            if len(all_users) > 5:
+                                ui.label(f'+ {len(all_users) - 5} more employees').classes('text-sm opacity-60 mt-2 text-center w-full')
+                    else:
+                        with ui.row().classes('w-full justify-center py-4'):
+                            ui.label('No employees created yet').classes('opacity-60')
+
+                # Quick Actions for Admin
+                with ui.card().classes('w-full mb-4 p-4'):
+                    ui.label('Quick Actions').classes('text-xs font-semibold uppercase opacity-60 mb-3')
+                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                        ui.button('Company Calendar', icon='calendar_month',
+                                  on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                        ui.button('Employee Handbook', icon='menu_book',
+                                  on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                        ui.button('Carryover Approvals', icon='approval',
+                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
+
+            # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
+            if user_role not in ['admin', 'superadmin']:
+              with ui.card().classes('w-full mb-4'):
+                ui.label('Recent Approved Time Off').classes('text-lg font-semibold mb-3')
 
                 if recent_requests:
                     for req in recent_requests:
@@ -279,11 +513,11 @@ def dashboard_page():
                                 ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey'))
                 else:
                     with ui.row().classes('w-full justify-center py-6'):
-                        ui.label('No requests yet').classes('opacity-60')
-                        ui.button('Submit Your First Request', on_click=lambda: ui.navigate.to('/submit-request')).props('flat')
+                        ui.label('No approved time off yet').classes('opacity-60')
 
-            # ============ LEAVE POLICY (Collapsible) ============
-            with ui.expansion('My Leave Policy', icon='policy').classes('w-full'):
+            # ============ LEAVE POLICY (Collapsible) - not for admin/superadmin ============
+            if user_role not in ['admin', 'superadmin']:
+              with ui.expansion('My Leave Policy', icon='policy').classes('w-full'):
                 if current_user:
                     # Work Location
                     with ui.row().classes('w-full mb-4 items-center gap-2'):
@@ -300,9 +534,9 @@ def dashboard_page():
                     if not current_user.location_state:
                         ui.label('Set your work location with HR to see your policy details').classes('text-amber-500 italic')
                     else:
-                        with ui.row().classes('w-full gap-4 flex-wrap'):
+                        with ui.row().classes('w-full gap-4 flex-wrap items-stretch'):
                             # Vacation Policy
-                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-blue-500'):
+                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-blue-500 flex flex-col'):
                                 ui.label('Vacation Policy').classes('font-semibold text-blue-600 mb-2')
                                 vacation_tier = accrual_service.get_vacation_tier(current_user)
                                 years_of_service = accrual_service.get_years_of_service(current_user)
@@ -322,9 +556,10 @@ def dashboard_page():
                                         ui.label(f'Carryover: Up to {int(float(vacation_policy.max_carryover_hours)/8)} days').classes('text-xs opacity-60')
                                     else:
                                         ui.label('Carryover: Requires approval').classes('text-xs text-amber-500')
+                                ui.element('div').classes('flex-grow')
 
                             # Sick Policy
-                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-green-500'):
+                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-green-500 flex flex-col'):
                                 ui.label('Sick Time Policy').classes('font-semibold text-green-600 mb-2')
                                 sick_policy = accrual_service.get_policy_for_employee(current_user, 'SICK')
 
@@ -335,9 +570,10 @@ def dashboard_page():
                                         ui.label(f'Annual max: {int(float(sick_policy.max_annual_hours)/8)} days').classes('text-xs opacity-70')
                                     if sick_policy.max_carryover_hours:
                                         ui.label(f'Carryover: Up to {int(float(sick_policy.max_carryover_hours)/8)} days').classes('text-xs opacity-60')
+                                ui.element('div').classes('flex-grow')
 
                             # Personal Policy
-                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-purple-500'):
+                            with ui.card().classes('flex-1 min-w-64 p-3 border-l-4 border-purple-500 flex flex-col'):
                                 ui.label('Personal Days Policy').classes('font-semibold text-purple-600 mb-2')
                                 personal_policy = accrual_service.get_policy_for_employee(current_user, 'PERSONAL')
 
@@ -347,6 +583,7 @@ def dashboard_page():
                                         ui.label(f'Annual allowance: {days} days').classes('text-sm')
                                     if personal_policy.min_increment_hours:
                                         ui.label(f'Minimum request: {personal_policy.min_increment_hours} hrs').classes('text-xs opacity-70')
+                                ui.element('div').classes('flex-grow')
                 else:
                     ui.label('Unable to load user information').classes('text-red-500')
 
