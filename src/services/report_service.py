@@ -4,21 +4,35 @@ Report generation service for TJM Time Calendar.
 Provides formatted reports with company branding for PDF, print, and email.
 """
 import logging
+import base64
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Dict, Optional, Any
 from io import BytesIO
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Load TJM logo as base64 at module level
+_LOGO_BASE64 = None
+_logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+if _logo_path.exists():
+    try:
+        with open(_logo_path, 'rb') as f:
+            _LOGO_BASE64 = base64.b64encode(f.read()).decode('ascii')
+    except Exception as e:
+        logger.warning(f"Could not load TJM logo: {e}")
 
 
 class ReportService:
     """Service for generating formatted reports."""
 
-    # Company branding
+    # Company branding - TJM colors from logo
     COMPANY_NAME = "TJM Holdings / Haventech Solutions"
-    COMPANY_LOGO_BASE64 = None  # Will be loaded from static if available
+    TJM_GOLD = "#C5A951"  # Gold/olive color from logo
+    TJM_GRAY = "#5A6A72"  # Dark gray/slate from logo text
+    LOGO_BASE64 = _LOGO_BASE64
 
     def __init__(self, db: Session):
         self.db = db
@@ -49,12 +63,19 @@ class ReportService:
             subtitle_parts.append(f"Department: {department}")
         subtitle = " | ".join(subtitle_parts) if subtitle_parts else ""
 
+        # Logo HTML - embedded as base64
+        logo_html = ""
+        if self.LOGO_BASE64:
+            logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="TJM" style="height: 50px; width: auto;">'
+        else:
+            logo_html = f'<div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">TJM</div>'
+
         header_html = f'''
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; border-bottom: 3px solid #1976D2;">
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; border-bottom: 3px solid {self.TJM_GOLD};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <div style="font-size: 24px; font-weight: bold; color: #1976D2;">TJM</div>
-                    <div style="font-size: 10px; color: #666;">Time Calendar System</div>
+                    {logo_html}
+                    <div style="font-size: 10px; color: #666; margin-top: 4px;">Time Calendar System</div>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 11px; color: #666;">Generated: {date_str}</div>
@@ -62,7 +83,7 @@ class ReportService:
                 </div>
             </div>
             <div style="margin-top: 10px;">
-                <h1 style="margin: 0; font-size: 20px; color: #333;">{title}</h1>
+                <h1 style="margin: 0; font-size: 20px; color: {self.TJM_GRAY};">{title}</h1>
                 {f'<div style="font-size: 14px; color: #555; margin-top: 5px;">{subtitle}</div>' if subtitle else ''}
             </div>
         </div>
@@ -141,7 +162,7 @@ class ReportService:
         <div style="padding: 20px; font-family: 'Segoe UI', sans-serif;">
             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                 <thead>
-                    <tr style="background: #1976D2; color: white;">
+                    <tr style="background: {self.TJM_GRAY}; color: white;">
                         <th style="padding: 12px; text-align: left;">Leave Type</th>
                         <th style="padding: 12px; text-align: center;">Total (Days)</th>
                         <th style="padding: 12px; text-align: center;">Used (Days)</th>
@@ -174,8 +195,8 @@ class ReportService:
                 </tbody>
             </table>
 
-            <div style="margin-top: 30px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-                <h3 style="margin: 0 0 10px 0; color: #1976D2;">Summary</h3>
+            <div style="margin-top: 30px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
+                <h3 style="margin: 0 0 10px 0; color: {self.TJM_GRAY};">Summary</h3>
                 <p style="margin: 5px 0;">Total PTO Available: <strong>{hours_to_days(vac_avail + sick_avail + personal_avail)} days</strong></p>
                 <p style="margin: 5px 0;">Total PTO Used YTD: <strong>{hours_to_days(vac_used + sick_used + personal_used)} days</strong></p>
             </div>
@@ -282,15 +303,15 @@ class ReportService:
                     <div style="font-size: 12px; color: #666;">Pending Days</div>
                     <div style="font-size: 24px; font-weight: bold; color: #f57c00;">{total_pending:.1f}</div>
                 </div>
-                <div style="flex: 1; padding: 15px; background: #e3f2fd; border-left: 4px solid #1976D2; border-radius: 4px;">
+                <div style="flex: 1; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
                     <div style="font-size: 12px; color: #666;">Total Requests</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #1976D2;">{len(requests)}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{len(requests)}</div>
                 </div>
             </div>
 
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr style="background: #1976D2; color: white;">
+                    <tr style="background: {self.TJM_GRAY}; color: white;">
                         <th style="padding: 12px; text-align: left;">Type</th>
                         <th style="padding: 12px; text-align: left;">Dates</th>
                         <th style="padding: 12px; text-align: center;">Days</th>
@@ -390,7 +411,7 @@ class ReportService:
 
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                 <thead>
-                    <tr style="background: #1976D2; color: white;">
+                    <tr style="background: {self.TJM_GRAY}; color: white;">
                         <th style="padding: 10px; text-align: left;">Employee</th>
                         <th style="padding: 10px; text-align: left;">Department</th>
                         <th style="padding: 10px; text-align: center;">Vac Total</th>
