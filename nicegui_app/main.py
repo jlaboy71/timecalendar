@@ -618,11 +618,22 @@ def admin_panel():
                     ui.label('Update and manage employee handbook').classes('text-gray-600 text-center')
                     ui.button('Manage Handbook', on_click=lambda: ui.navigate.to('/admin/handbook'), color='primary')
 
+        # Third row - Super Admin only
+        if user_role == 'superadmin':
+            with ui.row().classes('w-full gap-6 justify-center mt-6'):
+                # System Administration card
+                with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-500'):
+                    with ui.column().classes('items-center gap-4'):
+                        ui.icon('settings_applications', size='3rem').classes('text-amber-600')
+                        ui.label('System Administration').classes('text-xl font-semibold')
+                        ui.label('Database, email config, logs, and system settings').classes('text-gray-600 text-center')
+                        ui.button('System Settings', on_click=lambda: ui.navigate.to('/admin/system'), color='warning')
+
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
 
 @ui.page('/admin/departments')
 def admin_departments():
-    """Admin page for managing departments."""
+    """Admin page for managing departments with search and member display."""
     if not require_auth():
         return
 
@@ -641,44 +652,54 @@ def admin_departments():
         ui.navigate.to('/')
         return
 
-    # Get managers for dropdowns
-    db = next(get_db())
-    try:
-        managers = UserService.get_users_by_role(db, 'manager')
-        manager_options = {0: 'No Manager'}
-        manager_options.update({m.id: f'{m.first_name} {m.last_name}' for m in managers})
-        departments = DepartmentService.get_all_departments(db)
+    # State for view mode
+    view_state = {'show_all': False, 'search_query': ''}
 
-        # Build department data with manager info
-        dept_data = []
-        for dept in departments:
-            manager_name = 'No Manager'
-            if dept.manager_id:
-                manager = UserService(db).get_user_by_id(dept.manager_id)
-                if manager:
-                    manager_name = f'{manager.first_name} {manager.last_name}'
+    def load_department_data():
+        """Load all department data with members."""
+        db = next(get_db())
+        try:
+            managers = UserService.get_users_by_role(db, 'manager')
+            manager_options = {0: 'No Manager'}
+            manager_options.update({m.id: f'{m.first_name} {m.last_name}' for m in managers})
+            departments = DepartmentService.get_all_departments(db)
 
-            # Get employee count
-            employee_count = db.query(User).filter(User.department_id == dept.id).count()
+            dept_data = []
+            for dept in departments:
+                manager_name = 'No Manager'
+                if dept.manager_id:
+                    manager = UserService(db).get_user_by_id(dept.manager_id)
+                    if manager:
+                        manager_name = f'{manager.first_name} {manager.last_name}'
 
-            dept_data.append({
-                'id': dept.id,
-                'name': dept.name,
-                'code': dept.code,
-                'manager_id': dept.manager_id or 0,
-                'manager_name': manager_name,
-                'is_active': dept.is_active,
-                'employee_count': employee_count
-            })
-    finally:
-        db.close()
+                # Get employees in this department
+                employees = db.query(User).filter(
+                    User.department_id == dept.id,
+                    User.is_active == True
+                ).order_by(User.last_name, User.first_name).all()
+
+                dept_data.append({
+                    'id': dept.id,
+                    'name': dept.name,
+                    'code': dept.code,
+                    'manager_id': dept.manager_id or 0,
+                    'manager_name': manager_name,
+                    'is_active': dept.is_active,
+                    'employee_count': len(employees),
+                    'employees': [{'id': e.id, 'name': f'{e.first_name} {e.last_name}', 'email': e.email, 'role': e.role} for e in employees]
+                })
+            return dept_data, manager_options
+        finally:
+            db.close()
+
+    dept_data, manager_options = load_department_data()
 
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
         with ui.row().classes('w-full justify-between items-start mb-6'):
             with ui.column().classes('gap-2'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
                 with ui.row().classes('items-center gap-2'):
-                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
+                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
                     ui.label('DEPARTMENT MANAGEMENT').classes('text-xl font-bold').style('color: #5a6a72;')
 
         # Create New Department Card
@@ -710,19 +731,75 @@ def admin_departments():
 
                 ui.button('Create', icon='add', on_click=create_dept).props('color=primary')
 
-        # Existing Departments Card
-        with ui.card().classes('w-full'):
-            with ui.row().classes('items-center gap-2 mb-4 p-4 pb-0'):
-                ui.icon('business', color='indigo').classes('text-xl')
-                ui.label('Existing Departments').classes('text-lg font-semibold')
-                ui.badge(f'{len(dept_data)} total', color='indigo').props('outline')
+        # Search and View Toggle Card
+        with ui.card().classes('w-full mb-4 p-4'):
+            with ui.row().classes('w-full items-center gap-4'):
+                search_input = ui.input(placeholder='Search departments or employees...').props('outlined dense clearable').classes('flex-1')
+                search_input.on('keydown.enter', lambda: do_search())
 
-            if not dept_data:
-                with ui.row().classes('w-full justify-center py-8'):
-                    ui.label('No departments created yet').classes('text-xl opacity-60')
+                def do_search():
+                    view_state['search_query'] = search_input.value or ''
+                    render_departments()
+
+                ui.button('Search', icon='search', on_click=do_search).props('color=primary')
+
+                def toggle_show_all():
+                    view_state['show_all'] = not view_state['show_all']
+                    view_state['search_query'] = ''
+                    search_input.value = ''
+                    render_departments()
+
+                show_all_btn = ui.button(
+                    'Show All Departments' if not view_state['show_all'] else 'Hide Departments',
+                    icon='visibility' if not view_state['show_all'] else 'visibility_off',
+                    on_click=toggle_show_all
+                ).props('flat')
+
+        # Results Container
+        results_container = ui.column().classes('w-full')
+
+        def render_departments():
+            results_container.clear()
+            query = view_state['search_query'].lower().strip()
+
+            # Filter departments
+            if query:
+                filtered = []
+                for dept in dept_data:
+                    # Match department name or code
+                    dept_match = query in dept['name'].lower() or query in dept['code'].lower()
+                    # Match employees
+                    matching_employees = [e for e in dept['employees'] if query in e['name'].lower() or query in e['email'].lower()]
+
+                    if dept_match or matching_employees:
+                        dept_copy = dept.copy()
+                        dept_copy['matching_employees'] = matching_employees if not dept_match else dept['employees']
+                        dept_copy['highlight'] = dept_match
+                        filtered.append(dept_copy)
+                display_depts = filtered
+            elif view_state['show_all']:
+                display_depts = [dict(d, matching_employees=d['employees'], highlight=False) for d in dept_data]
             else:
-                with ui.column().classes('w-full px-4 pb-4'):
-                    for dept in dept_data:
+                display_depts = []
+
+            with results_container:
+                if not query and not view_state['show_all']:
+                    with ui.card().classes('w-full p-8 text-center'):
+                        ui.icon('search', size='3rem').classes('opacity-30 mb-2')
+                        ui.label('Search for a department or employee').classes('text-lg opacity-60')
+                        ui.label('Or click "Show All Departments" to view all').classes('text-sm opacity-50')
+                elif not display_depts:
+                    with ui.card().classes('w-full p-8 text-center'):
+                        ui.icon('search_off', size='3rem').classes('opacity-30 mb-2')
+                        ui.label(f'No results found for "{query}"').classes('text-lg opacity-60')
+                else:
+                    # Header
+                    with ui.row().classes('items-center gap-2 mb-2'):
+                        ui.badge(f'{len(display_depts)} department(s)', color='indigo').props('outline')
+                        if query:
+                            ui.label(f'matching "{query}"').classes('text-sm opacity-70')
+
+                    for dept in display_depts:
                         with ui.card().classes('w-full p-4 mb-3 border-l-4 border-indigo-500'):
                             with ui.row().classes('w-full justify-between items-start'):
                                 # Department info
@@ -743,10 +820,8 @@ def admin_departments():
                                 with ui.row().classes('gap-2'):
                                     def create_edit_handler(d, mgr_opts):
                                         def open_edit():
-                                            # Edit dialog
                                             with ui.dialog() as edit_dialog, ui.card().classes('p-6 min-w-96'):
                                                 ui.label(f"Edit Department: {d['name']}").classes('text-lg font-semibold mb-4')
-
                                                 edit_name = ui.input('Department Name', value=d['name']).props('outlined').classes('w-full mb-2')
                                                 edit_code = ui.input('Department Code', value=d['code']).props('outlined').classes('w-full mb-2')
                                                 edit_manager = ui.select(mgr_opts, label='Manager', value=d['manager_id']).props('outlined').classes('w-full mb-4')
@@ -755,16 +830,10 @@ def admin_departments():
                                                     if not edit_name.value or not edit_code.value:
                                                         ui.notify('Name and code are required', type='negative')
                                                         return
-
                                                     db = next(get_db())
                                                     try:
                                                         mgr_id = None if edit_manager.value == 0 else edit_manager.value
-                                                        DepartmentService.update_department(
-                                                            db, d['id'],
-                                                            name=edit_name.value,
-                                                            code=edit_code.value,
-                                                            manager_id=mgr_id
-                                                        )
+                                                        DepartmentService.update_department(db, d['id'], name=edit_name.value, code=edit_code.value, manager_id=mgr_id)
                                                         ui.notify('Department updated successfully', type='positive')
                                                         edit_dialog.close()
                                                         ui.navigate.to('/admin/departments')
@@ -776,7 +845,6 @@ def admin_departments():
                                                 with ui.row().classes('w-full justify-end gap-2'):
                                                     ui.button('Cancel', on_click=edit_dialog.close).props('flat')
                                                     ui.button('Save Changes', on_click=save_changes).props('color=primary')
-
                                             edit_dialog.open()
                                         return open_edit
 
@@ -784,18 +852,14 @@ def admin_departments():
 
                                     def create_delete_handler(d):
                                         def open_delete():
-                                            # Delete confirmation dialog
                                             with ui.dialog() as delete_dialog, ui.card().classes('p-6'):
                                                 ui.label('Delete Department').classes('text-lg font-semibold mb-2')
-
                                                 if d['employee_count'] > 0:
                                                     with ui.card().classes('w-full p-3 mb-4 border-l-4 border-red-500'):
                                                         with ui.row().classes('items-center gap-2'):
                                                             ui.icon('warning', color='red')
                                                             ui.label(f"Cannot delete: {d['employee_count']} employee(s) assigned").classes('text-red-600')
-
                                                     ui.label('Reassign employees to another department before deleting.').classes('text-sm opacity-70 mb-4')
-
                                                     with ui.row().classes('w-full justify-end'):
                                                         ui.button('Close', on_click=delete_dialog.close).props('flat')
                                                 else:
@@ -817,11 +881,32 @@ def admin_departments():
                                                     with ui.row().classes('w-full justify-end gap-2'):
                                                         ui.button('Cancel', on_click=delete_dialog.close).props('flat')
                                                         ui.button('Delete', on_click=confirm_delete).props('color=red')
-
                                             delete_dialog.open()
                                         return open_delete
 
                                     ui.button(icon='delete', on_click=create_delete_handler(dept)).props('flat round dense color=red').tooltip('Delete Department')
+
+                            # Show employees in this department
+                            employees_to_show = dept.get('matching_employees', [])
+                            if employees_to_show:
+                                ui.separator().classes('my-3')
+                                with ui.row().classes('items-center gap-2 mb-2'):
+                                    ui.icon('people', size='sm').classes('opacity-50')
+                                    ui.label('Members').classes('text-sm font-semibold opacity-70')
+
+                                with ui.row().classes('flex-wrap gap-2'):
+                                    for emp in employees_to_show:
+                                        role_colors = {'employee': 'blue', 'manager': 'purple', 'admin': 'orange', 'superadmin': 'red'}
+                                        with ui.card().classes('p-2 bg-gray-50'):
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.icon('person', size='sm').classes('opacity-50')
+                                                ui.label(emp['name']).classes('font-medium')
+                                                ui.badge(emp['role'], color=role_colors.get(emp['role'], 'grey')).props('dense')
+                                            ui.label(emp['email']).classes('text-xs opacity-60')
+
+        # Initial render
+        render_departments()
+
 
 @ui.page('/admin/employees')
 def admin_employees():
@@ -1959,6 +2044,359 @@ def help_page():
 
         # Initial view
         show_chapters()
+
+
+@ui.page('/admin/system')
+def admin_system():
+    """Super Admin system administration page."""
+    if not require_auth():
+        return
+
+    import os
+    import subprocess
+    from datetime import datetime
+    from pathlib import Path
+    from src.config import config
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    user_role = app.storage.general.get('user', {}).get('role')
+    if user_role != 'superadmin':
+        ui.notify('Access denied - Super Admin only', type='negative')
+        ui.navigate.to('/')
+        return
+
+    with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
+        # Header
+        with ui.column().classes('gap-2 mb-6'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            with ui.row().classes('items-center'):
+                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
+                ui.label('SYSTEM ADMINISTRATION').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+                ui.badge('SUPER ADMIN', color='amber').classes('ml-2')
+
+        # Tabs for different sections
+        with ui.tabs().classes('w-full') as tabs:
+            database_tab = ui.tab('Database', icon='storage')
+            email_tab = ui.tab('Email Config', icon='email')
+            logs_tab = ui.tab('System Logs', icon='description')
+            settings_tab = ui.tab('Settings', icon='tune')
+
+        with ui.tab_panels(tabs, value=database_tab).classes('w-full'):
+            # ========== DATABASE TAB ==========
+            with ui.tab_panel(database_tab):
+                with ui.card().classes('w-full p-4 mb-4'):
+                    ui.label('Database Management').classes('text-lg font-semibold mb-4')
+
+                    # Database info
+                    db_path = Path(__file__).parent.parent / 'pto_calendar.db'
+                    db_exists = db_path.exists()
+                    db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0  # MB
+
+                    with ui.row().classes('gap-8 mb-4'):
+                        with ui.column():
+                            ui.label('Database File').classes('text-sm opacity-70')
+                            ui.label(str(db_path.name)).classes('font-mono')
+                        with ui.column():
+                            ui.label('Size').classes('text-sm opacity-70')
+                            ui.label(f'{db_size:.2f} MB').classes('font-mono')
+                        with ui.column():
+                            ui.label('Status').classes('text-sm opacity-70')
+                            if db_exists:
+                                ui.badge('Online', color='green')
+                            else:
+                                ui.badge('Not Found', color='red')
+
+                    ui.separator().classes('my-4')
+
+                    # Backup section
+                    ui.label('Backup Database').classes('font-semibold mb-2')
+                    backup_status = ui.label('').classes('text-sm')
+
+                    def run_backup():
+                        try:
+                            backup_status.set_text('Running backup...')
+                            backup_dir = Path(__file__).parent.parent / 'backups'
+                            backup_dir.mkdir(exist_ok=True)
+
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            backup_file = backup_dir / f'pto_calendar_{timestamp}.db'
+
+                            import shutil
+                            shutil.copy2(db_path, backup_file)
+
+                            backup_status.set_text(f'Backup created: {backup_file.name}')
+                            ui.notify(f'Backup successful: {backup_file.name}', type='positive')
+                            refresh_backups()
+                        except Exception as e:
+                            backup_status.set_text(f'Error: {str(e)}')
+                            ui.notify(f'Backup failed: {str(e)}', type='negative')
+
+                    ui.button('Create Backup Now', icon='backup', on_click=run_backup).props('color=primary')
+
+                    ui.separator().classes('my-4')
+
+                    # Existing backups
+                    ui.label('Existing Backups').classes('font-semibold mb-2')
+                    backups_container = ui.column().classes('w-full')
+
+                    def refresh_backups():
+                        backups_container.clear()
+                        backup_dir = Path(__file__).parent.parent / 'backups'
+                        if not backup_dir.exists():
+                            with backups_container:
+                                ui.label('No backups directory found').classes('opacity-60')
+                            return
+
+                        backup_files = sorted(backup_dir.glob('*.db'), key=lambda x: x.stat().st_mtime, reverse=True)
+                        if not backup_files:
+                            with backups_container:
+                                ui.label('No backups found').classes('opacity-60')
+                            return
+
+                        with backups_container:
+                            for bf in backup_files[:10]:  # Show last 10
+                                size_mb = bf.stat().st_size / (1024 * 1024)
+                                mtime = datetime.fromtimestamp(bf.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                                with ui.row().classes('w-full items-center gap-4 p-2 border-b'):
+                                    ui.icon('save').classes('opacity-50')
+                                    ui.label(bf.name).classes('font-mono flex-1')
+                                    ui.label(f'{size_mb:.2f} MB').classes('text-sm opacity-70')
+                                    ui.label(mtime).classes('text-sm opacity-70')
+
+                                    def create_restore_handler(backup_file):
+                                        def restore():
+                                            with ui.dialog() as dialog, ui.card().classes('p-6'):
+                                                ui.label('Restore Database').classes('text-lg font-semibold mb-2')
+                                                ui.label(f'Restore from: {backup_file.name}').classes('mb-2')
+                                                ui.label('WARNING: This will overwrite the current database!').classes('text-red-500 mb-4')
+
+                                                def confirm_restore():
+                                                    try:
+                                                        import shutil
+                                                        shutil.copy2(backup_file, db_path)
+                                                        ui.notify('Database restored successfully. Please restart the application.', type='positive')
+                                                        dialog.close()
+                                                    except Exception as e:
+                                                        ui.notify(f'Restore failed: {str(e)}', type='negative')
+
+                                                with ui.row().classes('gap-2'):
+                                                    ui.button('Cancel', on_click=dialog.close).props('flat')
+                                                    ui.button('Restore', on_click=confirm_restore).props('color=red')
+                                            dialog.open()
+                                        return restore
+
+                                    ui.button(icon='restore', on_click=create_restore_handler(bf)).props('flat dense').tooltip('Restore this backup')
+
+                    refresh_backups()
+
+            # ========== EMAIL CONFIG TAB ==========
+            with ui.tab_panel(email_tab):
+                with ui.card().classes('w-full p-4'):
+                    ui.label('Email Configuration').classes('text-lg font-semibold mb-4')
+
+                    # Current config display
+                    smtp_host = os.getenv('SMTP_HOST', 'Not configured')
+                    smtp_port = os.getenv('SMTP_PORT', 'Not configured')
+                    smtp_user = os.getenv('SMTP_USER', 'Not configured')
+                    smtp_from = os.getenv('SMTP_FROM', 'Not configured')
+                    smtp_configured = smtp_host != 'Not configured'
+
+                    with ui.row().classes('gap-8 mb-4'):
+                        with ui.column():
+                            ui.label('Status').classes('text-sm opacity-70')
+                            if smtp_configured:
+                                ui.badge('Configured', color='green')
+                            else:
+                                ui.badge('Not Configured', color='red')
+                        with ui.column():
+                            ui.label('SMTP Host').classes('text-sm opacity-70')
+                            ui.label(smtp_host).classes('font-mono')
+                        with ui.column():
+                            ui.label('SMTP Port').classes('text-sm opacity-70')
+                            ui.label(smtp_port).classes('font-mono')
+
+                    with ui.row().classes('gap-8 mb-4'):
+                        with ui.column():
+                            ui.label('SMTP User').classes('text-sm opacity-70')
+                            ui.label(smtp_user if smtp_user != 'Not configured' else '-').classes('font-mono')
+                        with ui.column():
+                            ui.label('From Address').classes('text-sm opacity-70')
+                            ui.label(smtp_from).classes('font-mono')
+
+                    ui.separator().classes('my-4')
+
+                    # Test email
+                    ui.label('Send Test Email').classes('font-semibold mb-2')
+                    test_email_input = ui.input('Recipient Email').props('outlined dense').classes('w-80')
+                    test_status = ui.label('').classes('text-sm mt-2')
+
+                    def send_test_email():
+                        if not test_email_input.value:
+                            ui.notify('Please enter an email address', type='warning')
+                            return
+                        if not smtp_configured:
+                            ui.notify('SMTP not configured. Set environment variables first.', type='negative')
+                            return
+
+                        test_status.set_text('Sending test email...')
+                        try:
+                            from src.services.email_service import email_service
+                            success = email_service.send_email(
+                                to_email=test_email_input.value,
+                                subject='TJM Calendar - Test Email',
+                                body='This is a test email from the TJM Time Calendar system.\n\nIf you received this, your email configuration is working correctly!'
+                            )
+                            if success:
+                                test_status.set_text('Test email sent successfully!')
+                                ui.notify('Test email sent!', type='positive')
+                            else:
+                                test_status.set_text('Failed to send test email. Check logs.')
+                                ui.notify('Failed to send email', type='negative')
+                        except Exception as e:
+                            test_status.set_text(f'Error: {str(e)}')
+                            ui.notify(f'Error: {str(e)}', type='negative')
+
+                    ui.button('Send Test', icon='send', on_click=send_test_email).props('color=primary')
+
+                    ui.separator().classes('my-4')
+
+                    # Configuration instructions
+                    with ui.expansion('How to Configure Email', icon='help_outline').classes('w-full'):
+                        ui.markdown('''
+Set these environment variables in your `.env` file:
+
+```
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_USER=your-email@company.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=noreply@company.com
+```
+
+**Common providers:**
+- Gmail: `smtp.gmail.com:587`
+- Microsoft 365: `smtp.office365.com:587`
+- Amazon SES: `email-smtp.us-east-1.amazonaws.com:587`
+
+After updating `.env`, restart the application.
+                        ''')
+
+            # ========== LOGS TAB ==========
+            with ui.tab_panel(logs_tab):
+                with ui.card().classes('w-full p-4'):
+                    ui.label('System Logs').classes('text-lg font-semibold mb-4')
+
+                    log_path = Path(__file__).parent.parent / 'logs' / 'tjm_calendar.log'
+                    log_exists = log_path.exists()
+
+                    with ui.row().classes('gap-4 mb-4 items-center'):
+                        ui.label('Log File:').classes('text-sm opacity-70')
+                        ui.label(str(log_path.name) if log_exists else 'Not found').classes('font-mono')
+                        if log_exists:
+                            log_size = log_path.stat().st_size / 1024  # KB
+                            ui.label(f'({log_size:.1f} KB)').classes('text-sm opacity-70')
+
+                    # Log viewer
+                    log_display = ui.textarea('').props('readonly outlined').classes('w-full font-mono text-xs').style('height: 400px;')
+
+                    def refresh_logs(lines=100):
+                        if not log_exists:
+                            log_display.value = 'Log file not found. Logs will appear after application activity.'
+                            return
+                        try:
+                            with open(log_path, 'r') as f:
+                                all_lines = f.readlines()
+                                recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                                log_display.value = ''.join(recent)
+                        except Exception as e:
+                            log_display.value = f'Error reading log: {str(e)}'
+
+                    with ui.row().classes('gap-2 mb-2'):
+                        ui.button('Refresh', icon='refresh', on_click=lambda: refresh_logs()).props('flat')
+                        ui.button('Last 50', on_click=lambda: refresh_logs(50)).props('flat dense')
+                        ui.button('Last 100', on_click=lambda: refresh_logs(100)).props('flat dense')
+                        ui.button('Last 500', on_click=lambda: refresh_logs(500)).props('flat dense')
+
+                        def clear_logs():
+                            if log_exists:
+                                try:
+                                    with open(log_path, 'w') as f:
+                                        f.write('')
+                                    ui.notify('Logs cleared', type='positive')
+                                    refresh_logs()
+                                except Exception as e:
+                                    ui.notify(f'Error: {str(e)}', type='negative')
+
+                        ui.button('Clear Logs', icon='delete', on_click=clear_logs).props('flat color=red')
+
+                    refresh_logs()
+
+            # ========== SETTINGS TAB ==========
+            with ui.tab_panel(settings_tab):
+                with ui.card().classes('w-full p-4'):
+                    ui.label('System Settings').classes('text-lg font-semibold mb-4')
+
+                    # Current settings display
+                    with ui.row().classes('gap-8 mb-4'):
+                        with ui.column():
+                            ui.label('Debug Mode').classes('text-sm opacity-70')
+                            debug_val = os.getenv('DEBUG', 'false')
+                            if debug_val.lower() == 'true':
+                                ui.badge('ENABLED', color='red')
+                            else:
+                                ui.badge('Disabled', color='green')
+                        with ui.column():
+                            ui.label('Secret Key').classes('text-sm opacity-70')
+                            secret = os.getenv('SECRET_KEY', '')
+                            if secret and len(secret) > 20:
+                                ui.badge('Configured', color='green')
+                            else:
+                                ui.badge('Weak/Missing', color='red')
+                        with ui.column():
+                            ui.label('Session Timeout').classes('text-sm opacity-70')
+                            timeout = os.getenv('SESSION_TIMEOUT_MINUTES', '30')
+                            ui.label(f'{timeout} minutes').classes('font-mono')
+
+                    ui.separator().classes('my-4')
+
+                    # Environment variables summary
+                    ui.label('Environment Variables').classes('font-semibold mb-2')
+                    env_vars = [
+                        ('SECRET_KEY', 'Yes' if os.getenv('SECRET_KEY') else 'No'),
+                        ('DEBUG', os.getenv('DEBUG', 'false')),
+                        ('DATABASE_URL', 'Configured' if os.getenv('DATABASE_URL') else 'Default'),
+                        ('SMTP_HOST', os.getenv('SMTP_HOST', 'Not set')),
+                        ('ANTHROPIC_API_KEY', 'Set' if os.getenv('ANTHROPIC_API_KEY') else 'Not set'),
+                    ]
+
+                    with ui.card().classes('w-full p-3 bg-gray-50'):
+                        for var_name, var_val in env_vars:
+                            with ui.row().classes('w-full justify-between py-1 border-b last:border-0'):
+                                ui.label(var_name).classes('font-mono text-sm')
+                                ui.label(var_val).classes('text-sm opacity-70')
+
+                    ui.separator().classes('my-4')
+
+                    # System info
+                    ui.label('System Information').classes('font-semibold mb-2')
+                    import platform
+                    import sys
+
+                    with ui.row().classes('gap-8'):
+                        with ui.column():
+                            ui.label('Python Version').classes('text-sm opacity-70')
+                            ui.label(sys.version.split()[0]).classes('font-mono')
+                        with ui.column():
+                            ui.label('Platform').classes('text-sm opacity-70')
+                            ui.label(platform.system()).classes('font-mono')
+                        with ui.column():
+                            ui.label('Architecture').classes('text-sm opacity-70')
+                            ui.label(platform.machine()).classes('font-mono')
 
 
 @ui.page('/health')
