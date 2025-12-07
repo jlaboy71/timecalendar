@@ -2179,7 +2179,10 @@ def admin_year_end():
         # Initial load
         refresh_status()
 
-        ui.button('Refresh Status', on_click=refresh_status, icon='refresh').classes('mt-4')
+        # Action buttons
+        with ui.row().classes('w-full gap-4 mt-4'):
+            ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
+            ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'), icon='dashboard')
 
 
 @ui.page('/help')

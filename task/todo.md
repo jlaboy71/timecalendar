@@ -122,7 +122,8 @@ All these pages now use the shared component instead of custom headers:
 
 ### 4. Back Navigation Buttons Added:
 - `/admin/employees/edit/{user_id}` - "Back to Dashboard" button at bottom
-- `/admin/system` - "Back to Admin" and "Back to Dashboard" buttons at bottom
+- `/admin/system` - "Back to Dashboard" button at bottom
+- `/admin/year-end` - "Back to Dashboard" button at bottom (alongside Refresh Status)
 
 ## Review Summary
 
