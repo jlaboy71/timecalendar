@@ -170,20 +170,24 @@ class PTOService:
     
     @staticmethod
     def get_pending_requests_with_employee_info(db: Session):
-        """Get all pending PTO requests with employee information"""
+        """Get all pending PTO requests with employee information and department"""
         from ..models.pto_request import PTORequest
         from ..models.user import User
+        from ..models.department import Department
 
         results = db.query(
             PTORequest.id.label('request_id'),
             PTORequest.user_id,
             (User.first_name + ' ' + User.last_name).label('employee_name'),
+            User.department_id.label('employee_department_id'),
+            Department.name.label('department_name'),
             PTORequest.pto_type,
             PTORequest.start_date,
             PTORequest.end_date,
             PTORequest.total_days,
             PTORequest.submitted_at
         ).join(User, PTORequest.user_id == User.id
+        ).outerjoin(Department, User.department_id == Department.id
         ).filter(PTORequest.status == 'pending'
         ).order_by(PTORequest.submitted_at.desc()).all()
 

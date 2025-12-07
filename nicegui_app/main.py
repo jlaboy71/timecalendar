@@ -102,6 +102,8 @@ def requests():
     if not require_auth():
         return
 
+    from nicegui_app.components.header import page_header
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -116,14 +118,9 @@ def requests():
     current_filter = {'value': 'approved' if is_manager_or_admin else 'pending'}
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        # Header with logo above title
-        with ui.column().classes('gap-2 mb-4'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
-                # Different title for managers vs employees
-                page_title = 'MY TIME OFF' if is_manager_or_admin else 'REQUEST HISTORY'
-                ui.label(page_title).classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+        # Different title for managers vs employees
+        page_title = 'MY TIME OFF' if is_manager_or_admin else 'REQUEST HISTORY'
+        page_header(title=page_title, show_back=True)
 
         db = next(get_db())
         try:
@@ -371,6 +368,8 @@ def manager_request_detail(request_id: int):
     if not require_auth():
         return
 
+    from nicegui_app.components.header import page_header
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -401,16 +400,12 @@ def manager_request_detail(request_id: int):
             if employee_dept_id != user_department_id:
                 ui.label('Access denied - You can only review requests from your department').classes('text-red-500')
                 return
-        
+
         request = detail['request']
         balance = detail['balance']
-        
-        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-            with ui.column().classes('gap-2 mb-6'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-                with ui.row().classes('items-center'):
-                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
-                    ui.label('PTO REQUEST REVIEW').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+
+        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+            page_header(title='PTO REQUEST REVIEW', show_back=True)
             
             # Employee Info Card
             with ui.card().classes('w-full p-4 mb-4'):
@@ -558,6 +553,8 @@ def admin_panel():
     if not require_auth():
         return
 
+    from nicegui_app.components.header import page_header
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -569,10 +566,8 @@ def admin_panel():
         ui.navigate.to('/')
         return
 
-    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            ui.label('ADMIN PANEL').classes('text-xl font-bold').style('color: #5a6a72;')
+    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        page_header(title='ADMIN PANEL', show_back=True)
 
         # Navigation cards
         with ui.row().classes('w-full gap-6 justify-center'):
@@ -698,30 +693,10 @@ def admin_departments():
     dept_dropdown_options = {0: '-- Select Department --'}
     dept_dropdown_options.update({d['id']: f"{d['name']} ({d['employee_count']} employees)" for d in dept_data})
 
-    # Get user info for greeting
-    current_user = app.storage.general.get('user', {})
-    first_name = current_user.get('first_name', '')
-    last_name = current_user.get('last_name', '')
+    from nicegui_app.components.header import page_header
 
-    # Get time-based greeting
-    from datetime import datetime
-    hour = datetime.now().hour
-    if hour < 12:
-        greeting = 'Good Morning'
-    elif hour < 17:
-        greeting = 'Good Afternoon'
-    else:
-        greeting = 'Good Evening'
-
-    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
-        # Header with logo and greeting
-        with ui.row().classes('w-full justify-between items-start mb-6'):
-            with ui.column().classes('gap-2'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-                ui.label(f'{greeting}, {first_name} {last_name}').classes('text-sm opacity-70')
-                with ui.row().classes('items-center gap-2'):
-                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
-                    ui.label('DEPARTMENT MANAGEMENT').classes('text-xl font-bold').style('color: #5a6a72;')
+    with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
+        page_header(title='DEPARTMENT MANAGEMENT', show_back=True, back_url='/admin')
 
         # Create New Department Card (collapsible)
         with ui.expansion('Create New Department', icon='add_business').classes('w-full mb-4'):
@@ -960,6 +935,140 @@ def admin_departments():
         ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
+@ui.page('/admin/approvals')
+def admin_approvals():
+    """Admin page for viewing and approving all pending PTO requests."""
+    if not require_auth():
+        return
+
+    from nicegui_app.components.header import page_header
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    current_user = app.storage.general.get('user', {})
+    user_role = current_user.get('role')
+
+    if user_role not in ['admin', 'superadmin']:
+        ui.label('Access denied - Admin only').classes('text-red-500')
+        return
+
+    db = next(get_db())
+    try:
+        from src.services.pto_service import PTOService
+        from src.services.department_service import DepartmentService
+
+        # Get all pending requests
+        pending_requests = PTOService.get_pending_requests_with_employee_info(db)
+
+        # Get all departments for filtering
+        all_departments = DepartmentService.get_all_departments(db)
+
+        with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+            page_header(title='PENDING PTO APPROVALS', show_back=True)
+
+            if not pending_requests:
+                with ui.card().classes('w-full p-6 text-center'):
+                    ui.icon('check_circle', color='green').classes('text-4xl mb-2')
+                    ui.label('No pending requests').classes('text-lg font-semibold text-green-600')
+                    ui.label('All PTO requests have been processed.').classes('text-sm opacity-70')
+            else:
+                # Summary
+                ui.label(f'{len(pending_requests)} request(s) awaiting approval').classes('text-sm opacity-70 mb-4')
+
+                # Filter by department
+                dept_options = {'all': 'All Departments'}
+                for dept in all_departments:
+                    dept_options[dept.id] = dept.name
+
+                selected_dept = ui.select(
+                    options=dept_options,
+                    value='all',
+                    label='Filter by Department'
+                ).classes('w-64 mb-4')
+
+                # Request list container
+                request_container = ui.column().classes('w-full gap-3')
+
+                def render_requests(filter_dept=None):
+                    request_container.clear()
+
+                    filtered = pending_requests
+                    if filter_dept and filter_dept != 'all':
+                        filtered = [r for r in pending_requests if r.get('employee_department_id') == filter_dept]
+
+                    if not filtered:
+                        with request_container:
+                            ui.label('No pending requests in this department').classes('text-sm opacity-70 italic')
+                        return
+
+                    # Type colors
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+
+                    # Pre-compute conflicts
+                    pto_service = PTOService(db)
+                    request_conflicts = {}
+                    for req in filtered:
+                        conflicts = pto_service.get_department_conflicts(
+                            req['user_id'],
+                            req['start_date'],
+                            req['end_date'],
+                            exclude_request_id=req['request_id']
+                        )
+                        if conflicts:
+                            request_conflicts[req['request_id']] = len(conflicts)
+
+                    with request_container:
+                        for req in filtered:
+                            pto_type_lower = req['pto_type'].lower()
+                            border_color = type_colors.get(pto_type_lower, 'gray')
+                            has_conflict = req['request_id'] in request_conflicts
+
+                            with ui.card().classes(f'w-full p-4 border-l-4 border-{border_color}-500'):
+                                with ui.row().classes('w-full justify-between items-center'):
+                                    with ui.row().classes('gap-3 items-center'):
+                                        ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500 text-2xl')
+                                        with ui.column().classes('gap-1'):
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.label(req['employee_name']).classes('font-semibold text-lg')
+                                                if req.get('department_name'):
+                                                    ui.badge(req['department_name'], color='grey').props('outline')
+                                                if has_conflict:
+                                                    conflict_count = request_conflicts[req['request_id']]
+                                                    ui.icon('warning', color='amber').classes('text-lg').tooltip(
+                                                        f'{conflict_count} other team member(s) off on same date(s)'
+                                                    )
+                                            with ui.row().classes('gap-2 items-center'):
+                                                ui.label(req['pto_type'].title()).classes('text-sm')
+                                                ui.label('•').classes('text-xs opacity-50')
+                                                if req['start_date'] == req['end_date']:
+                                                    ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                else:
+                                                    ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                ui.label('•').classes('text-xs opacity-50')
+                                                days = float(req['total_days'])
+                                                ui.label(f'{days:.1f} days').classes('text-sm font-medium')
+
+                                    ui.button('Review', icon='visibility',
+                                             on_click=lambda r=req: ui.navigate.to(f"/manager/request/{r['request_id']}")).props('color=primary')
+
+                # Initial render
+                render_requests()
+
+                # Update on filter change
+                selected_dept.on('update:model-value', lambda e: render_requests(e.args))
+
+            # Back to Dashboard button
+            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+
+    finally:
+        db.close()
+
+
 @ui.page('/admin/employees')
 def admin_employees():
     """Admin page for managing employees."""
@@ -1173,6 +1282,8 @@ def admin_employees_add():
     from datetime import date as date_type
     import json
 
+    from nicegui_app.components.header import page_header
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -1194,13 +1305,8 @@ def admin_employees_add():
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-        # Header with back button
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat round')
-                ui.label('ADD NEW EMPLOYEE').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        page_header(title='ADD NEW EMPLOYEE', show_back=True, back_url='/admin/employees')
 
         # Basic Information Section
         with ui.card().classes('w-full p-6 mb-4'):
@@ -1224,7 +1330,7 @@ def admin_employees_add():
         with ui.card().classes('w-full p-6 mb-4'):
             ui.label('Employment Details').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
 
-            with ui.row().classes('w-full gap-4'):
+            with ui.row().classes('w-full gap-4 items-end'):
                 # Hire Date with calendar picker
                 with ui.column().classes('flex-1'):
                     ui.label('Hire Date').classes('text-sm font-medium mb-1')
@@ -1236,7 +1342,8 @@ def admin_employees_add():
                         with hire_date_input.add_slot('append'):
                             ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
-                department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('flex-1')
+                with ui.column().classes('flex-1'):
+                    department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('w-full')
 
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
@@ -1382,6 +1489,7 @@ def admin_employees_edit(user_id: int):
         return
 
     import json
+    from nicegui_app.components.header import page_header
 
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
@@ -1423,13 +1531,9 @@ def admin_employees_edit(user_id: int):
             except:
                 remote_schedule = {}
 
-        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-            # Header with back button
-            with ui.column().classes('gap-2 mb-6'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-                with ui.row().classes('items-center'):
-                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat round')
-                    ui.label('EDIT EMPLOYEE').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+            # Header using shared component
+            page_header(title='EDIT EMPLOYEE', show_back=True, back_url='/admin/employees')
 
             # Employee name display
             with ui.card().classes('w-full p-4 mb-4').style('border-left: 4px solid #5a6a72'):
@@ -1458,7 +1562,7 @@ def admin_employees_edit(user_id: int):
             with ui.card().classes('w-full p-6 mb-4'):
                 ui.label('Employment Details').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
 
-                with ui.row().classes('w-full gap-4'):
+                with ui.row().classes('w-full gap-4 items-end'):
                     # Hire Date with calendar picker
                     with ui.column().classes('flex-1'):
                         ui.label('Hire Date').classes('text-sm font-medium mb-1')
@@ -1471,7 +1575,8 @@ def admin_employees_edit(user_id: int):
                             with hire_date_input.add_slot('append'):
                                 ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
-                    department_select = ui.select(dept_options, label='Department', value=user.department_id).props('outlined').classes('flex-1')
+                    with ui.column().classes('flex-1'):
+                        department_select = ui.select(dept_options, label='Department', value=user.department_id).props('outlined').classes('w-full')
 
                 with ui.row().classes('w-full gap-4 mt-2'):
                     role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
@@ -1685,6 +1790,9 @@ def admin_employees_edit(user_id: int):
 
                     ui.button('Delete', on_click=confirm_delete, color='red', icon='delete_forever')
 
+            # Back to Dashboard button
+            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+
     finally:
         db.close()
 
@@ -1698,6 +1806,7 @@ def admin_handbook():
     from datetime import datetime
     from src.services.handbook_revision_service import HandbookRevisionService
     from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
+    from nicegui_app.components.header import page_header
 
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
@@ -1712,12 +1821,8 @@ def admin_handbook():
 
     current_user = app.storage.general.get('user')
 
-    with ui.column().classes('w-full max-w-5xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
-                ui.label('HANDBOOK MANAGEMENT').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+        page_header(title='HANDBOOK MANAGEMENT', show_back=True, back_url='/admin')
 
         # Tabs for different views
         with ui.tabs().classes('w-full') as tabs:
@@ -1876,7 +1981,13 @@ def admin_handbook():
 
                         # Step 1: Create backup before changes
                         try:
-                            db_path = Path(__file__).parent.parent / 'pto_calendar.db'
+                            # Get database path from config
+                            handbook_db_url = config.DATABASE_URL
+                            if handbook_db_url.startswith('sqlite:///'):
+                                handbook_db_filename = handbook_db_url.replace('sqlite:///', '')
+                                db_path = Path(__file__).parent.parent / handbook_db_filename
+                            else:
+                                db_path = Path(__file__).parent.parent / 'tjm_calendar.db'
                             backup_dir = Path(__file__).parent.parent / 'backups' / 'handbook_changes'
                             backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1965,6 +2076,7 @@ def admin_year_end():
 
     from datetime import datetime
     from src.services.year_end_service import YearEndService
+    from nicegui_app.components.header import page_header
 
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
@@ -1980,12 +2092,8 @@ def admin_year_end():
     current_year = datetime.now().year
     next_year = current_year + 1
 
-    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
-                ui.label('YEAR-END PROCESSING').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        page_header(title='YEAR-END PROCESSING', show_back=True, back_url='/admin')
 
         # Status cards container
         status_container = ui.column().classes('w-full gap-4')
@@ -2081,6 +2189,7 @@ def help_page():
         return
 
     from src.services.help_service import HelpService
+    from nicegui_app.components.header import page_header
 
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
@@ -2093,12 +2202,8 @@ def help_page():
     search_results = {'items': []}
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        # Header
-        with ui.column().classes('gap-2 mb-4'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
-                ui.label('HELP CENTER').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+        # Header using shared component (no help button on help page itself)
+        page_header(title='HELP CENTER', show_back=True)
 
         # Search bar
         search_input = ui.input(placeholder='Search help articles...').classes('w-full mb-4').props('outlined dense clearable')
@@ -2113,15 +2218,15 @@ def help_page():
             content_container.clear()
             with content_container:
                 chapters = HelpService.get_all_chapters()
-                with ui.row().classes('w-full flex-wrap gap-4'):
+                # Use CSS grid for consistent card sizing
+                with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;'):
                     for chapter in chapters:
-                        with ui.card().classes('w-72 cursor-pointer hover:shadow-lg transition-shadow').on('click', lambda c=chapter['id']: show_chapter(c)):
-                            with ui.card_section():
-                                with ui.row().classes('items-center gap-3'):
+                        with ui.card().classes('cursor-pointer hover:shadow-lg transition-shadow h-full').on('click', lambda c=chapter['id']: show_chapter(c)):
+                            with ui.card_section().classes('h-full'):
+                                with ui.row().classes('items-center gap-3 mb-3'):
                                     ui.icon(chapter['icon'], size='2rem').classes('text-primary')
                                     ui.label(chapter['title']).classes('text-lg font-semibold')
-                            with ui.card_section():
-                                ui.label(f"{chapter['article_count']} articles").classes('text-sm opacity-70')
+                                ui.label(f"{chapter['article_count']} articles").classes('text-sm opacity-70 mb-2')
                                 for article in chapter['articles'][:3]:
                                     ui.label(f"• {article['title']}").classes('text-sm truncate')
                                 if len(chapter['articles']) > 3:
@@ -2140,7 +2245,7 @@ def help_page():
 
                 # Breadcrumb
                 with ui.row().classes('items-center gap-2 mb-4'):
-                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('Help').classes('text-primary cursor-pointer').on('click', show_chapters)
                     ui.label('/').classes('opacity-50')
                     ui.label(chapter['title']).classes('font-semibold')
 
@@ -2166,9 +2271,9 @@ def help_page():
 
                 # Breadcrumb
                 with ui.row().classes('items-center gap-2 mb-4'):
-                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('Help').classes('text-primary cursor-pointer').on('click', show_chapters)
                     ui.label('/').classes('opacity-50')
-                    ui.link(article['chapter_title'], on_click=lambda: show_chapter(chapter_id)).classes('text-primary cursor-pointer')
+                    ui.label(article['chapter_title']).classes('text-primary cursor-pointer').on('click', lambda c=chapter_id: show_chapter(c))
                     ui.label('/').classes('opacity-50')
                     ui.label(article['title']).classes('font-semibold')
 
@@ -2188,7 +2293,7 @@ def help_page():
             with content_container:
                 # Breadcrumb
                 with ui.row().classes('items-center gap-2 mb-4'):
-                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('Help').classes('text-primary cursor-pointer').on('click', show_chapters)
                     ui.label('/').classes('opacity-50')
                     ui.label(f'Search: "{query}"').classes('font-semibold')
 
@@ -2212,6 +2317,9 @@ def help_page():
 
         # Initial view
         show_chapters()
+
+        # Back to Dashboard button
+        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-6')
 
 
 @ui.page('/admin/system')
@@ -2238,14 +2346,11 @@ def admin_system():
         ui.navigate.to('/')
         return
 
+    from nicegui_app.components.header import page_header
+
     with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
         # Header
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
-                ui.label('SYSTEM ADMINISTRATION').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
-                ui.badge('SUPER ADMIN', color='amber').classes('ml-2')
+        page_header(title='SYSTEM ADMINISTRATION', show_back=True, back_url='/admin')
 
         # Tabs for different sections
         with ui.tabs().classes('w-full') as tabs:
@@ -2260,8 +2365,13 @@ def admin_system():
                 with ui.card().classes('w-full p-4 mb-4'):
                     ui.label('Database Management').classes('text-lg font-semibold mb-4')
 
-                    # Database info
-                    db_path = Path(__file__).parent.parent / 'pto_calendar.db'
+                    # Database info - derive path from DATABASE_URL config
+                    db_url = config.DATABASE_URL
+                    if db_url.startswith('sqlite:///'):
+                        db_filename = db_url.replace('sqlite:///', '')
+                        db_path = Path(__file__).parent.parent / db_filename
+                    else:
+                        db_path = Path(__file__).parent.parent / 'tjm_calendar.db'
                     db_exists = db_path.exists()
                     db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0  # MB
 
@@ -2292,7 +2402,8 @@ def admin_system():
                             backup_dir.mkdir(exist_ok=True)
 
                             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                            backup_file = backup_dir / f'pto_calendar_{timestamp}.db'
+                            db_name = db_path.stem  # Get filename without extension
+                            backup_file = backup_dir / f'{db_name}_{timestamp}.db'
 
                             import shutil
                             shutil.copy2(db_path, backup_file)
@@ -2565,6 +2676,10 @@ After updating `.env`, restart the application.
                         with ui.column():
                             ui.label('Architecture').classes('text-sm opacity-70')
                             ui.label(platform.machine()).classes('font-mono')
+
+        # Back button
+        with ui.row().classes('w-full mt-6'):
+            ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
 
 
 @ui.page('/health')

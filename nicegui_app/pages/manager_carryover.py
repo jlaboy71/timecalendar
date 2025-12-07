@@ -319,8 +319,4 @@ def manager_carryover_page():
 
         # Back button
         with ui.row().classes('w-full mt-6'):
-            if is_admin:
-                ui.button('Back to Admin', on_click=lambda: ui.navigate.to('/admin')).classes('mr-4')
-            else:
-                ui.button('Back to Manager Dashboard', on_click=lambda: ui.navigate.to('/manager')).classes('mr-4')
             ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))

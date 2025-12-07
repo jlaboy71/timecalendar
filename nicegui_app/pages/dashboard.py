@@ -4,6 +4,7 @@ from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
+from src.models.carryover_request import CarryoverRequest
 from src.database import get_db
 from datetime import datetime, date
 import pytz
@@ -348,6 +349,10 @@ def dashboard_page():
 
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
+                # Get pending requests for admins (all departments)
+                admin_pending_requests = PTOService.get_pending_requests_with_employee_info(db)
+                pending_count = len(admin_pending_requests)
+
                 # Admin Overview Stats
                 with ui.card().classes('w-full mb-4 p-4 border-l-4 border-red-500'):
                     with ui.row().classes('w-full justify-between items-center mb-4'):
@@ -372,11 +377,100 @@ def dashboard_page():
                             ui.label(str(len(all_departments))).classes('text-3xl font-bold text-indigo-600')
                             ui.label('Departments').classes('text-xs opacity-60')
 
-                        # Pending Requests
-                        pending_count = len(PTOService.get_pending_requests_with_employee_info(db))
-                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
+                        # Pending Requests (clickable)
+                        with ui.card().classes('flex-1 min-w-32 p-3 text-center cursor-pointer hover:bg-amber-50').on('click', lambda: ui.navigate.to('/admin/approvals') if pending_count > 0 else None):
                             ui.label(str(pending_count)).classes('text-3xl font-bold text-amber-600')
                             ui.label('Pending Requests').classes('text-xs opacity-60')
+
+                # ============ PENDING APPROVALS (admins see all pending requests) ============
+                if admin_pending_requests:
+                    # Pre-compute conflicts for each pending request
+                    pto_service = PTOService(db)
+                    request_conflicts = {}
+                    for req in admin_pending_requests:
+                        conflicts = pto_service.get_department_conflicts(
+                            req['user_id'],
+                            req['start_date'],
+                            req['end_date'],
+                            exclude_request_id=req['request_id']
+                        )
+                        if conflicts:
+                            request_conflicts[req['request_id']] = len(conflicts)
+
+                    with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                        with ui.row().classes('w-full justify-between items-center mb-3'):
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('pending_actions', color='amber').classes('text-xl')
+                                ui.label('Pending PTO Approvals').classes('text-lg font-semibold')
+                            with ui.row().classes('items-center gap-2'):
+                                if request_conflicts:
+                                    ui.badge(f'{len(request_conflicts)} conflicts', color='amber').props('outline').tooltip('Some requests have scheduling conflicts')
+                                ui.badge(f'{pending_count} pending', color='amber').props('outline')
+
+                        # Type colors for border
+                        type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                        type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+
+                        for req in admin_pending_requests[:5]:  # Show first 5
+                            pto_type_lower = req['pto_type'].lower()
+                            border_color = type_colors.get(pto_type_lower, 'gray')
+                            has_conflict = req['request_id'] in request_conflicts
+
+                            with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                                with ui.row().classes('w-full justify-between items-center'):
+                                    with ui.row().classes('gap-3 items-center'):
+                                        ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                        with ui.column().classes('gap-0'):
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.label(req['employee_name']).classes('font-medium')
+                                                # Show department name for admins
+                                                if req.get('department_name'):
+                                                    ui.badge(req['department_name'], color='grey').props('outline dense')
+                                                # Show conflict warning icon
+                                                if has_conflict:
+                                                    conflict_count = request_conflicts[req['request_id']]
+                                                    ui.icon('warning', color='amber').classes('text-lg').tooltip(
+                                                        f'{conflict_count} other team member(s) off on same date(s)'
+                                                    )
+                                            with ui.row().classes('gap-2 items-center'):
+                                                ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                                ui.label('•').classes('text-xs opacity-50')
+                                                if req['start_date'] == req['end_date']:
+                                                    ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                else:
+                                                    ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+
+                                    with ui.row().classes('items-center gap-3'):
+                                        days = float(req['total_days'])
+                                        ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+
+                                        def create_review_handler(request_id):
+                                            def review():
+                                                ui.navigate.to(f'/manager/request/{request_id}')
+                                            return review
+
+                                        ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=amber size=sm')
+
+                        if len(admin_pending_requests) > 5:
+                            with ui.row().classes('w-full justify-center mt-2'):
+                                ui.button(f'View All {pending_count} Requests', icon='visibility',
+                                         on_click=lambda: ui.navigate.to('/admin/approvals')).props('flat dense')
+
+                # ============ PENDING CARRYOVER REQUESTS (admins see all) ============
+                pending_carryovers = db.query(CarryoverRequest).filter(
+                    CarryoverRequest.status == 'pending',
+                    CarryoverRequest.from_year == current_year
+                ).count()
+
+                if pending_carryovers > 0:
+                    with ui.card().classes('w-full mb-4 border-l-4 border-purple-500 cursor-pointer hover:shadow-lg').on('click', lambda: ui.navigate.to('/manager/carryover')):
+                        with ui.row().classes('w-full justify-between items-center p-2'):
+                            with ui.row().classes('items-center gap-3'):
+                                ui.icon('move_down', color='purple').classes('text-2xl')
+                                with ui.column().classes('gap-0'):
+                                    ui.label('Pending Carryover Requests').classes('font-semibold')
+                                    ui.label(f'{pending_carryovers} employee(s) requesting to carry over unused PTO').classes('text-sm opacity-70')
+                            ui.badge(str(pending_carryovers), color='purple')
 
                 # Admin Quick Actions
                 with ui.card().classes('w-full mb-4 p-4'):
@@ -391,14 +485,33 @@ def dashboard_page():
 
                     ui.separator().classes('my-3')
 
+                    ui.label('Approvals').classes('text-xs font-semibold uppercase opacity-60 mb-3')
+                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                        ui.button('PTO Approvals', icon='pending_actions',
+                                  on_click=lambda: ui.navigate.to('/admin/approvals')).props('outline color=amber').classes('flex-1 min-w-fit')
+                        ui.button('Carryover Approvals', icon='move_down',
+                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=purple').classes('flex-1 min-w-fit')
+
+                    ui.separator().classes('my-3')
+
                     ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60 mb-3')
                     with ui.row().classes('w-full gap-3 flex-wrap'):
                         ui.button('Company Calendar', icon='calendar_month',
                                   on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                        ui.button('Employee Handbook', icon='menu_book',
-                                  on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                        ui.button('Manage Handbook', icon='menu_book',
+                                  on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
                         ui.button('Reports', icon='assessment',
                                   on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
+
+                    ui.separator().classes('my-3')
+
+                    ui.label('System').classes('text-xs font-semibold uppercase opacity-60 mb-3')
+                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                        ui.button('Year-End Processing', icon='event_repeat',
+                                  on_click=lambda: ui.navigate.to('/admin/year-end')).props('outline color=teal').classes('flex-1 min-w-fit')
+                        if user_role == 'superadmin':
+                            ui.button('System Admin', icon='settings_applications',
+                                      on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=warning').classes('flex-1 min-w-fit')
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
