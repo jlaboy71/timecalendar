@@ -16,6 +16,7 @@ from nicegui_app.pages.handbook import handbook_page
 from nicegui_app.pages.reports import reports_page
 from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.logo import LOGO_DATA_URL
+from src.services.session_manager import SessionManager, require_auth
 
 # Set up basic app configuration
 app.title = "TJM Time Calendar"
@@ -25,9 +26,9 @@ STATIC_DIR = Path(__file__).parent / 'static'
 app.add_static_files('/static', STATIC_DIR)
 
 @ui.page('/')
-def home():
+def home(timeout: str = None):
     """Home page with login interface."""
-    login_page()
+    login_page(timeout)
 
 @ui.page('/forgot-password')
 def forgot_password():
@@ -42,50 +43,63 @@ def reset_password(token: str):
 @ui.page('/dashboard')
 def dashboard():
     """Dashboard page for logged-in users."""
+    if not require_auth():
+        return
     dashboard_page()
 
 @ui.page('/submit-request')
 def submit_request():
     """PTO Request submission page."""
+    if not require_auth():
+        return
     request_form_page()
 
 @ui.page('/calendar')
 def calendar():
     """Calendar view page."""
+    if not require_auth():
+        return
     calendar_page()
 
 @ui.page('/carryover')
 def carryover():
     """Carryover request page."""
+    if not require_auth():
+        return
     carryover_page()
 
 @ui.page('/manager/carryover')
 def manager_carryover():
     """Manager carryover approval page."""
+    if not require_auth():
+        return
     manager_carryover_page()
 
 @ui.page('/handbook')
 def handbook():
     """Employee handbook page."""
+    if not require_auth():
+        return
     handbook_page()
 
 @ui.page('/reports')
 def reports():
     """Reports page for managers and admins."""
+    if not require_auth():
+        return
     reports_page()
 
 @ui.page('/requests')
 def requests():
     """User's PTO request history page with filtering and cancel functionality."""
+    if not require_auth():
+        return
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
     if is_dark:
         dark_mode.enable()
-
-    if not app.storage.general.get('user'):
-        ui.navigate.to('/')
-        return
 
     user = app.storage.general.get('user')
     user_role = user.get('role', 'employee')
@@ -347,6 +361,9 @@ def cancel_user_request(request_id: int, pto_type: str, total_days: float, year:
 @ui.page('/manager/request/{request_id}')
 def manager_request_detail(request_id: int):
     """Request detail page for approval/denial"""
+    if not require_auth():
+        return
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -354,7 +371,7 @@ def manager_request_detail(request_id: int):
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['manager', 'admin', 'superadmin']:
+    if user_role not in ['manager', 'admin', 'superadmin']:
         ui.label('Access denied').classes('text-red-500')
         return
 
@@ -499,6 +516,9 @@ def manager_request_detail(request_id: int):
 @ui.page('/admin')
 def admin_panel():
     """Admin panel landing page with navigation to admin functions."""
+    if not require_auth():
+        return
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -506,7 +526,7 @@ def admin_panel():
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['admin', 'superadmin']:
+    if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
@@ -554,6 +574,9 @@ def admin_panel():
 @ui.page('/admin/departments')
 def admin_departments():
     """Admin page for managing departments."""
+    if not require_auth():
+        return
+
     from src.services.department_service import DepartmentService
     from src.services.user_service import UserService
     from src.models.user import User
@@ -565,7 +588,7 @@ def admin_departments():
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['admin', 'superadmin']:
+    if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
@@ -754,6 +777,9 @@ def admin_departments():
 @ui.page('/admin/employees')
 def admin_employees():
     """Admin page for managing employees."""
+    if not require_auth():
+        return
+
     from nicegui_app.components.header import page_header
 
     # Apply dark mode if previously set
@@ -763,7 +789,7 @@ def admin_employees():
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['admin', 'superadmin']:
+    if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
@@ -955,6 +981,9 @@ def admin_employees():
 @ui.page('/admin/employees/add')
 def admin_employees_add():
     """Admin page for adding a new employee."""
+    if not require_auth():
+        return
+
     from datetime import date as date_type
     import json
 
@@ -965,7 +994,7 @@ def admin_employees_add():
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['admin', 'superadmin']:
+    if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
@@ -1163,6 +1192,9 @@ def admin_employees_add():
 @ui.page('/admin/employees/edit/{user_id}')
 def admin_employees_edit(user_id: int):
     """Admin page for editing an existing employee."""
+    if not require_auth():
+        return
+
     import json
 
     # Apply dark mode if previously set
@@ -1172,7 +1204,7 @@ def admin_employees_edit(user_id: int):
         dark_mode.enable()
 
     user_role = app.storage.general.get('user', {}).get('role')
-    if not app.storage.general.get('user') or user_role not in ['admin', 'superadmin']:
+    if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 

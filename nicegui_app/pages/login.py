@@ -6,7 +6,7 @@ from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
 
 
-def login_page():
+def login_page(timeout: str = None):
     """Create a centered login page with Material Design styling."""
 
     # Apply dark mode if previously set
@@ -21,7 +21,13 @@ def login_page():
             with ui.column().classes('w-full items-center mb-6'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto; margin-bottom: 16px;')
                 ui.label('TJM TIME CALENDAR').classes('text-xl font-bold text-center').style('color: #5a6a72;')
-            
+
+            # Show timeout message if session expired
+            if timeout == '1':
+                with ui.card().classes('w-full mb-4 p-3 border-l-4 border-amber-500'):
+                    ui.label('Session Expired').classes('font-semibold text-amber-600')
+                    ui.label('You were logged out due to inactivity. Please log in again.').classes('text-sm opacity-70')
+
             # Username input
             username_input = ui.input(label='Username').classes('w-full mb-4')
             

@@ -5,6 +5,7 @@ import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from src.database import get_db
 from src.services.audit_service import AuditService
+from src.services.session_manager import SessionManager
 
 
 def get_time_based_greeting():
@@ -33,6 +34,9 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
     user = app.storage.general.get('user')
     if not user:
         return
+
+    # Update session activity timestamp
+    SessionManager.update_activity()
 
     user_first_name = user.get('first_name', 'User')
     user_last_name = user.get('last_name', '')
@@ -77,8 +81,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
                     except Exception:
                         pass  # Don't block logout if audit logging fails
 
-                app.storage.general.pop('user', None)
-                app.storage.general.pop('dark_mode', None)
+                SessionManager.clear_session()
                 ui.navigate.to('/')
 
             ui.button('Logout', on_click=logout).props('flat color=red')
