@@ -4,6 +4,7 @@ from src.services.accrual_service import AccrualService
 from src.services.balance_service import BalanceService
 from src.services.user_service import UserService
 from src.services.audit_service import AuditService
+from src.services.email_service import email_service
 from src.database import get_db
 from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
@@ -525,8 +526,42 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 balance_service.adjust_vacation_used(balance.id, -total_days, is_pending=True)
                 balance_service.adjust_vacation_used(balance.id, total_days, is_pending=False)
 
+            # Send auto-approval email to employee
+            email_service.send_pto_approved(
+                employee.email,
+                f"{employee.first_name} {employee.last_name}",
+                pto_type,
+                start_date,
+                end_date,
+                float(total_days),
+                f"{employee.first_name} {employee.last_name} (auto-approved)"
+            )
+
             ui.notify('PTO request approved automatically!', type='positive')
         else:
+            # Send confirmation email to employee
+            email_service.send_pto_submitted(
+                employee.email,
+                f"{employee.first_name} {employee.last_name}",
+                pto_type,
+                start_date,
+                end_date,
+                float(total_days)
+            )
+
+            # Send notification to manager if employee has a department with a manager
+            if employee.department and employee.department.manager:
+                manager = employee.department.manager
+                email_service.send_pending_request_notification(
+                    manager.email,
+                    f"{manager.first_name} {manager.last_name}",
+                    f"{employee.first_name} {employee.last_name}",
+                    pto_type,
+                    start_date,
+                    end_date,
+                    float(total_days)
+                )
+
             ui.notify('PTO request submitted for approval', type='positive')
 
         ui.navigate.to('/dashboard')
