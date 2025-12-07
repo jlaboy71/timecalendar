@@ -79,6 +79,18 @@ def setup_logging():
     uvicorn_access.propagate = False
     uvicorn_access.addHandler(file_handler)
 
+    # Uvicorn error logger (startup messages)
+    uvicorn_error = logging.getLogger('uvicorn.error')
+    uvicorn_error.setLevel(logging.WARNING)
+    uvicorn_error.propagate = False
+    uvicorn_error.addHandler(file_handler)
+
+    # Root uvicorn logger
+    uvicorn_root = logging.getLogger('uvicorn')
+    uvicorn_root.setLevel(logging.WARNING)
+    uvicorn_root.propagate = False
+    uvicorn_root.addHandler(file_handler)
+
     return root_logger
 
 
