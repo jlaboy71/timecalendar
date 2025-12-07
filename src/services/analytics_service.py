@@ -362,7 +362,7 @@ class AnalyticsService:
                 continue
 
             users_with_balance += 1
-            total_allocated += float(bal.vacation_days) + float(bal.personal_days) + float(bal.sick_days)
+            total_allocated += float(bal.vacation_total) + float(bal.personal_total) + float(bal.sick_total)
             total_used += float(bal.vacation_used) + float(bal.personal_used) + float(bal.sick_used)
 
         utilization_rate = (total_used / total_allocated * 100) if total_allocated > 0 else 0
