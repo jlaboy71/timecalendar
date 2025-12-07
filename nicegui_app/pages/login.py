@@ -1,6 +1,7 @@
 from nicegui import ui, app
 from src.services.user_service import UserService
 from src.services.audit_service import AuditService
+from src.services.rate_limiter import LoginRateLimiter
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
 
@@ -40,22 +41,32 @@ def authenticate(username_input, password_input, error_message):
     # Get values from inputs
     username = username_input.value.strip()
     password = password_input.value
-    
+
     # Validate inputs
     if not username or not password:
         error_message.text = 'Please enter both username and password'
         error_message.set_visibility(True)
         return
-    
+
+    # Check if user is locked out due to too many failed attempts
+    is_locked, minutes_remaining = LoginRateLimiter.is_locked_out(username)
+    if is_locked:
+        error_message.text = f'Account temporarily locked. Try again in {minutes_remaining} minute(s).'
+        error_message.set_visibility(True)
+        return
+
     # Get database session
     db = next(get_db())
-    
+
     try:
         # Create user service and authenticate
         user_service = UserService(db)
         user = user_service.authenticate_user(username, password)
-        
+
         if user:
+            # Clear failed attempts on successful login
+            LoginRateLimiter.record_successful_login(username)
+
             # Log successful login
             AuditService.log_login(db, user.id, user.username, success=True)
 
@@ -71,13 +82,22 @@ def authenticate(username_input, password_input, error_message):
             }
             ui.navigate.to('/dashboard')
         else:
-            # Log failed login attempt
-            AuditService.log(db, action='login_failed', username=username)
+            # Record failed attempt and check if now locked out
+            attempts_remaining, is_now_locked = LoginRateLimiter.record_failed_attempt(username)
 
-            # Show error message
-            error_message.text = 'Invalid credentials'
+            # Log failed login attempt
+            AuditService.log(db, action='login_failed', username=username,
+                           details={'attempts_remaining': attempts_remaining, 'locked_out': is_now_locked})
+
+            # Show appropriate error message
+            if is_now_locked:
+                error_message.text = f'Too many failed attempts. Account locked for {LoginRateLimiter.LOCKOUT_MINUTES} minutes.'
+            elif attempts_remaining <= 2:
+                error_message.text = f'Invalid credentials. {attempts_remaining} attempt(s) remaining.'
+            else:
+                error_message.text = 'Invalid credentials'
             error_message.set_visibility(True)
-            
+
     except Exception as e:
         # Handle any database or service errors
         error_message.text = 'Login failed. Please try again.'
