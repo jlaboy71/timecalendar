@@ -826,7 +826,10 @@ def reports_page():
 
         def show_print_preview():
             """Show print preview dialog with formatted report."""
+            import base64
             html_content = get_report_html()
+            # Encode HTML as base64 to avoid escaping issues
+            b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
 
             with ui.dialog().props('maximized') as dialog, ui.card().classes('w-full h-full'):
                 with ui.row().classes('w-full justify-between items-center p-4 border-b'):
@@ -838,29 +841,26 @@ def reports_page():
                         ''')).props('color=primary')
                         ui.button('Close', icon='close', on_click=dialog.close).props('flat')
 
-                # Create iframe for print preview
-                ui.html(f'''
-                    <iframe id="print-frame" srcdoc="{html_content.replace('"', '&quot;')}"
-                        style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;">
-                    </iframe>
-                ''').classes('w-full')
+                # Use data URI to load HTML content into iframe
+                ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>').classes('w-full')
 
             dialog.open()
 
         def download_pdf():
             """Download report as PDF (using browser print-to-PDF)."""
+            import base64
             html_content = get_report_html()
-            # Escape backticks for JavaScript template literal
-            escaped_content = html_content.replace('`', '\\`')
+            # Encode HTML as base64 to avoid escaping issues
+            b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
 
-            # Create a hidden iframe and trigger print dialog (which allows Save as PDF)
+            # Open new window with data URI and trigger print dialog
             ui.run_javascript(f'''
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(`{escaped_content}`);
-                printWindow.document.close();
-                printWindow.onload = function() {{
-                    printWindow.print();
-                }};
+                const printWindow = window.open('data:text/html;base64,{b64_content}', '_blank');
+                if (printWindow) {{
+                    printWindow.onload = function() {{
+                        printWindow.print();
+                    }};
+                }}
             ''')
             ui.notify("PDF: Use your browser's 'Save as PDF' option in the print dialog", type='info')
 
