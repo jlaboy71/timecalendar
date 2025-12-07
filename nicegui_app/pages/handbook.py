@@ -1,9 +1,35 @@
 """
 Employee Handbook page with AI chat for managers and styled viewer for employees.
+Uses database content (if available) for both display and AI search.
 """
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
 from nicegui_app.components.header import page_header
+from src.database import get_db
+
+
+def get_active_handbook_content():
+    """
+    Get the active handbook content from database or fall back to static.
+
+    Returns:
+        Tuple of (content, version) where content is the markdown text
+        and version is the version string or 'static' for fallback.
+    """
+    db = next(get_db())
+    try:
+        from src.models.handbook_revision import HandbookRevision
+        active = db.query(HandbookRevision).filter(HandbookRevision.is_active == True).first()
+        if active:
+            return active.content, active.version
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+    # Fall back to static content
+    from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
+    return HANDBOOK_CONTENT, 'static'
 
 
 def handbook_page():
@@ -24,14 +50,19 @@ def handbook_page():
     user_role = user_data.get('role', 'employee')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
 
+    # Get current handbook content and version
+    handbook_content, handbook_version = get_active_handbook_content()
+
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Header with greeting
         title = 'HANDBOOK AI ASSISTANT' if is_manager_or_admin else 'EMPLOYEE HANDBOOK'
         page_header(title=title, show_back=False)
 
-        # AI badge for managers
-        if is_manager_or_admin:
-            with ui.row().classes('mb-4'):
+        # Version and AI badge
+        with ui.row().classes('mb-4 gap-2'):
+            if handbook_version != 'static':
+                ui.badge(f'Version {handbook_version}', color='blue').props('outline')
+            if is_manager_or_admin:
                 ui.badge('AI Enabled', color='green').props('outline')
 
         # Show AI Chat for managers/admins
@@ -39,26 +70,33 @@ def handbook_page():
             render_ai_chat()
             ui.separator().classes('my-6')
             with ui.expansion('View Full Handbook', icon='menu_book').classes('w-full'):
-                render_styled_handbook()
+                render_handbook_content(handbook_content)
         else:
-            # Employees see the styled handbook directly
-            render_styled_handbook()
+            # Employees see the handbook content directly
+            render_handbook_content(handbook_content)
 
         # Back to Dashboard button
         ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
 def render_ai_chat():
-    """Render the AI chat interface for handbook Q&A."""
+    """Render the AI chat interface for handbook Q&A - uses database content."""
     from src.services.handbook_service import HandbookService
 
-    handbook_service = HandbookService()
+    # Create handbook service with database session for live content
+    db = next(get_db())
+    handbook_service = HandbookService(db_session=db)
     conversation_history = []
+
+    # Get version info
+    version = handbook_service.get_handbook_version()
 
     with ui.card().classes('w-full'):
         with ui.row().classes('w-full items-center gap-2 mb-4'):
             ui.icon('smart_toy', color='primary').classes('text-2xl')
             ui.label('Handbook AI Assistant').classes('text-lg font-semibold').style('color: #5a6a72;')
+            if version:
+                ui.badge(f'v{version}', color='blue').props('outline dense')
             if not handbook_service.is_available():
                 ui.badge('API Key Required', color='red').props('outline')
 
@@ -66,6 +104,7 @@ def render_ai_chat():
             with ui.card().classes('w-full p-4 border-l-4 border-amber-500'):
                 ui.label('AI Assistant Not Configured').classes('font-semibold text-amber-600')
                 ui.label('To enable AI chat, add ANTHROPIC_API_KEY to your .env file.').classes('text-sm opacity-70')
+            db.close()
             return
 
         ui.label('Ask questions about company policies, PTO, benefits, and more.').classes('text-sm opacity-70 mb-4')
@@ -116,7 +155,7 @@ def render_ai_chat():
                                 ui.spinner('dots', size='sm')
                                 ui.label('Thinking...').classes('text-sm opacity-60')
 
-                # Get response
+                # Get response (uses database content via handbook_service)
                 response = handbook_service.ask_question_sync(question, conversation_history)
 
                 # Remove loading
@@ -158,8 +197,38 @@ def render_ai_chat():
                 ui.button(q, icon=icon, on_click=make_handler(q)).props('flat dense size=sm outline')
 
 
+def render_handbook_content(content: str):
+    """
+    Render handbook content - either from database or static sections.
+
+    Args:
+        content: The handbook content as markdown text
+    """
+    # Check if we have structured sections (static) or raw markdown (database)
+    if HANDBOOK_SECTIONS and not content.startswith('#'):
+        # Use structured sections (static file format)
+        render_styled_handbook()
+    else:
+        # Render raw markdown content (from database)
+        render_markdown_handbook(content)
+
+
+def render_markdown_handbook(content: str):
+    """Render handbook as markdown content with scrollable sections."""
+
+    with ui.card().classes('w-full p-6'):
+        ui.label('Employee Handbook').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        ui.markdown(content).classes('prose max-w-none')
+
+    # Footer
+    with ui.card().classes('w-full p-4 text-center mt-4'):
+        with ui.row().classes('w-full justify-center items-center gap-2'):
+            ui.icon('info', size='sm').classes('opacity-60')
+            ui.label('For questions, contact HR').classes('text-xs opacity-60')
+
+
 def render_styled_handbook():
-    """Render the styled handbook viewer."""
+    """Render the styled handbook viewer using static sections."""
 
     # Section navigation card
     with ui.card().classes('w-full mb-4 p-3'):
