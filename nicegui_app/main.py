@@ -600,14 +600,14 @@ def admin_panel():
                     ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
                     ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
 
-            # Reports card (disabled)
-            with ui.card().classes('p-6 opacity-50'):
+            # Year-End Processing card
+            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
                 with ui.column().classes('items-center gap-4'):
-                    ui.icon('assessment', size='3rem').classes('text-gray-400')
-                    ui.label('Reports').classes('text-xl font-semibold text-gray-400')
-                    ui.label('View PTO usage and analytics').classes('text-gray-400 text-center')
-                    ui.label('Coming Soon').classes('text-gray-400 font-semibold')
-        
+                    ui.icon('event_repeat', size='3rem').classes('text-primary')
+                    ui.label('Year-End Processing').classes('text-xl font-semibold')
+                    ui.label('Process year transitions and holidays').classes('text-gray-600 text-center')
+                    ui.button('Go to Year-End', on_click=lambda: ui.navigate.to('/admin/year-end'), color='primary')
+
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
 
 @ui.page('/admin/departments')
@@ -1540,6 +1540,123 @@ def admin_employees_edit(user_id: int):
 
     finally:
         db.close()
+
+
+@ui.page('/admin/year-end')
+def admin_year_end():
+    """Admin page for year-end processing."""
+    if not require_auth():
+        return
+
+    from datetime import datetime
+    from src.services.year_end_service import YearEndService
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    user_role = app.storage.general.get('user', {}).get('role')
+    if user_role not in ['admin', 'superadmin']:
+        ui.navigate.to('/')
+        return
+
+    current_year = datetime.now().year
+    next_year = current_year + 1
+
+    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+        with ui.column().classes('gap-2 mb-6'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            with ui.row().classes('items-center'):
+                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
+                ui.label('YEAR-END PROCESSING').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+
+        # Status cards container
+        status_container = ui.column().classes('w-full gap-4')
+
+        def refresh_status():
+            status_container.clear()
+            db = next(get_db())
+            try:
+                service = YearEndService(db)
+
+                # Current year status
+                current_status = service.get_year_end_status(current_year)
+
+                # Next year status
+                next_status = service.get_year_end_status(next_year)
+
+                with status_container:
+                    # Current Year Card
+                    with ui.card().classes('w-full p-4'):
+                        ui.label(f'Current Year: {current_year}').classes('text-lg font-bold mb-2')
+                        with ui.row().classes('gap-8'):
+                            with ui.column():
+                                ui.label(f"Active Employees: {current_status['active_users']}")
+                                ui.label(f"Balances Created: {current_status['balances_created']}")
+                            with ui.column():
+                                ui.label(f"Pending Carryovers: {current_status['pending_carryovers']}")
+                                ui.label(f"Holidays: {current_status['holidays_created']}")
+
+                    # Next Year Card
+                    with ui.card().classes('w-full p-4'):
+                        ui.label(f'Next Year: {next_year}').classes('text-lg font-bold mb-2')
+                        with ui.row().classes('gap-8'):
+                            with ui.column():
+                                ui.label(f"Balances Created: {next_status['balances_created']} / {next_status['active_users']}")
+                                status_text = "Complete" if next_status['balances_complete'] else "Incomplete"
+                                status_color = "green" if next_status['balances_complete'] else "orange"
+                                ui.badge(status_text, color=status_color)
+                            with ui.column():
+                                ui.label(f"Carryovers Applied: {next_status['approved_carryovers']}")
+                                ui.label(f"Holidays: {next_status['holidays_created']}")
+
+                    # Warnings
+                    if current_status['pending_carryovers'] > 0:
+                        with ui.card().classes('w-full p-4 border-l-4 border-amber-500'):
+                            ui.label(f"⚠️ {current_status['pending_carryovers']} carryover requests pending").classes('font-semibold text-amber-600')
+                            ui.label("These should be approved or denied before year-end processing.").classes('text-sm')
+
+                    # Process Button
+                    if not next_status['balances_complete'] or next_status['holidays_created'] == 0:
+                        def process_year_end():
+                            process_db = next(get_db())
+                            try:
+                                process_service = YearEndService(process_db)
+                                results = process_service.process_year_transition(next_year)
+
+                                if results['errors']:
+                                    ui.notify(f"Completed with {len(results['errors'])} errors", type='warning')
+                                else:
+                                    ui.notify(
+                                        f"Success! Created {results['balances_created']} balances, "
+                                        f"applied {results['carryovers_applied']} carryovers, "
+                                        f"generated {results['holidays_created']} holidays",
+                                        type='positive'
+                                    )
+                                refresh_status()
+                            finally:
+                                process_db.close()
+
+                        with ui.row().classes('w-full justify-center mt-4'):
+                            ui.button(
+                                f'Process Year-End Transition to {next_year}',
+                                on_click=process_year_end,
+                                color='primary',
+                                icon='play_arrow'
+                            ).classes('text-lg')
+                    else:
+                        with ui.row().classes('w-full justify-center mt-4'):
+                            ui.label(f"✓ Year-end processing complete for {next_year}").classes('text-green-600 font-semibold')
+
+            finally:
+                db.close()
+
+        # Initial load
+        refresh_status()
+
+        ui.button('Refresh Status', on_click=refresh_status, icon='refresh').classes('mt-4')
 
 
 @ui.page('/health')
