@@ -14,6 +14,7 @@ from nicegui_app.pages.manager_carryover import manager_carryover_page
 from nicegui_app.pages.calendar import calendar_page
 from nicegui_app.pages.handbook import handbook_page
 from nicegui_app.pages.reports import reports_page
+from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.logo import LOGO_DATA_URL
 
 # Set up basic app configuration
@@ -27,6 +28,16 @@ app.add_static_files('/static', STATIC_DIR)
 def home():
     """Home page with login interface."""
     login_page()
+
+@ui.page('/forgot-password')
+def forgot_password():
+    """Password reset request page."""
+    password_reset_request_page()
+
+@ui.page('/reset-password/{token}')
+def reset_password(token: str):
+    """Password reset page with token."""
+    password_reset_page(token)
 
 @ui.page('/dashboard')
 def dashboard():

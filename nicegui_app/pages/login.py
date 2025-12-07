@@ -33,7 +33,10 @@ def login_page():
             error_message.set_visibility(False)
             
             # Login button
-            ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message)).classes('w-full bg-blue-500 text-white')
+            ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message)).classes('w-full bg-blue-500 text-white mb-4')
+
+            # Forgot password link
+            ui.button('Forgot Password?', on_click=lambda: ui.navigate.to('/forgot-password')).props('flat dense').classes('w-full text-sm')
 
 
 def authenticate(username_input, password_input, error_message):
