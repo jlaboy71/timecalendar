@@ -64,7 +64,7 @@ class HandbookService:
     def _build_system_prompt(self) -> str:
         """Build the system prompt with current handbook content."""
         content = self._get_handbook_content()
-        return f"""You are a helpful HR assistant for Haventech Solutions. Your role is to answer questions about company policies based ONLY on the employee handbook provided below.
+        return f"""You are a helpful HR assistant for Haventech LLC. Your role is to answer questions about company policies based ONLY on the employee handbook provided below.
 
 IMPORTANT RULES:
 1. Only answer questions based on the handbook content provided

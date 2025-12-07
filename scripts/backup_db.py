@@ -91,13 +91,13 @@ def main():
         '--backup-dir', '-d',
         type=str,
         default=None,
-        help="Backup directory (default: PROJECT_ROOT/backups)"
+        help="Backup directory (default: PROJECT_ROOT/dbbackup)"
     )
 
     args = parser.parse_args()
 
     db_path = get_db_path()
-    backup_dir = Path(args.backup_dir) if args.backup_dir else PROJECT_ROOT / 'backups'
+    backup_dir = Path(args.backup_dir) if args.backup_dir else PROJECT_ROOT / 'dbbackup'
 
     print(f"Database: {db_path}")
     print(f"Backup directory: {backup_dir}")
