@@ -336,13 +336,26 @@ def carryover_page():
 
                     db = next(get_db())
                     try:
-                        # Get user's role to check for auto-approval
+                        # Get user's role and policy to check for auto-approval
                         user_service = UserService(db)
                         current_employee = user_service.get_user_by_id(user['id'])
                         user_role = current_employee.role if current_employee else 'employee'
 
-                        # Determine if auto-approve applies
+                        # Check policy-based auto-approval for carryover
                         auto_approve = user_role in ['manager', 'admin', 'superadmin']
+                        auto_approve_reason = 'management role'
+
+                        if not auto_approve and current_employee:
+                            # Check if under policy max_carryover_hours
+                            accrual_svc = AccrualService(db)
+                            lt = db.query(LeaveType).filter(LeaveType.id == leave_type_select.value).first()
+                            if lt:
+                                policy = accrual_svc.get_policy_for_employee(current_employee, lt.code)
+                                if policy and policy.max_carryover_hours:
+                                    max_auto = float(policy.max_carryover_hours)
+                                    if hours_input.value <= max_auto:
+                                        auto_approve = True
+                                        auto_approve_reason = f'within policy limit ({max_auto:.0f} hrs)'
 
                         # Create carryover request
                         request = CarryoverRequest(
@@ -360,12 +373,13 @@ def carryover_page():
                             request.approved_by = user['id']
                             request.approved_at = datetime.now()
                             request.hours_approved = Decimal(str(hours_input.value))
+                            request.manager_notes = f'Auto-approved: {auto_approve_reason}'
 
                         db.add(request)
                         db.commit()
 
                         if auto_approve:
-                            ui.notify('Carryover request approved automatically!', type='positive')
+                            ui.notify(f'Carryover request auto-approved ({auto_approve_reason})!', type='positive')
                         else:
                             ui.notify('Carryover request submitted for manager approval!', type='positive')
                         ui.navigate.to('/carryover')  # Refresh page
