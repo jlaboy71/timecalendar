@@ -89,15 +89,16 @@ class YearEndService:
         # Get all active employees
         active_users = self.db.query(User).filter(User.is_active == True).all()
 
+        # Pre-fetch all existing balances for this year in one query (avoid N+1)
+        existing_balances = self.db.query(PTOBalance.user_id).filter(
+            PTOBalance.year == year
+        ).all()
+        existing_user_ids = {b.user_id for b in existing_balances}
+
         for user in active_users:
             try:
-                # Check if balance already exists
-                existing = self.db.query(PTOBalance).filter(
-                    PTOBalance.user_id == user.id,
-                    PTOBalance.year == year
-                ).first()
-
-                if existing:
+                # Check if balance already exists (from pre-fetched set)
+                if user.id in existing_user_ids:
                     result['skipped'] += 1
                     continue
 
@@ -178,17 +179,31 @@ class YearEndService:
             CarryoverRequest.to_year == new_year
         ).all()
 
+        if not approved_carryovers:
+            return result
+
+        # Pre-fetch all balances and users in bulk to avoid N+1 queries
+        carryover_user_ids = [c.employee_id for c in approved_carryovers]
+        existing_balances = {
+            b.user_id: b for b in self.db.query(PTOBalance).filter(
+                PTOBalance.user_id.in_(carryover_user_ids),
+                PTOBalance.year == new_year
+            ).all()
+        }
+        users_map = {
+            u.id: u for u in self.db.query(User).filter(
+                User.id.in_(carryover_user_ids)
+            ).all()
+        }
+
         for carryover in approved_carryovers:
             try:
-                # Get or create the new year balance
-                balance = self.db.query(PTOBalance).filter(
-                    PTOBalance.user_id == carryover.employee_id,
-                    PTOBalance.year == new_year
-                ).first()
+                # Get or create the new year balance from pre-fetched data
+                balance = existing_balances.get(carryover.employee_id)
 
                 if not balance:
                     # Create balance if it doesn't exist
-                    user = self.db.query(User).filter(User.id == carryover.employee_id).first()
+                    user = users_map.get(carryover.employee_id)
                     if user:
                         vacation_days = self._calculate_vacation_allocation(user)
                         balance = PTOBalance(
@@ -200,6 +215,7 @@ class YearEndService:
                         )
                         self.db.add(balance)
                         self.db.flush()
+                        existing_balances[carryover.employee_id] = balance
 
                 if balance:
                     # Apply carryover hours (convert to days: hours / 8)
@@ -237,14 +253,17 @@ class YearEndService:
 
         holidays = self._calculate_federal_holidays(year)
 
-        for holiday_data in holidays:
-            # Check if already exists
-            existing = self.db.query(MarketHoliday).filter(
-                MarketHoliday.holiday_date == holiday_data['date'],
+        # Pre-fetch existing federal holidays for this year in one query
+        existing_holidays = {
+            h.holiday_date for h in self.db.query(MarketHoliday.holiday_date).filter(
+                MarketHoliday.year == year,
                 MarketHoliday.market == 'Federal'
-            ).first()
+            ).all()
+        }
 
-            if existing:
+        for holiday_data in holidays:
+            # Check if already exists from pre-fetched set
+            if holiday_data['date'] in existing_holidays:
                 result['skipped'] += 1
                 continue
 

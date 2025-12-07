@@ -1707,9 +1707,12 @@ def admin_handbook():
 
             # Update Handbook Panel
             with ui.tab_panel(update_tab):
+                # State for preview
+                preview_state = {'report': None, 'new_content': None, 'backup_file': None}
+
                 with ui.card().classes('w-full p-4'):
                     ui.label('Update Handbook Content').classes('text-lg font-bold mb-2')
-                    ui.label('Paste the new handbook content below. The system will automatically detect changes and generate a summary.').classes('text-sm opacity-70 mb-4')
+                    ui.label('Paste the new handbook content below. Click "Preview Changes" to review before applying.').classes('text-sm opacity-70 mb-4')
 
                     # Load current content or default
                     db = next(get_db())
@@ -1725,36 +1728,149 @@ def admin_handbook():
                         value=initial_content
                     ).classes('w-full').props('outlined rows=20')
 
-                    with ui.row().classes('w-full justify-end gap-4 mt-4'):
-                        def save_handbook():
-                            new_content = content_input.value.strip()
-                            if not new_content:
-                                ui.notify('Content cannot be empty', type='negative')
+                    # Preview container (initially hidden)
+                    preview_container = ui.column().classes('w-full mt-4')
+                    preview_container.set_visibility(False)
+
+                    # Confirmation buttons container (initially hidden)
+                    confirm_container = ui.row().classes('w-full justify-end gap-4 mt-4')
+                    confirm_container.set_visibility(False)
+
+                    def preview_changes():
+                        """Analyze changes and show preview before applying."""
+                        new_content = content_input.value.strip()
+                        if not new_content:
+                            ui.notify('Content cannot be empty', type='negative')
+                            return
+
+                        preview_db = next(get_db())
+                        try:
+                            preview_service = HandbookRevisionService(preview_db)
+                            current = preview_service.get_active_revision()
+                            old_content = current.content if current else ""
+
+                            # Analyze changes without saving
+                            report = preview_service._analyze_changes(old_content, new_content)
+
+                            if not report.get('has_changes'):
+                                ui.notify('No changes detected in the content', type='info')
                                 return
 
-                            save_db = next(get_db())
-                            try:
-                                save_service = HandbookRevisionService(save_db)
-                                revision, report = save_service.create_revision(
-                                    content=new_content,
-                                    created_by=current_user.get('id')
-                                )
+                            # Store for confirmation
+                            preview_state['report'] = report
+                            preview_state['new_content'] = new_content
 
-                                if report.get('has_changes'):
-                                    stats = report.get('stats', {})
-                                    ui.notify(
-                                        f"Saved version {revision.version}: +{stats.get('additions', 0)} / -{stats.get('deletions', 0)} lines",
-                                        type='positive'
-                                    )
-                                else:
-                                    ui.notify('No changes detected', type='info')
+                            # Show preview
+                            preview_container.clear()
+                            preview_container.set_visibility(True)
+                            confirm_container.set_visibility(True)
 
-                            except Exception as e:
-                                ui.notify(f'Error saving: {str(e)}', type='negative')
-                            finally:
-                                save_db.close()
+                            with preview_container:
+                                ui.label('Change Preview').classes('text-lg font-bold mb-2')
 
-                        ui.button('Save New Version', on_click=save_handbook, color='primary', icon='save')
+                                # Stats card
+                                stats = report.get('stats', {})
+                                with ui.card().classes('w-full p-4 mb-4 border-l-4 border-amber-500'):
+                                    with ui.row().classes('gap-8'):
+                                        with ui.column():
+                                            ui.label('Lines Added').classes('text-sm opacity-70')
+                                            ui.label(f"+{stats.get('additions', 0)}").classes('text-2xl font-bold text-green-600')
+                                        with ui.column():
+                                            ui.label('Lines Removed').classes('text-sm opacity-70')
+                                            ui.label(f"-{stats.get('deletions', 0)}").classes('text-2xl font-bold text-red-600')
+                                        with ui.column():
+                                            ui.label('Total Changes').classes('text-sm opacity-70')
+                                            ui.label(f"{stats.get('total_lines_changed', 0)}").classes('text-2xl font-bold')
+
+                                # Changes by section
+                                changes = report.get('changes', [])
+                                if changes:
+                                    ui.label('Changes by Section').classes('font-semibold mb-2')
+                                    with ui.card().classes('w-full p-3'):
+                                        for change in changes[:10]:  # Show first 10
+                                            with ui.row().classes('items-center gap-2 py-1 border-b last:border-0'):
+                                                section = change.get('section', 'General')
+                                                summary = change.get('summary', '')
+                                                ui.label(section or 'General').classes('font-medium')
+                                                ui.label(summary).classes('text-sm opacity-70')
+                                        if len(changes) > 10:
+                                            ui.label(f'...and {len(changes) - 10} more sections').classes('text-sm opacity-50 mt-2')
+
+                                # Warning
+                                with ui.card().classes('w-full p-3 mt-4 border-l-4 border-blue-500'):
+                                    ui.label('A backup will be automatically created before applying changes.').classes('text-sm')
+                                    ui.label('You can restore from Admin > System > Database if needed.').classes('text-sm opacity-70')
+
+                        except Exception as e:
+                            ui.notify(f'Error analyzing changes: {str(e)}', type='negative')
+                        finally:
+                            preview_db.close()
+
+                    def cancel_preview():
+                        """Cancel the preview and hide confirmation."""
+                        preview_container.set_visibility(False)
+                        confirm_container.set_visibility(False)
+                        preview_state['report'] = None
+                        preview_state['new_content'] = None
+
+                    def confirm_and_save():
+                        """Create backup and save the new handbook version."""
+                        if not preview_state['new_content'] or not preview_state['report']:
+                            ui.notify('Please preview changes first', type='warning')
+                            return
+
+                        import shutil
+                        from pathlib import Path
+
+                        # Step 1: Create backup before changes
+                        try:
+                            db_path = Path(__file__).parent.parent / 'pto_calendar.db'
+                            backup_dir = Path(__file__).parent.parent / 'backups' / 'handbook_changes'
+                            backup_dir.mkdir(parents=True, exist_ok=True)
+
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            backup_file = backup_dir / f'pre_handbook_change_{timestamp}.db'
+                            shutil.copy2(db_path, backup_file)
+                            preview_state['backup_file'] = backup_file
+                            logger.info(f"Created handbook change backup: {backup_file}")
+                        except Exception as e:
+                            ui.notify(f'Backup failed: {str(e)}. Changes not applied.', type='negative')
+                            logger.error(f"Handbook backup failed: {str(e)}")
+                            return
+
+                        # Step 2: Save the new version
+                        save_db = next(get_db())
+                        try:
+                            save_service = HandbookRevisionService(save_db)
+                            revision, report = save_service.create_revision(
+                                content=preview_state['new_content'],
+                                created_by=current_user.get('id')
+                            )
+
+                            stats = report.get('stats', {})
+                            ui.notify(
+                                f"Version {revision.version} saved! Backup: {backup_file.name}",
+                                type='positive'
+                            )
+                            logger.info(f"Handbook updated to version {revision.version}")
+
+                            # Hide preview and reset
+                            cancel_preview()
+
+                        except Exception as e:
+                            ui.notify(f'Error saving: {str(e)}. Backup available at {backup_file.name}', type='negative')
+                            logger.error(f"Handbook save failed: {str(e)}")
+                        finally:
+                            save_db.close()
+
+                    # Initial button - Preview Changes
+                    with ui.row().classes('w-full justify-end gap-4 mt-4'):
+                        ui.button('Preview Changes', on_click=preview_changes, color='primary', icon='preview')
+
+                    # Confirmation buttons (shown after preview)
+                    with confirm_container:
+                        ui.button('Cancel', on_click=cancel_preview, icon='close').props('flat')
+                        ui.button('Apply Changes', on_click=confirm_and_save, color='positive', icon='check').classes('text-white')
 
             # Revision History Panel
             with ui.tab_panel(history_tab):
@@ -2403,19 +2519,23 @@ After updating `.env`, restart the application.
 def health_check():
     """Health check endpoint for monitoring and load balancers."""
     from datetime import datetime
+    from sqlalchemy import text
 
     status = {'status': 'healthy', 'timestamp': datetime.now().isoformat()}
 
+    db = None
     try:
         # Test database connection
         db = next(get_db())
-        db.execute('SELECT 1')
-        db.close()
+        db.execute(text('SELECT 1'))
         status['database'] = 'connected'
     except Exception as e:
         status['status'] = 'unhealthy'
         status['database'] = f'error: {str(e)}'
         logger.error(f"Health check failed - database error: {str(e)}")
+    finally:
+        if db:
+            db.close()
 
     with ui.column().classes('w-full max-w-md mx-auto mt-8 p-6'):
         color = 'green' if status['status'] == 'healthy' else 'red'

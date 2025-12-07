@@ -8,6 +8,7 @@ from sqlalchemy import String, Integer, Boolean, Date, DateTime, Numeric, Text, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+from sqlalchemy import Index
 
 if TYPE_CHECKING:
     from .user import User
@@ -86,6 +87,12 @@ class PTORequest(Base):
         foreign_keys=[approved_by]
     )
     
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('ix_pto_requests_user_status', 'user_id', 'status'),
+        Index('ix_pto_requests_status_dates', 'status', 'start_date', 'end_date'),
+    )
+
     def __repr__(self) -> str:
         """String representation of the PTORequest model."""
         return (f"<PTORequest(id={self.id}, user_id={self.user_id}, "
