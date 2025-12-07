@@ -83,3 +83,6 @@ venv.bak/
 
 # NiceGUI storage (session data)
 .nicegui/
+
+# Database backups
+backups/
