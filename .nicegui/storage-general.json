@@ -1,1 +1,1 @@
-{"user":{"id":6,"username":"netadmin","email":"netadmin@haventech.com","first_name":"System","last_name":"Administrator","role":"admin","department_id":21}}
+{"calendar_prefs":{"department_id":null,"view_mode":"team","show_holidays":true,"show_weekends":true,"filter_vacation":true,"filter_sick":true,"filter_personal":true,"filter_other":true,"current_view":"month"},"dark_mode":true}

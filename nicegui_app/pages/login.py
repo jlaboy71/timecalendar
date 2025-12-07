@@ -36,14 +36,9 @@ def login_page():
 
 def authenticate(username_input, password_input, error_message):
     """Authenticate user credentials and handle login."""
-    
-    print("Attempting login...")
-    
     # Get values from inputs
     username = username_input.value.strip()
     password = password_input.value
-    
-    print(f"Username: {username}, Password length: {len(password)}")
     
     # Validate inputs
     if not username or not password:
@@ -60,7 +55,6 @@ def authenticate(username_input, password_input, error_message):
         user = user_service.authenticate_user(username, password)
         
         if user:
-            print("User authenticated successfully!")
             # Store user in app storage and redirect
             app.storage.general['user'] = {
                 'id': user.id,
@@ -79,7 +73,6 @@ def authenticate(username_input, password_input, error_message):
             
     except Exception as e:
         # Handle any database or service errors
-        print(f"Authentication failed: {e}")
         error_message.text = 'Login failed. Please try again.'
         error_message.set_visibility(True)
     finally:

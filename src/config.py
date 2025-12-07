@@ -12,8 +12,8 @@ class Config:
     
     def __init__(self):
         """Initialize configuration by loading environment variables."""
-        # Load environment variables from .env file
-        load_dotenv()
+        # Load environment variables from .env file (override=True ensures .env takes precedence)
+        load_dotenv(override=True)
         
         # Load required environment variables
         self.DATABASE_URL = os.getenv('DATABASE_URL')
