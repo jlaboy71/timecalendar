@@ -223,6 +223,50 @@ class EmailService:
         """
         return self._send_email(manager_email, subject, html)
 
+    def send_report_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        message: Optional[str] = None
+    ) -> bool:
+        """
+        Send a formatted report via email.
+
+        Args:
+            to_email: Recipient email address
+            subject: Email subject
+            html_content: HTML report content
+            message: Optional personal message to include
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        message_html = ""
+        if message:
+            message_html = f"""
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <p style="margin: 0; color: #666;"><em>{message}</em></p>
+            </div>
+            """
+
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+            <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin: 0;">TJM Time Calendar Report</h1>
+            </div>
+            <div style="padding: 20px;">
+                {message_html}
+                <p>Please find the attached report below:</p>
+                <hr style="border: 1px solid #ddd; margin: 20px 0;">
+                {html_content}
+            </div>
+        </body>
+        </html>
+        """
+        return self._send_email(to_email, subject, html)
+
 
 # Global instance
 email_service = EmailService()

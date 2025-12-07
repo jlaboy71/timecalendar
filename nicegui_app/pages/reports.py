@@ -5,6 +5,7 @@ from src.models.user import User
 from src.models.department import Department
 from src.models.pto_balance import PTOBalance
 from src.models.pto_request import PTORequest
+from src.services.report_service import ReportService
 from datetime import date, datetime
 from io import StringIO
 import csv
@@ -143,8 +144,12 @@ def reports_page():
                     # Refresh button
                     ui.button('Refresh', icon='refresh', on_click=render_report).props('outline')
 
-                    # Export button
-                    ui.button('Export CSV', icon='download', on_click=export_csv).props('color=secondary')
+                    # Export dropdown with multiple options
+                    with ui.dropdown_button('Export', icon='download', auto_close=True).props('color=secondary'):
+                        ui.item('Download CSV', on_click=export_csv)
+                        ui.item('Print Preview', on_click=show_print_preview)
+                        ui.item('Download PDF', on_click=download_pdf)
+                        ui.item('Email Report', on_click=show_email_dialog)
 
         def update_filter(key, value):
             filter_state[key] = value
@@ -759,6 +764,158 @@ def reports_page():
                 ui.notify(f'Error exporting CSV: {str(e)}', type='negative')
             finally:
                 db.close()
+
+        def get_report_html():
+            """Generate formatted HTML report using ReportService."""
+            db = next(get_db())
+            try:
+                report_service = ReportService(db)
+                report_type = filter_state['report_type']
+                year = filter_state['year']
+
+                if report_type == 'my_history':
+                    return report_service.generate_history_report_html(
+                        user_id, year, filter_state['status_filter']
+                    )
+                elif report_type == 'my_balance':
+                    return report_service.generate_balance_report_html(user_id, year)
+                elif report_type == 'team_balance':
+                    return report_service.generate_team_balance_report_html(
+                        year, filter_state['department_id']
+                    )
+                else:
+                    # For other report types, generate a simple HTML version
+                    return generate_simple_report_html(report_type)
+            finally:
+                db.close()
+
+        def generate_simple_report_html(report_type: str) -> str:
+            """Generate a simple HTML report for types not covered by ReportService."""
+            db = next(get_db())
+            try:
+                report_service = ReportService(db)
+                now = datetime.now()
+                year = filter_state['year']
+
+                # Get current user info
+                current_user = db.query(User).filter(User.id == user_id).first()
+                employee_name = f"{current_user.first_name} {current_user.last_name}" if current_user else "Unknown"
+
+                header = report_service.get_report_header_html(
+                    title=f"{report_type.replace('_', ' ').title()} Report - {year}",
+                    employee_name=employee_name if report_type.startswith('my_') else None
+                )
+                footer = report_service.get_report_footer_html()
+
+                content = '<div style="padding: 20px; font-family: Segoe UI, sans-serif;">'
+                content += '<p style="color: #666;">This report type does not have a formatted print version yet.</p>'
+                content += '<p>Please use CSV export for detailed data.</p>'
+                content += '</div>'
+
+                return f'''
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Report</title></head>
+                <body style="margin: 0; padding: 0; background: white;">
+                    {header}{content}{footer}
+                </body>
+                </html>
+                '''
+            finally:
+                db.close()
+
+        def show_print_preview():
+            """Show print preview dialog with formatted report."""
+            html_content = get_report_html()
+
+            with ui.dialog().props('maximized') as dialog, ui.card().classes('w-full h-full'):
+                with ui.row().classes('w-full justify-between items-center p-4 border-b'):
+                    ui.label('Print Preview').classes('text-xl font-semibold')
+                    with ui.row().classes('gap-2'):
+                        ui.button('Print', icon='print', on_click=lambda: ui.run_javascript('''
+                            const iframe = document.getElementById("print-frame");
+                            iframe.contentWindow.print();
+                        ''')).props('color=primary')
+                        ui.button('Close', icon='close', on_click=dialog.close).props('flat')
+
+                # Create iframe for print preview
+                ui.html(f'''
+                    <iframe id="print-frame" srcdoc="{html_content.replace('"', '&quot;')}"
+                        style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;">
+                    </iframe>
+                ''').classes('w-full')
+
+            dialog.open()
+
+        def download_pdf():
+            """Download report as PDF (using browser print-to-PDF)."""
+            html_content = get_report_html()
+            # Escape backticks for JavaScript template literal
+            escaped_content = html_content.replace('`', '\\`')
+
+            # Create a hidden iframe and trigger print dialog (which allows Save as PDF)
+            ui.run_javascript(f'''
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(`{escaped_content}`);
+                printWindow.document.close();
+                printWindow.onload = function() {{
+                    printWindow.print();
+                }};
+            ''')
+            ui.notify("PDF: Use your browser's 'Save as PDF' option in the print dialog", type='info')
+
+        def show_email_dialog():
+            """Show dialog to email the report."""
+            with ui.dialog() as dialog, ui.card().classes('p-6 min-w-96'):
+                ui.label('Email Report').classes('text-xl font-semibold mb-4')
+
+                email_input = ui.input(
+                    label='Recipient Email',
+                    placeholder='email@example.com'
+                ).classes('w-full mb-4')
+
+                subject_input = ui.input(
+                    label='Subject',
+                    value=f'PTO Report - {filter_state["report_type"].replace("_", " ").title()} ({filter_state["year"]})'
+                ).classes('w-full mb-4')
+
+                message_input = ui.textarea(
+                    label='Message (optional)',
+                    placeholder='Add a personal message...'
+                ).classes('w-full mb-4')
+
+                async def send_email():
+                    if not email_input.value or '@' not in email_input.value:
+                        ui.notify('Please enter a valid email address', type='negative')
+                        return
+
+                    try:
+                        from src.services.email_service import email_service
+
+                        html_content = get_report_html()
+
+                        # Try to send email
+                        success = email_service.send_report_email(
+                            to_email=email_input.value,
+                            subject=subject_input.value,
+                            html_content=html_content,
+                            message=message_input.value
+                        )
+
+                        if success:
+                            ui.notify(f'Report sent to {email_input.value}', type='positive')
+                            dialog.close()
+                        else:
+                            ui.notify('Email service not configured. Please configure SMTP settings.', type='warning')
+
+                    except Exception as e:
+                        ui.notify(f'Error sending email: {str(e)}', type='negative')
+
+                with ui.row().classes('w-full justify-end gap-2'):
+                    ui.button('Cancel', on_click=dialog.close).props('flat')
+                    ui.button('Send', icon='send', on_click=send_email).props('color=primary')
+
+            dialog.open()
 
         # Initial render
         render_filters()
