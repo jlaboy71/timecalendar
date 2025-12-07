@@ -842,7 +842,7 @@ def reports_page():
                         ui.button('Close', icon='close', on_click=dialog.close).props('flat')
 
                 # Use data URI to load HTML content into iframe
-                ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>').classes('w-full')
+                ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
 
             dialog.open()
 
