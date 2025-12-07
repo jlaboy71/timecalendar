@@ -1821,6 +1821,146 @@ def admin_year_end():
         ui.button('Refresh Status', on_click=refresh_status, icon='refresh').classes('mt-4')
 
 
+@ui.page('/help')
+def help_page():
+    """Help documentation page with searchable chapters."""
+    if not require_auth():
+        return
+
+    from src.services.help_service import HelpService
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    # State for current view
+    current_view = {'chapter': None, 'article': None}
+    search_results = {'items': []}
+
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+        # Header
+        with ui.column().classes('gap-2 mb-4'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            with ui.row().classes('items-center'):
+                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
+                ui.label('HELP CENTER').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+
+        # Search bar
+        search_input = ui.input(placeholder='Search help articles...').classes('w-full mb-4').props('outlined dense clearable')
+
+        # Content container
+        content_container = ui.column().classes('w-full')
+
+        def show_chapters():
+            """Show all chapters (home view)."""
+            current_view['chapter'] = None
+            current_view['article'] = None
+            content_container.clear()
+            with content_container:
+                chapters = HelpService.get_all_chapters()
+                with ui.row().classes('w-full flex-wrap gap-4'):
+                    for chapter in chapters:
+                        with ui.card().classes('w-72 cursor-pointer hover:shadow-lg transition-shadow').on('click', lambda c=chapter['id']: show_chapter(c)):
+                            with ui.card_section():
+                                with ui.row().classes('items-center gap-3'):
+                                    ui.icon(chapter['icon'], size='2rem').classes('text-primary')
+                                    ui.label(chapter['title']).classes('text-lg font-semibold')
+                            with ui.card_section():
+                                ui.label(f"{chapter['article_count']} articles").classes('text-sm opacity-70')
+                                for article in chapter['articles'][:3]:
+                                    ui.label(f"• {article['title']}").classes('text-sm truncate')
+                                if len(chapter['articles']) > 3:
+                                    ui.label(f"  + {len(chapter['articles']) - 3} more...").classes('text-xs opacity-50')
+
+        def show_chapter(chapter_id):
+            """Show articles in a chapter."""
+            current_view['chapter'] = chapter_id
+            current_view['article'] = None
+            content_container.clear()
+            with content_container:
+                chapter = HelpService.get_chapter(chapter_id)
+                if not chapter:
+                    ui.label('Chapter not found')
+                    return
+
+                # Breadcrumb
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('/').classes('opacity-50')
+                    ui.label(chapter['title']).classes('font-semibold')
+
+                # Articles list
+                with ui.card().classes('w-full'):
+                    for article in chapter['articles']:
+                        with ui.row().classes('w-full p-4 border-b last:border-0 items-center cursor-pointer hover:bg-gray-50').on('click', lambda a=article['id'], c=chapter_id: show_article(c, a)):
+                            ui.icon('article').classes('text-primary mr-3')
+                            ui.label(article['title']).classes('text-lg')
+                            ui.space()
+                            ui.icon('chevron_right').classes('opacity-50')
+
+        def show_article(chapter_id, article_id):
+            """Show a single article."""
+            current_view['chapter'] = chapter_id
+            current_view['article'] = article_id
+            content_container.clear()
+            with content_container:
+                article = HelpService.get_article(chapter_id, article_id)
+                if not article:
+                    ui.label('Article not found')
+                    return
+
+                # Breadcrumb
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('/').classes('opacity-50')
+                    ui.link(article['chapter_title'], on_click=lambda: show_chapter(chapter_id)).classes('text-primary cursor-pointer')
+                    ui.label('/').classes('opacity-50')
+                    ui.label(article['title']).classes('font-semibold')
+
+                # Article content
+                with ui.card().classes('w-full p-6'):
+                    ui.markdown(article['content']).classes('prose max-w-none')
+
+        def do_search(e):
+            """Perform search and show results."""
+            query = e.value if hasattr(e, 'value') else search_input.value
+            if not query or len(query) < 2:
+                show_chapters()
+                return
+
+            results = HelpService.search(query)
+            content_container.clear()
+            with content_container:
+                # Breadcrumb
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.link('Help', on_click=show_chapters).classes('text-primary cursor-pointer')
+                    ui.label('/').classes('opacity-50')
+                    ui.label(f'Search: "{query}"').classes('font-semibold')
+
+                if not results:
+                    with ui.card().classes('w-full p-8 text-center'):
+                        ui.icon('search_off', size='3rem').classes('opacity-30 mb-2')
+                        ui.label(f'No results found for "{query}"').classes('text-lg opacity-60')
+                else:
+                    ui.label(f'{len(results)} result(s) found').classes('text-sm opacity-70 mb-2')
+                    with ui.card().classes('w-full'):
+                        for result in results:
+                            with ui.row().classes('w-full p-4 border-b last:border-0 cursor-pointer hover:bg-gray-50').on('click', lambda r=result: show_article(r['chapter_id'], r['article_id'])):
+                                with ui.column().classes('flex-1'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label(result['article_title']).classes('font-semibold')
+                                        ui.badge(result['chapter_title']).classes('text-xs')
+                                    if result['snippet']:
+                                        ui.label(result['snippet']).classes('text-sm opacity-70 mt-1')
+
+        search_input.on('keydown.enter', do_search)
+
+        # Initial view
+        show_chapters()
+
+
 @ui.page('/health')
 def health_check():
     """Health check endpoint for monitoring and load balancers."""

@@ -83,6 +83,9 @@ def dashboard_page():
                     ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-xl font-bold uppercase').style('color: #5a6a72;')
 
                 with ui.row().classes('items-center gap-2'):
+                    # Help button
+                    ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round').tooltip('Help Center')
+
                     # Dark mode toggle
                     dark_mode = ui.dark_mode()
 
