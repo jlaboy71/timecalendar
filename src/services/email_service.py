@@ -3,10 +3,13 @@ Email notification service for PTO-related communications.
 """
 import smtplib
 import os
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from datetime import date
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
@@ -54,8 +57,10 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.sendmail(self.from_email, to_email, msg.as_string())
 
+            logger.info(f"Email sent successfully to {to_email}: {subject}")
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {str(e)}")
             return False
 
     def send_pto_submitted(

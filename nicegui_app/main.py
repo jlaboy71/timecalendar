@@ -3,6 +3,12 @@ import sys
 import re
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Initialize logging first
+from src.logging_config import setup_logging, get_logger
+setup_logging()
+logger = get_logger(__name__)
+
 from src.database import get_db
 from src.config import config
 from src.services.audit_service import AuditService
@@ -371,7 +377,10 @@ def manager_request_detail(request_id: int):
     if is_dark:
         dark_mode.enable()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    current_user = app.storage.general.get('user', {})
+    user_role = current_user.get('role')
+    user_department_id = current_user.get('department_id')
+
     if user_role not in ['manager', 'admin', 'superadmin']:
         ui.label('Access denied').classes('text-red-500')
         return
@@ -380,10 +389,18 @@ def manager_request_detail(request_id: int):
     try:
         from src.services.pto_service import PTOService
         detail = PTOService.get_request_detail(db, request_id)
-        
+
         if not detail:
             ui.label('Request not found').classes('text-red-500')
             return
+
+        # Managers can only approve requests from their own department
+        # Admins and superadmins can approve any request
+        if user_role == 'manager':
+            employee_dept_id = detail.get('employee_department_id')
+            if employee_dept_id != user_department_id:
+                ui.label('Access denied - You can only review requests from your department').classes('text-red-500')
+                return
         
         request = detail['request']
         balance = detail['balance']
@@ -1524,5 +1541,32 @@ def admin_employees_edit(user_id: int):
     finally:
         db.close()
 
+
+@ui.page('/health')
+def health_check():
+    """Health check endpoint for monitoring and load balancers."""
+    from datetime import datetime
+
+    status = {'status': 'healthy', 'timestamp': datetime.now().isoformat()}
+
+    try:
+        # Test database connection
+        db = next(get_db())
+        db.execute('SELECT 1')
+        db.close()
+        status['database'] = 'connected'
+    except Exception as e:
+        status['status'] = 'unhealthy'
+        status['database'] = f'error: {str(e)}'
+        logger.error(f"Health check failed - database error: {str(e)}")
+
+    with ui.column().classes('w-full max-w-md mx-auto mt-8 p-6'):
+        color = 'green' if status['status'] == 'healthy' else 'red'
+        ui.label(f"Status: {status['status'].upper()}").classes(f'text-2xl font-bold text-{color}-600')
+        ui.label(f"Database: {status['database']}").classes('text-lg')
+        ui.label(f"Timestamp: {status['timestamp']}").classes('text-sm opacity-70')
+
+
 if __name__ in {"__main__", "__mp_main__"}:
+    logger.info("Starting TJM Time Calendar application")
     ui.run(port=8080, host='0.0.0.0', storage_secret=config.SECRET_KEY)

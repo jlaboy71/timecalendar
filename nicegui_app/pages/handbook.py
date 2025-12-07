@@ -201,4 +201,4 @@ def render_styled_handbook():
     with ui.card().classes('w-full p-4 text-center'):
         with ui.row().classes('w-full justify-center items-center gap-2'):
             ui.icon('info', size='sm').classes('opacity-60')
-            ui.label('Last Updated: December 2025 | For questions, contact HR').classes('text-xs opacity-60')
+            ui.label('For questions, contact HR').classes('text-xs opacity-60')

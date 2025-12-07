@@ -86,3 +86,7 @@ venv.bak/
 
 # Database backups
 backups/
+
+# Log files
+logs/
+*.log
