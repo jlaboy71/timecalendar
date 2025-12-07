@@ -2855,8 +2855,11 @@ def admin_system():
                         sync_status_label.set_text(f'Syncing {year} holidays...')
                         try:
                             from src.services.market_calendar_service import MarketCalendarService
-                            service = MarketCalendarService(db_session=db)
+                            from src.database import get_db
+                            db_session = next(get_db())
+                            service = MarketCalendarService(db_session=db_session)
                             result = service.sync_market_holidays(year)
+                            db_session.close()
 
                             if result.success:
                                 source_display = result.source.value.replace('_', ' ').title()
@@ -2881,11 +2884,13 @@ def admin_system():
                         sync_results_container.clear()
                         try:
                             from src.models.market_holiday import MarketHoliday
+                            from src.database import get_db
+                            db_session = next(get_db())
                             with sync_results_container:
                                 # Show stats for current and next year
                                 for year in [current_year, current_year + 1]:
-                                    count = db.query(MarketHoliday).filter(MarketHoliday.year == year).count()
-                                    markets = db.query(MarketHoliday.market).filter(
+                                    count = db_session.query(MarketHoliday).filter(MarketHoliday.year == year).count()
+                                    markets = db_session.query(MarketHoliday.market).filter(
                                         MarketHoliday.year == year
                                     ).distinct().all()
                                     market_list = ', '.join([m[0] for m in markets]) if markets else 'None'
@@ -2897,6 +2902,7 @@ def admin_system():
                                             ui.label(f'{year}').classes('font-semibold')
                                             ui.label(f'{count} holidays | Markets: {market_list}').classes('text-xs opacity-70')
                                         ui.button('Sync', icon='sync', on_click=lambda y=year: sync_market_holidays(y)).props('flat dense')
+                            db_session.close()
                         except Exception as e:
                             with sync_results_container:
                                 ui.label(f'Error loading stats: {e}').classes('text-red-500')
