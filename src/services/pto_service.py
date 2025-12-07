@@ -61,6 +61,11 @@ class PTOService:
         # Extract year from start_date
         year = request_data.start_date.year
 
+        # Validate request is for current or next year only (not 2+ years ahead)
+        current_year = datetime.now().year
+        if year > current_year + 1:
+            raise ValueError(f"Cannot request time off more than one year in advance. Maximum year: {current_year + 1}")
+
         # Get/create balance
         balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
 

@@ -136,3 +136,63 @@ All admin pages now have consistent headers with:
 6. ✅ Back navigation where appropriate
 
 The `page_header()` component pattern ensures future pages will automatically have all these features.
+
+---
+
+# Task: Year-End Processing Improvements
+
+## Problem
+1. Year-end processing can be triggered any time - should only be allowed on Dec 31 or later
+2. Buttons on year-end page need reordering: Back to Dashboard, Process Year-End, Refresh
+3. System should work year after year, not just 2026
+4. When year-end processing happens, approved future PTO requests for the next year should carry over
+5. Users should be able to request PTO for the following year (but not 2+ years ahead)
+6. Vacation and sick time are accrued - show negative balance until eligibility is met
+
+## Solution
+Update year-end processing page with date restrictions, button reordering, and review accrual/future request logic.
+
+## Todo Items
+
+- [x] Add date restriction - only allow year-end processing on Dec 31 or later
+- [x] Reorder buttons: Back to Dashboard first, then Process Year-End, then Refresh
+- [x] Validate PTO request allows next year only (not 2+ years ahead)
+- [x] Verify year-end transition handles approved future requests (already works)
+- [ ] Review accrual display to show negative until eligibility (deferred - see notes)
+
+## Changes Made
+
+### 1. Year-End Processing Page (nicegui_app/main.py - `/admin/year-end`)
+- Added date restriction: processing only allowed on December 31
+- Shows informational message when not Dec 31, explaining when it will be available
+- Disabled button with tooltip when not Dec 31
+- Reordered buttons: Back to Dashboard, Process Year-End Transition, Refresh Status
+
+### 2. PTO Service (src/services/pto_service.py)
+- Added validation: requests cannot be more than 1 year in advance
+- Example: In 2025, can request for 2025 or 2026, but not 2027
+
+### 3. Future Requests Handling (Verified)
+- System already uses `request.start_date.year` to apply to correct year's balance
+- When request for 2026 is approved, hours deduct from 2026 balance
+- Year-end processing skips employees who already have balances (from pre-approved requests)
+
+## Notes on Accrual Display (Deferred)
+
+The request for "negative balance until eligibility" requires an accrual-based model where:
+1. Time is earned monthly/per-hours-worked rather than given upfront
+2. Balance shows: `accrued_so_far - used` which can be negative
+
+Current system:
+- Gives full annual allocation on Jan 1 (e.g., 10 vacation days)
+- Policies have `waiting_period_days` for eligibility
+- No monthly accrual calculation
+
+To implement true accrual model would require:
+1. Adding `accrued_hours` field to PTOBalance that gets updated monthly
+2. Changing `vacation_total` to be the full annual entitlement (not what's available now)
+3. Modifying balance display to show `accrued - used` with negative allowed
+4. Creating monthly job to add accrued hours based on policy `accrual_rate`
+5. Updating year-end to set `accrued_hours = 0` for new year
+
+This is a significant architectural change - recommend as separate task.

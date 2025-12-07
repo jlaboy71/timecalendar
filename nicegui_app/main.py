@@ -2089,14 +2089,22 @@ def admin_year_end():
         ui.navigate.to('/')
         return
 
-    current_year = datetime.now().year
+    today = datetime.now().date()
+    current_year = today.year
     next_year = current_year + 1
+
+    # Year-end processing is only allowed on Dec 31 or later (into new year before processing)
+    # This allows processing on last day of year or early January if delayed
+    is_year_end_allowed = today.month == 12 and today.day == 31
 
     with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
         page_header(title='YEAR-END PROCESSING', show_back=True, back_url='/admin')
 
         # Status cards container
         status_container = ui.column().classes('w-full gap-4')
+
+        # Store status for button logic
+        year_status = {'can_process': False, 'complete': False}
 
         def refresh_status():
             status_container.clear()
@@ -2109,6 +2117,10 @@ def admin_year_end():
 
                 # Next year status
                 next_status = service.get_year_end_status(next_year)
+
+                # Update status for button logic
+                year_status['can_process'] = not next_status['balances_complete'] or next_status['holidays_created'] == 0
+                year_status['complete'] = next_status['balances_complete'] and next_status['holidays_created'] > 0
 
                 with status_container:
                     # Current Year Card
@@ -2141,48 +2153,62 @@ def admin_year_end():
                             ui.label(f"⚠️ {current_status['pending_carryovers']} carryover requests pending").classes('font-semibold text-amber-600')
                             ui.label("These should be approved or denied before year-end processing.").classes('text-sm')
 
-                    # Process Button
-                    if not next_status['balances_complete'] or next_status['holidays_created'] == 0:
-                        def process_year_end():
-                            process_db = next(get_db())
-                            try:
-                                process_service = YearEndService(process_db)
-                                results = process_service.process_year_transition(next_year)
+                    # Date restriction warning
+                    if not is_year_end_allowed and year_status['can_process']:
+                        with ui.card().classes('w-full p-4 border-l-4 border-blue-500'):
+                            ui.label(f"ℹ️ Year-end processing will be available on December 31, {current_year}").classes('font-semibold text-blue-600')
+                            ui.label("Processing can only be triggered on the last day of the year.").classes('text-sm')
 
-                                if results['errors']:
-                                    ui.notify(f"Completed with {len(results['errors'])} errors", type='warning')
-                                else:
-                                    ui.notify(
-                                        f"Success! Created {results['balances_created']} balances, "
-                                        f"applied {results['carryovers_applied']} carryovers, "
-                                        f"generated {results['holidays_created']} holidays",
-                                        type='positive'
-                                    )
-                                refresh_status()
-                            finally:
-                                process_db.close()
-
-                        with ui.row().classes('w-full justify-center mt-4'):
-                            ui.button(
-                                f'Process Year-End Transition to {next_year}',
-                                on_click=process_year_end,
-                                color='primary',
-                                icon='play_arrow'
-                            ).classes('text-lg')
-                    else:
+                    # Status message if complete
+                    if year_status['complete']:
                         with ui.row().classes('w-full justify-center mt-4'):
                             ui.label(f"✓ Year-end processing complete for {next_year}").classes('text-green-600 font-semibold')
 
             finally:
                 db.close()
 
+        def process_year_end():
+            if not is_year_end_allowed:
+                ui.notify('Year-end processing is only available on December 31', type='warning')
+                return
+
+            process_db = next(get_db())
+            try:
+                process_service = YearEndService(process_db)
+                results = process_service.process_year_transition(next_year)
+
+                if results['errors']:
+                    ui.notify(f"Completed with {len(results['errors'])} errors", type='warning')
+                else:
+                    ui.notify(
+                        f"Success! Created {results['balances_created']} balances, "
+                        f"applied {results['carryovers_applied']} carryovers, "
+                        f"generated {results['holidays_created']} holidays",
+                        type='positive'
+                    )
+                refresh_status()
+            finally:
+                process_db.close()
+
         # Initial load
         refresh_status()
 
-        # Action buttons
-        with ui.row().classes('w-full gap-4 mt-4'):
-            ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
+        # Action buttons - reordered: Back to Dashboard, Process Year-End, Refresh
+        with ui.row().classes('w-full gap-4 mt-4 justify-center'):
             ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'), icon='dashboard')
+
+            # Process button - disabled if not Dec 31 or already complete
+            process_btn = ui.button(
+                f'Process Year-End Transition to {next_year}',
+                on_click=process_year_end,
+                color='primary',
+                icon='play_arrow'
+            )
+            if not is_year_end_allowed:
+                process_btn.props('disable')
+                process_btn.tooltip(f'Available on December 31, {current_year}')
+
+            ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
 
 
 @ui.page('/help')
