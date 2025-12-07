@@ -2829,6 +2829,77 @@ def admin_system():
 
                     refresh_backups()
 
+                # Market Calendar Sync Card
+                with ui.card().classes('w-full p-4 mt-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('event', size='sm', color='purple')
+                        ui.label('Market Calendar Sync').classes('text-lg font-semibold')
+
+                    ui.label('Sync market holidays for NYSE, CME, and CBOE exchanges.').classes('text-sm opacity-70 mb-4')
+
+                    # Current year and next year
+                    current_year = datetime.now().year
+                    sync_status_label = ui.label('').classes('text-sm mb-2')
+                    sync_results_container = ui.column().classes('w-full')
+
+                    def sync_market_holidays(year: int):
+                        """Sync market holidays for a specific year."""
+                        sync_status_label.set_text(f'Syncing {year} holidays...')
+                        try:
+                            from src.services.market_calendar_service import MarketCalendarService
+                            service = MarketCalendarService(db_session=db)
+                            result = service.sync_market_holidays(year)
+
+                            if result.success:
+                                source_display = result.source.value.replace('_', ' ').title()
+                                msg = f'{year}: Synced {result.count} holidays from {source_display}'
+                                if result.warning:
+                                    msg += f' (Warning: {result.warning})'
+                                    ui.notify(msg, type='warning')
+                                else:
+                                    ui.notify(msg, type='positive')
+                                sync_status_label.set_text(msg)
+                            else:
+                                ui.notify(f'Sync failed: {result.error}', type='negative')
+                                sync_status_label.set_text(f'Error: {result.error}')
+
+                            refresh_holiday_stats()
+                        except Exception as e:
+                            sync_status_label.set_text(f'Error: {str(e)}')
+                            ui.notify(f'Sync error: {str(e)}', type='negative')
+
+                    def refresh_holiday_stats():
+                        """Refresh the holiday statistics display."""
+                        sync_results_container.clear()
+                        try:
+                            from src.models.market_holiday import MarketHoliday
+                            with sync_results_container:
+                                # Show stats for current and next year
+                                for year in [current_year, current_year + 1]:
+                                    count = db.query(MarketHoliday).filter(MarketHoliday.year == year).count()
+                                    markets = db.query(MarketHoliday.market).filter(
+                                        MarketHoliday.year == year
+                                    ).distinct().all()
+                                    market_list = ', '.join([m[0] for m in markets]) if markets else 'None'
+
+                                    color = 'green' if count > 0 else 'gray'
+                                    with ui.row().classes(f'w-full items-center gap-4 p-3 bg-{color}-50 dark:bg-{color}-900/20 rounded-lg mb-2'):
+                                        ui.icon('calendar_month', color=color)
+                                        with ui.column().classes('flex-1'):
+                                            ui.label(f'{year}').classes('font-semibold')
+                                            ui.label(f'{count} holidays | Markets: {market_list}').classes('text-xs opacity-70')
+                                        ui.button('Sync', icon='sync', on_click=lambda y=year: sync_market_holidays(y)).props('flat dense')
+                        except Exception as e:
+                            with sync_results_container:
+                                ui.label(f'Error loading stats: {e}').classes('text-red-500')
+
+                    # Sync buttons
+                    with ui.row().classes('gap-2 mb-4'):
+                        ui.button(f'Sync {current_year}', icon='sync', on_click=lambda: sync_market_holidays(current_year)).props('color=primary')
+                        ui.button(f'Sync {current_year + 1}', icon='sync', on_click=lambda: sync_market_holidays(current_year + 1)).props('color=secondary')
+
+                    refresh_holiday_stats()
+
             # ========== EMAIL CONFIG TAB ==========
             with ui.tab_panel(email_tab):
                 # Current config values
