@@ -17,6 +17,7 @@ from nicegui_app.pages.reports import reports_page
 from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.logo import LOGO_DATA_URL
 from src.services.session_manager import SessionManager, require_auth
+from src.services.email_service import email_service
 
 # Set up basic app configuration
 app.title = "TJM Time Calendar"
@@ -475,6 +476,16 @@ def manager_request_detail(request_id: int):
                             AuditService.log_pto_approve(
                                 db, user_id, approver_name, request_id, detail['employee_name']
                             )
+                            # Send email notification
+                            email_service.send_pto_approved(
+                                detail['employee_email'],
+                                detail['employee_name'],
+                                request.pto_type,
+                                request.start_date,
+                                request.end_date,
+                                float(request.total_days),
+                                approver_name
+                            )
                             ui.notify('Request approved!', type='positive')
                             ui.navigate.to('/dashboard')
                         else:
@@ -493,6 +504,17 @@ def manager_request_detail(request_id: int):
                             # Log the denial
                             AuditService.log_pto_deny(
                                 db, user_id, approver_name, request_id, detail['employee_name'], reason
+                            )
+                            # Send email notification
+                            email_service.send_pto_denied(
+                                detail['employee_email'],
+                                detail['employee_name'],
+                                request.pto_type,
+                                request.start_date,
+                                request.end_date,
+                                float(request.total_days),
+                                approver_name,
+                                reason
                             )
                             ui.notify('Request denied', type='warning')
                             ui.navigate.to('/dashboard')
