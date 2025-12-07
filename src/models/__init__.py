@@ -13,6 +13,7 @@ from .vacation_accrual_tier import VacationAccrualTier
 from .carryover_request import CarryoverRequest
 from .audit_log import AuditLog
 from .password_reset import PasswordResetToken
+from .handbook_revision import HandbookRevision
 
 # Make all models available when importing from this module
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     'CarryoverRequest',
     'AuditLog',
     'PasswordResetToken',
+    'HandbookRevision',
 ]

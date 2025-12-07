@@ -608,6 +608,16 @@ def admin_panel():
                     ui.label('Process year transitions and holidays').classes('text-gray-600 text-center')
                     ui.button('Go to Year-End', on_click=lambda: ui.navigate.to('/admin/year-end'), color='primary')
 
+        # Second row of cards
+        with ui.row().classes('w-full gap-6 justify-center mt-6'):
+            # Handbook Management card
+            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('menu_book', size='3rem').classes('text-primary')
+                    ui.label('Handbook Management').classes('text-xl font-semibold')
+                    ui.label('Update and manage employee handbook').classes('text-gray-600 text-center')
+                    ui.button('Manage Handbook', on_click=lambda: ui.navigate.to('/admin/handbook'), color='primary')
+
         ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
 
 @ui.page('/admin/departments')
@@ -1540,6 +1550,158 @@ def admin_employees_edit(user_id: int):
 
     finally:
         db.close()
+
+
+@ui.page('/admin/handbook')
+def admin_handbook():
+    """Admin page for managing employee handbook revisions."""
+    if not require_auth():
+        return
+
+    from datetime import datetime
+    from src.services.handbook_revision_service import HandbookRevisionService
+    from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
+
+    # Apply dark mode if previously set
+    dark_mode = ui.dark_mode()
+    is_dark = app.storage.general.get('dark_mode', False)
+    if is_dark:
+        dark_mode.enable()
+
+    user_role = app.storage.general.get('user', {}).get('role')
+    if user_role not in ['admin', 'superadmin']:
+        ui.navigate.to('/')
+        return
+
+    current_user = app.storage.general.get('user')
+
+    with ui.column().classes('w-full max-w-5xl mx-auto mt-8 p-6'):
+        with ui.column().classes('gap-2 mb-6'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+            with ui.row().classes('items-center'):
+                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
+                ui.label('HANDBOOK MANAGEMENT').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+
+        # Tabs for different views
+        with ui.tabs().classes('w-full') as tabs:
+            current_tab = ui.tab('current', label='Current Version', icon='visibility')
+            update_tab = ui.tab('update', label='Update Handbook', icon='edit')
+            history_tab = ui.tab('history', label='Revision History', icon='history')
+
+        with ui.tab_panels(tabs, value=current_tab).classes('w-full'):
+            # Current Version Panel
+            with ui.tab_panel(current_tab):
+                db = next(get_db())
+                try:
+                    service = HandbookRevisionService(db)
+                    active = service.get_active_revision()
+
+                    if active:
+                        with ui.card().classes('w-full p-4 mb-4'):
+                            with ui.row().classes('justify-between items-center'):
+                                with ui.column():
+                                    ui.label(f'Version {active.version}').classes('text-lg font-bold')
+                                    ui.label(f"Last updated: {active.created_at.strftime('%B %d, %Y at %I:%M %p')}").classes('text-sm opacity-70')
+                                ui.badge('Active', color='green')
+
+                            if active.change_summary:
+                                with ui.card().classes('w-full mt-4 p-3 border-l-4 border-blue-500'):
+                                    ui.label('Change Summary').classes('font-semibold text-sm')
+                                    ui.label(active.change_summary).classes('text-sm')
+
+                        with ui.card().classes('w-full p-4'):
+                            ui.label('Content Preview').classes('font-semibold mb-2')
+                            ui.markdown(active.content[:2000] + '...' if len(active.content) > 2000 else active.content).classes('text-sm')
+                    else:
+                        with ui.card().classes('w-full p-4'):
+                            ui.label('No handbook version found').classes('text-lg')
+                            ui.label('Use the "Update Handbook" tab to create the first version.').classes('text-sm opacity-70')
+                            ui.label(f"Default content available: {len(HANDBOOK_CONTENT)} characters").classes('text-sm opacity-70 mt-2')
+                finally:
+                    db.close()
+
+            # Update Handbook Panel
+            with ui.tab_panel(update_tab):
+                with ui.card().classes('w-full p-4'):
+                    ui.label('Update Handbook Content').classes('text-lg font-bold mb-2')
+                    ui.label('Paste the new handbook content below. The system will automatically detect changes and generate a summary.').classes('text-sm opacity-70 mb-4')
+
+                    # Load current content or default
+                    db = next(get_db())
+                    try:
+                        service = HandbookRevisionService(db)
+                        active = service.get_active_revision()
+                        initial_content = active.content if active else HANDBOOK_CONTENT
+                    finally:
+                        db.close()
+
+                    content_input = ui.textarea(
+                        label='Handbook Content (Markdown)',
+                        value=initial_content
+                    ).classes('w-full').props('outlined rows=20')
+
+                    with ui.row().classes('w-full justify-end gap-4 mt-4'):
+                        def save_handbook():
+                            new_content = content_input.value.strip()
+                            if not new_content:
+                                ui.notify('Content cannot be empty', type='negative')
+                                return
+
+                            save_db = next(get_db())
+                            try:
+                                save_service = HandbookRevisionService(save_db)
+                                revision, report = save_service.create_revision(
+                                    content=new_content,
+                                    created_by=current_user.get('id')
+                                )
+
+                                if report.get('has_changes'):
+                                    stats = report.get('stats', {})
+                                    ui.notify(
+                                        f"Saved version {revision.version}: +{stats.get('additions', 0)} / -{stats.get('deletions', 0)} lines",
+                                        type='positive'
+                                    )
+                                else:
+                                    ui.notify('No changes detected', type='info')
+
+                            except Exception as e:
+                                ui.notify(f'Error saving: {str(e)}', type='negative')
+                            finally:
+                                save_db.close()
+
+                        ui.button('Save New Version', on_click=save_handbook, color='primary', icon='save')
+
+            # Revision History Panel
+            with ui.tab_panel(history_tab):
+                history_container = ui.column().classes('w-full')
+
+                def load_history():
+                    history_container.clear()
+                    db = next(get_db())
+                    try:
+                        service = HandbookRevisionService(db)
+                        revisions = service.get_all_revisions()
+
+                        with history_container:
+                            if not revisions:
+                                ui.label('No revisions found').classes('opacity-70')
+                                return
+
+                            for rev in revisions:
+                                with ui.card().classes('w-full mb-3 p-4'):
+                                    with ui.row().classes('justify-between items-start'):
+                                        with ui.column():
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.label(f'Version {rev.version}').classes('font-bold')
+                                                if rev.is_active:
+                                                    ui.badge('Active', color='green')
+                                            ui.label(f"Created: {rev.created_at.strftime('%Y-%m-%d %H:%M')}").classes('text-sm opacity-70')
+                                            if rev.change_summary:
+                                                ui.label(rev.change_summary).classes('text-sm mt-2')
+                    finally:
+                        db.close()
+
+                load_history()
 
 
 @ui.page('/admin/year-end')
