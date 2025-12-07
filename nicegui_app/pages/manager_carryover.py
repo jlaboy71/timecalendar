@@ -9,7 +9,7 @@ from src.models.user import User
 from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
-from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.header import page_header
 
 
 def manager_carryover_page():
@@ -37,9 +37,8 @@ def manager_carryover_page():
     current_year = date.today().year
 
     with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-2'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            ui.label('CARRYOVER REQUEST APPROVALS').classes('text-xl font-bold').style('color: #5a6a72;')
+        # Header with greeting
+        page_header(title='CARRYOVER REQUEST APPROVALS', show_back=False)
         ui.label(f'Review carryover requests from {current_year} to {current_year + 1}').classes('opacity-70 mb-6')
 
         # Container for pending requests - will be refreshed

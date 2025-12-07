@@ -10,7 +10,7 @@ from src.services.department_service import DepartmentService
 from datetime import date, timedelta
 from calendar import monthcalendar, month_name
 from collections import defaultdict
-from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.header import page_header
 
 
 def calendar_page():
@@ -70,9 +70,8 @@ def calendar_page():
 
     # Main container
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-4'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            ui.label('TEAM CALENDAR').classes('text-xl font-bold').style('color: #5a6a72;')
+        # Header with greeting
+        page_header(title='TEAM CALENDAR', show_back=False)
 
         # ===== VIEW TOGGLE (managers/admins/superadmins only) =====
         if user_role in ['manager', 'admin', 'superadmin']:

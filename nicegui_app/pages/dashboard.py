@@ -8,20 +8,7 @@ from src.database import get_db
 from datetime import datetime, date
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
-
-
-def get_time_based_greeting():
-    """Get greeting based on Chicago timezone time of day."""
-    chicago_tz = pytz.timezone('America/Chicago')
-    chicago_time = datetime.now(chicago_tz)
-    hour = chicago_time.hour
-
-    if hour < 12:
-        return "Good Morning"
-    elif hour < 17:
-        return "Good Afternoon"
-    else:
-        return "Good Evening"
+from nicegui_app.components.header import get_time_based_greeting
 
 
 def format_days(hours: float) -> str:
@@ -335,6 +322,7 @@ def dashboard_page():
                         with ui.row().classes('w-full gap-3 flex-wrap'):
                             ui.button('Company Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
                             ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                            ui.button('My Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
 
                     # Row 3: Manager Tools (managers only)
                     if user_role == 'manager':
@@ -353,7 +341,7 @@ def dashboard_page():
                                 ui.button('Team Calendar', icon='groups', on_click=go_to_team_calendar).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Carryover Approvals', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Handbook AI', icon='smart_toy', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Reports', icon='assessment', on_click=lambda: ui.notify('Reports coming soon!', type='info')).props('outline color=indigo disabled').classes('flex-1 min-w-fit opacity-50')
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
@@ -387,102 +375,27 @@ def dashboard_page():
                             ui.label(str(pending_count)).classes('text-3xl font-bold text-amber-600')
                             ui.label('Pending Requests').classes('text-xs opacity-60')
 
-                # Department Management Section
-                with ui.card().classes('w-full mb-4'):
-                    with ui.row().classes('w-full justify-between items-center mb-4 p-4 pb-0'):
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('business', color='indigo').classes('text-xl')
-                            ui.label('Department Management').classes('text-lg font-semibold')
-                        ui.button('Manage Departments', icon='settings',
-                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('flat dense')
-
-                    # Quick department list
-                    if all_departments:
-                        with ui.column().classes('w-full px-4 pb-4'):
-                            for dept in all_departments[:5]:
-                                manager_name = 'No Manager'
-                                if dept.manager_id:
-                                    manager = user_service.get_user_by_id(dept.manager_id)
-                                    if manager:
-                                        manager_name = f'{manager.first_name} {manager.last_name}'
-
-                                with ui.row().classes('w-full justify-between items-center py-2 border-b last:border-0'):
-                                    with ui.column().classes('gap-0'):
-                                        ui.label(dept.name).classes('font-medium')
-                                        ui.label(f'Code: {dept.code} • Manager: {manager_name}').classes('text-xs opacity-60')
-                                    if dept.is_active:
-                                        ui.badge('Active', color='green').props('outline')
-                                    else:
-                                        ui.badge('Inactive', color='grey').props('outline')
-
-                            if len(all_departments) > 5:
-                                ui.label(f'+ {len(all_departments) - 5} more departments').classes('text-sm opacity-60 mt-2 text-center w-full')
-                    else:
-                        with ui.row().classes('w-full justify-center py-4'):
-                            ui.label('No departments created yet').classes('opacity-60')
-
-                # Employee Management Section
-                with ui.card().classes('w-full mb-4'):
-                    with ui.row().classes('w-full justify-between items-center mb-4 p-4 pb-0'):
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('people', color='blue').classes('text-xl')
-                            ui.label('Employee Management').classes('text-lg font-semibold')
-                        with ui.row().classes('gap-2'):
-                            ui.button('Add Employee', icon='person_add',
-                                      on_click=lambda: ui.navigate.to('/admin/employees/add')).props('flat dense color=primary')
-                            ui.button('View All', icon='list',
-                                      on_click=lambda: ui.navigate.to('/admin/employees')).props('flat dense')
-
-                    # Quick employee list (recent or first 5)
-                    if all_users:
-                        # Create department lookup
-                        dept_lookup = {dept.id: dept.name for dept in all_departments}
-
-                        with ui.column().classes('w-full px-4 pb-4'):
-                            for user in all_users[:5]:
-                                dept_name = dept_lookup.get(user.department_id, 'No Department') if user.department_id else 'No Department'
-
-                                with ui.row().classes('w-full justify-between items-center py-2 border-b last:border-0'):
-                                    with ui.row().classes('items-center gap-3'):
-                                        # Role indicator
-                                        role_colors = {'employee': 'blue', 'manager': 'indigo', 'admin': 'red', 'superadmin': 'red'}
-                                        role_icons = {'employee': 'person', 'manager': 'supervisor_account', 'admin': 'admin_panel_settings', 'superadmin': 'security'}
-                                        ui.icon(role_icons.get(user.role, 'person'),
-                                               color=role_colors.get(user.role, 'grey')).classes('text-lg')
-
-                                        with ui.column().classes('gap-0'):
-                                            ui.label(f'{user.first_name} {user.last_name}').classes('font-medium')
-                                            ui.label(f'{dept_name} • {user.role.title()}').classes('text-xs opacity-60')
-
-                                    with ui.row().classes('items-center gap-2'):
-                                        if user.is_active:
-                                            ui.badge('Active', color='green').props('outline')
-                                        else:
-                                            ui.badge('Inactive', color='grey').props('outline')
-
-                                        def create_edit_handler(user_id):
-                                            def edit():
-                                                ui.navigate.to(f'/admin/employees/edit/{user_id}')
-                                            return edit
-
-                                        ui.button(icon='edit', on_click=create_edit_handler(user.id)).props('flat round dense size=sm')
-
-                            if len(all_users) > 5:
-                                ui.label(f'+ {len(all_users) - 5} more employees').classes('text-sm opacity-60 mt-2 text-center w-full')
-                    else:
-                        with ui.row().classes('w-full justify-center py-4'):
-                            ui.label('No employees created yet').classes('opacity-60')
-
-                # Quick Actions for Admin
+                # Admin Quick Actions
                 with ui.card().classes('w-full mb-4 p-4'):
-                    ui.label('Quick Actions').classes('text-xs font-semibold uppercase opacity-60 mb-3')
+                    ui.label('Management').classes('text-xs font-semibold uppercase opacity-60 mb-3')
+                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                        ui.button('Manage Departments', icon='business',
+                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                        ui.button('Manage Employees', icon='people',
+                                  on_click=lambda: ui.navigate.to('/admin/employees')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                        ui.button('Add Employee', icon='person_add',
+                                  on_click=lambda: ui.navigate.to('/admin/employees/add')).props('outline color=primary').classes('flex-1 min-w-fit')
+
+                    ui.separator().classes('my-3')
+
+                    ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60 mb-3')
                     with ui.row().classes('w-full gap-3 flex-wrap'):
                         ui.button('Company Calendar', icon='calendar_month',
                                   on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
                         ui.button('Employee Handbook', icon='menu_book',
                                   on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                        ui.button('Carryover Approvals', icon='approval',
-                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                        ui.button('Reports', icon='assessment',
+                                  on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:

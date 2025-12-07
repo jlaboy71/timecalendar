@@ -8,7 +8,7 @@ from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
 from datetime import date, timedelta
 from decimal import Decimal
-from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.header import page_header
 
 
 def request_form_page():
@@ -74,12 +74,8 @@ def request_form_page():
     # ============ MAIN PAGE LAYOUT ============
     with ui.column().classes('w-full max-w-3xl mx-auto p-4'):
 
-        # Header with logo and back button
-        with ui.column().classes('gap-2 mb-4'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            with ui.row().classes('items-center'):
-                ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
-                ui.label('NEW PTO REQUEST').classes('text-xl font-bold ml-2').style('color: #5a6a72;')
+        # Header with greeting
+        page_header(title='NEW PTO REQUEST', show_back=False)
 
         # Show notice if date was pre-filled from calendar
         if prefill_date:

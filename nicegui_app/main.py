@@ -11,6 +11,7 @@ from nicegui_app.pages.carryover import carryover_page
 from nicegui_app.pages.manager_carryover import manager_carryover_page
 from nicegui_app.pages.calendar import calendar_page
 from nicegui_app.pages.handbook import handbook_page
+from nicegui_app.pages.reports import reports_page
 from nicegui_app.logo import LOGO_DATA_URL
 
 # Set up basic app configuration
@@ -54,6 +55,11 @@ def manager_carryover():
 def handbook():
     """Employee handbook page."""
     handbook_page()
+
+@ui.page('/reports')
+def reports():
+    """Reports page for managers and admins."""
+    reports_page()
 
 @ui.page('/requests')
 def requests():
@@ -723,6 +729,8 @@ def admin_departments():
 @ui.page('/admin/employees')
 def admin_employees():
     """Admin page for managing employees."""
+    from nicegui_app.components.header import page_header
+
     # Apply dark mode if previously set
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
@@ -734,62 +742,190 @@ def admin_employees():
         ui.navigate.to('/')
         return
 
+    # Load data
+    db = next(get_db())
+    try:
+        from src.services.user_service import UserService
+        from src.services.department_service import DepartmentService
+
+        # Get all users and departments
+        all_users = UserService(db).get_all_users()
+        departments = DepartmentService.get_all_departments(db)
+
+        # Create department lookup
+        dept_lookup = {dept.id: dept.name for dept in departments}
+
+        # Build complete row data for all users
+        all_rows = []
+        for user in all_users:
+            department_name = 'No Department'
+            if user.department_id:
+                department_name = dept_lookup.get(user.department_id, 'Unknown Department')
+
+            all_rows.append({
+                'id': user.id,
+                'name': f'{user.first_name} {user.last_name}',
+                'username': user.username,
+                'department': department_name,
+                'department_id': user.department_id,
+                'role': user.role.title(),
+                'role_raw': user.role,
+                'hire_date': user.hire_date.strftime('%m-%d-%Y') if user.hire_date else 'Not Set',
+                'active': 'Yes' if user.is_active else 'No',
+                'is_active': user.is_active,
+            })
+
+        # Build autocomplete options from employee names
+        employee_names = [row['name'] for row in all_rows]
+
+    finally:
+        db.close()
+
+    # Filter state
+    filter_state = {
+        'search': '',
+        'department_id': None,
+        'status': 'all',  # 'all', 'active', 'inactive'
+        'role': None,
+    }
+
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-6'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            ui.label('EMPLOYEE MANAGEMENT').classes('text-xl font-bold').style('color: #5a6a72;')
+        page_header(title='EMPLOYEE MANAGEMENT', show_back=False)
 
         # Add New Employee button
-        ui.button('Add New Employee', on_click=lambda: ui.navigate.to('/admin/employees/add'), color='primary').classes('mb-6')
-        
-        db = next(get_db())
-        try:
-            from src.services.user_service import UserService
-            from src.services.department_service import DepartmentService
-            
-            # Get all users and departments
-            users = UserService(db).get_all_users()
-            departments = DepartmentService.get_all_departments(db)
-            
-            # Create department lookup
-            dept_lookup = {dept.id: dept.name for dept in departments}
-            
-            if not users:
-                ui.label('No employees yet').classes('text-xl text-gray-500 text-center mt-8')
-            else:
-                # Build table data
-                columns = [
-                    {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left', 'sortable': True},
-                    {'name': 'username', 'label': 'Username', 'field': 'username', 'align': 'left', 'sortable': True},
-                    {'name': 'department', 'label': 'Department', 'field': 'department', 'align': 'left', 'sortable': True},
-                    {'name': 'role', 'label': 'Role', 'field': 'role', 'align': 'left', 'sortable': True},
-                    {'name': 'hire_date', 'label': 'Hire Date', 'field': 'hire_date', 'align': 'left', 'sortable': True},
-                    {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center', 'sortable': True},
-                ]
+        ui.button('Add New Employee', icon='person_add', on_click=lambda: ui.navigate.to('/admin/employees/add')).props('color=primary').classes('mb-4')
 
-                rows = []
-                for user in users:
-                    department_name = 'No Department'
-                    if user.department_id:
-                        department_name = dept_lookup.get(user.department_id, 'Unknown Department')
+        # Filters card
+        with ui.card().classes('w-full mb-4 p-4'):
+            ui.label('Search & Filter').classes('text-sm font-semibold uppercase opacity-60 mb-3')
 
-                    rows.append({
-                        'id': user.id,
-                        'name': f'{user.first_name} {user.last_name}',
-                        'username': user.username,
-                        'department': department_name,
-                        'role': user.role.title(),
-                        'hire_date': user.hire_date.strftime('%m-%d-%Y') if user.hire_date else 'Not Set',
-                        'active': 'Yes' if user.is_active else 'No',
-                    })
+            with ui.row().classes('w-full gap-4 items-end flex-wrap'):
+                # Search input with autocomplete
+                search_input = ui.input(
+                    placeholder='Search by name or username...',
+                    autocomplete=employee_names
+                ).classes('flex-grow min-w-48').props('clearable outlined dense')
 
-                table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                table.on('row-click', lambda e: ui.navigate.to(f'/admin/employees/edit/{e.args[1]["id"]}'))
-        
-        finally:
-            db.close()
-        
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+                # Department filter
+                dept_options = {None: 'All Departments'}
+                dept_options.update({dept.id: dept.name for dept in departments})
+                dept_select = ui.select(
+                    dept_options,
+                    label='Department',
+                    value=None
+                ).classes('w-48').props('outlined dense')
+
+                # Role filter
+                role_options = {None: 'All Roles', 'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Superadmin'}
+                role_select = ui.select(
+                    role_options,
+                    label='Role',
+                    value=None
+                ).classes('w-40').props('outlined dense')
+
+                # Status filter
+                status_options = {'all': 'All Status', 'active': 'Active Only', 'inactive': 'Inactive Only'}
+                status_select = ui.select(
+                    status_options,
+                    label='Status',
+                    value='all'
+                ).classes('w-36').props('outlined dense')
+
+        # Results count
+        results_label = ui.label('').classes('text-sm opacity-60 mb-2')
+
+        # Table container
+        table_container = ui.column().classes('w-full')
+
+        # Table columns
+        columns = [
+            {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left', 'sortable': True},
+            {'name': 'username', 'label': 'Username', 'field': 'username', 'align': 'left', 'sortable': True},
+            {'name': 'department', 'label': 'Department', 'field': 'department', 'align': 'left', 'sortable': True},
+            {'name': 'role', 'label': 'Role', 'field': 'role', 'align': 'left', 'sortable': True},
+            {'name': 'hire_date', 'label': 'Hire Date', 'field': 'hire_date', 'align': 'left', 'sortable': True},
+            {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center', 'sortable': True},
+        ]
+
+        def has_any_filter():
+            """Check if any filter is applied."""
+            return (
+                filter_state['search'].strip() != '' or
+                filter_state['department_id'] is not None or
+                filter_state['role'] is not None or
+                filter_state['status'] != 'all'
+            )
+
+        def filter_and_render():
+            """Filter rows based on current filter state and re-render table."""
+            table_container.clear()
+
+            # If no filters applied, show prompt to search
+            if not has_any_filter():
+                results_label.text = f'{len(all_rows)} employees total'
+                with table_container:
+                    with ui.column().classes('w-full items-center py-8'):
+                        ui.icon('search', size='xl').classes('opacity-40 mb-2')
+                        ui.label('Use the search or filters above to find employees').classes('text-gray-500')
+                return
+
+            filtered_rows = all_rows.copy()
+
+            # Apply search filter
+            search_term = filter_state['search'].lower().strip()
+            if search_term:
+                filtered_rows = [r for r in filtered_rows if search_term in r['name'].lower() or search_term in r['username'].lower()]
+
+            # Apply department filter
+            if filter_state['department_id'] is not None:
+                filtered_rows = [r for r in filtered_rows if r['department_id'] == filter_state['department_id']]
+
+            # Apply role filter
+            if filter_state['role'] is not None:
+                filtered_rows = [r for r in filtered_rows if r['role_raw'] == filter_state['role']]
+
+            # Apply status filter
+            if filter_state['status'] == 'active':
+                filtered_rows = [r for r in filtered_rows if r['is_active']]
+            elif filter_state['status'] == 'inactive':
+                filtered_rows = [r for r in filtered_rows if not r['is_active']]
+
+            # Update results count
+            results_label.text = f'Showing {len(filtered_rows)} of {len(all_rows)} employees'
+
+            with table_container:
+                if not filtered_rows:
+                    ui.label('No employees match your filters').classes('text-gray-500 text-center py-8')
+                else:
+                    table = ui.table(columns=columns, rows=filtered_rows, row_key='id').classes('w-full')
+                    table.on('row-click', lambda e: ui.navigate.to(f'/admin/employees/edit/{e.args[1]["id"]}'))
+
+        # Wire up filter handlers - use widget.value instead of event.value
+        def on_search_change(e):
+            filter_state['search'] = search_input.value or ''
+            filter_and_render()
+
+        def on_dept_change(e):
+            filter_state['department_id'] = dept_select.value
+            filter_and_render()
+
+        def on_role_change(e):
+            filter_state['role'] = role_select.value
+            filter_and_render()
+
+        def on_status_change(e):
+            filter_state['status'] = status_select.value
+            filter_and_render()
+
+        search_input.on('update:model-value', on_search_change)
+        dept_select.on('update:model-value', on_dept_change)
+        role_select.on('update:model-value', on_role_change)
+        status_select.on('update:model-value', on_status_change)
+
+        # Initial render
+        filter_and_render()
+
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
 
 @ui.page('/admin/employees/add')
 def admin_employees_add():

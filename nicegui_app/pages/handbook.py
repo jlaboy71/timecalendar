@@ -3,7 +3,7 @@ Employee Handbook page with AI chat for managers and styled viewer for employees
 """
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
-from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.header import page_header
 
 
 def handbook_page():
@@ -25,37 +25,14 @@ def handbook_page():
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        # Header with logo above title (matching dashboard style)
-        with ui.row().classes('w-full justify-between items-start mb-6'):
-            with ui.column().classes('gap-2'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-                with ui.row().classes('items-center gap-2'):
-                    ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat round')
-                    if is_manager_or_admin:
-                        ui.label('HANDBOOK AI ASSISTANT').classes('text-xl font-bold uppercase').style('color: #5a6a72;')
-                    else:
-                        ui.label('EMPLOYEE HANDBOOK').classes('text-xl font-bold uppercase').style('color: #5a6a72;')
+        # Header with greeting
+        title = 'HANDBOOK AI ASSISTANT' if is_manager_or_admin else 'EMPLOYEE HANDBOOK'
+        page_header(title=title, show_back=False)
 
-            # Right side - AI badge for managers and dark mode toggle
-            with ui.row().classes('items-center gap-2'):
-                if is_manager_or_admin:
-                    ui.badge('AI Enabled', color='green').props('outline')
-
-                # Dark mode toggle
-                def toggle_dark_mode():
-                    current = app.storage.general.get('dark_mode', False)
-                    new_state = not current
-                    app.storage.general['dark_mode'] = new_state
-                    if new_state:
-                        dark_mode.enable()
-                    else:
-                        dark_mode.disable()
-                    dark_toggle.props(f'icon={"light_mode" if new_state else "dark_mode"}')
-
-                dark_toggle = ui.button(
-                    icon='light_mode' if is_dark else 'dark_mode',
-                    on_click=toggle_dark_mode
-                ).props('flat round')
+        # AI badge for managers
+        if is_manager_or_admin:
+            with ui.row().classes('mb-4'):
+                ui.badge('AI Enabled', color='green').props('outline')
 
         # Show AI Chat for managers/admins
         if is_manager_or_admin:
@@ -66,6 +43,9 @@ def handbook_page():
         else:
             # Employees see the styled handbook directly
             render_styled_handbook()
+
+        # Back to Dashboard button
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
 def render_ai_chat():
@@ -168,7 +148,6 @@ def render_ai_chat():
                 ('How much vacation do I get?', 'beach_access'),
                 ('What are the holidays?', 'celebration'),
                 ('How does sick time work?', 'medical_services'),
-                ('What benefits are offered?', 'health_and_safety'),
             ]
             for q, icon in quick_questions:
                 def make_handler(question):
@@ -222,4 +201,4 @@ def render_styled_handbook():
     with ui.card().classes('w-full p-4 text-center'):
         with ui.row().classes('w-full justify-center items-center gap-2'):
             ui.icon('info', size='sm').classes('opacity-60')
-            ui.label('Last Updated: January 2024 | For questions, contact HR at hr@haventech.com').classes('text-xs opacity-60')
+            ui.label('Last Updated: December 2025 | For questions, contact HR').classes('text-xs opacity-60')

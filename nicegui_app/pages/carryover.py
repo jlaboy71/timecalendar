@@ -8,7 +8,7 @@ from src.models.leave_type import LeaveType
 from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
-from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.header import page_header
 
 
 def format_hours_days(hours):
@@ -114,9 +114,8 @@ def carryover_page():
     selected_hours = {'value': 0}
 
     with ui.column().classes('w-full max-w-2xl mx-auto mt-8 p-6'):
-        with ui.column().classes('gap-2 mb-2'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
-            ui.label('REQUEST LEAVE CARRYOVER').classes('text-xl font-bold').style('color: #5a6a72;')
+        # Header with greeting
+        page_header(title='REQUEST LEAVE CARRYOVER', show_back=False)
         ui.label(f'Carry unused {current_year} leave balance into {next_year}').classes('opacity-70 mb-6')
 
         # ============ UNUSED BALANCES CARD ============
@@ -270,7 +269,7 @@ def carryover_page():
                         value=0,
                         min=0,
                         max=get_max_hours(),
-                        step=4,
+                        step=8,  # Full day increments only
                         format='%.1f'
                     ).classes('w-32')
 
@@ -284,16 +283,16 @@ def carryover_page():
 
                 hours_input.on('update:model-value', lambda e: update_hours_display())
 
-                # Quick select buttons
+                # Quick select buttons (minimum 1 full day per policy)
                 with ui.row().classes('gap-2 mb-4'):
                     def set_hours(hrs):
                         max_hrs = get_max_hours()
                         hours_input.value = min(hrs, max_hrs)
                         update_hours_display()
 
-                    ui.button('Half Day (4h)', on_click=lambda: set_hours(4)).props('size=sm dense outline')
                     ui.button('1 Day (8h)', on_click=lambda: set_hours(8)).props('size=sm dense outline')
                     ui.button('2 Days (16h)', on_click=lambda: set_hours(16)).props('size=sm dense outline')
+                    ui.button('3 Days (24h)', on_click=lambda: set_hours(24)).props('size=sm dense outline')
                     ui.button('All Unused', on_click=lambda: set_hours(get_max_hours())).props('size=sm dense outline color=primary')
 
                 # Update max when leave type changes
@@ -320,6 +319,11 @@ def carryover_page():
 
                     if not hours_input.value or hours_input.value <= 0:
                         ui.notify('Please enter hours to carry over', type='negative')
+                        return
+
+                    # Enforce full-day (8-hour) increments for carryover
+                    if hours_input.value % 8 != 0:
+                        ui.notify('Carryover must be in full-day (8-hour) increments', type='negative')
                         return
 
                     if hours_input.value > get_max_hours():
