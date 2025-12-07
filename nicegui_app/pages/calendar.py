@@ -199,6 +199,31 @@ def calendar_page():
 
                 ui.button('Today', on_click=lambda: go_to_today()).props('flat')
 
+            # Export and View toggle
+            with ui.row().classes('gap-2 items-center'):
+                # Export dropdown
+                with ui.dropdown_button('Export', icon='download', auto_close=True).props('flat color=primary'):
+                    def export_my_calendar():
+                        year = current_month['year']
+                        ui.download(f'/api/calendar/export?type=my&year={year}')
+                        ui.notify(f'Downloading My PTO Calendar {year}...', type='info')
+
+                    def export_team_calendar():
+                        year = current_month['year']
+                        dept_param = f'&department_id={selected_department["id"]}' if selected_department['id'] else ''
+                        ui.download(f'/api/calendar/export?type=team&year={year}{dept_param}')
+                        ui.notify(f'Downloading Team Calendar {year}...', type='info')
+
+                    def export_holidays():
+                        year = current_month['year']
+                        ui.download(f'/api/calendar/export?type=holidays&year={year}')
+                        ui.notify(f'Downloading Market Holidays {year}...', type='info')
+
+                    ui.item('My PTO Calendar', on_click=export_my_calendar).props('clickable')
+                    if user_role in ['manager', 'admin', 'superadmin']:
+                        ui.item('Team Calendar', on_click=export_team_calendar).props('clickable')
+                    ui.item('Market Holidays', on_click=export_holidays).props('clickable')
+
             # View toggle (Month / Year)
             with ui.row().classes('gap-2'):
                 def set_month_view():

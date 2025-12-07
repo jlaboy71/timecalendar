@@ -3421,6 +3421,84 @@ LOG CONTENT:
             ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat')
 
 
+# ============================================================
+# CALENDAR EXPORT ENDPOINT
+# ============================================================
+from fastapi.responses import Response
+
+@app.get('/api/calendar/export')
+def export_calendar(
+    type: str = 'my',  # 'my', 'team', 'holidays'
+    year: int = None,
+    department_id: int = None
+):
+    """
+    Export calendar to iCal (.ics) format.
+
+    Args:
+        type: 'my' for personal, 'team' for department, 'holidays' for market holidays only
+        year: Year to export (defaults to current year)
+        department_id: Department ID for team exports (admin only)
+    """
+    from datetime import date
+    from src.services.ical_export_service import ICalExportService
+
+    # Get current user from session
+    user = app.storage.general.get('user')
+    if not user:
+        return Response(content="Unauthorized", status_code=401)
+
+    user_id = user.get('id')
+    user_role = user.get('role')
+
+    if year is None:
+        year = date.today().year
+
+    db = next(get_db())
+    try:
+        service = ICalExportService(db_session=db)
+
+        if type == 'holidays':
+            ical_content = service.generate_holidays_only(year)
+            filename = f"market_holidays_{year}.ics"
+        elif type == 'team':
+            if user_role not in ['manager', 'admin', 'superadmin']:
+                return Response(content="Forbidden", status_code=403)
+
+            # For managers, use their department
+            if user_role == 'manager':
+                from src.services.user_service import UserService
+                user_service = UserService(db)
+                manager = user_service.get_user_by_id(user_id)
+                dept_id = manager.department_id if manager else None
+                dept_name = manager.department.name if manager and manager.department else "Team"
+            else:
+                # Admin/superadmin can specify department
+                dept_id = department_id
+                if dept_id:
+                    from src.models.department import Department
+                    dept = db.query(Department).filter(Department.id == dept_id).first()
+                    dept_name = dept.name if dept else "Team"
+                else:
+                    dept_name = "All Departments"
+
+            ical_content = service.generate_team_calendar(dept_id, year, dept_name)
+            filename = f"team_calendar_{year}.ics"
+        else:  # 'my'
+            ical_content = service.generate_my_calendar(user_id, year)
+            filename = f"my_pto_calendar_{year}.ics"
+
+        return Response(
+            content=ical_content,
+            media_type="text/calendar",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    finally:
+        db.close()
+
+
 @ui.page('/health')
 def health_check():
     """Health check endpoint for monitoring and load balancers."""
