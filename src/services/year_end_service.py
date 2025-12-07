@@ -16,6 +16,7 @@ from src.models.user import User
 from src.models.pto_balance import PTOBalance
 from src.models.carryover_request import CarryoverRequest
 from src.models.market_holiday import MarketHoliday
+from src.models.year_end_status import YearEndStatus
 from src.services.balance_service import BalanceService
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,59 @@ class YearEndService:
     def __init__(self, db: Session):
         self.db = db
         self.balance_service = BalanceService(db)
+
+    def check_and_run_auto_processing(self) -> Optional[Dict]:
+        """
+        Check if year-end processing is needed for the current year and run if not done.
+
+        This should be called on app startup or user login to ensure automatic processing.
+
+        Returns:
+            Processing results if run, None if already processed or not needed
+        """
+        current_year = date.today().year
+
+        # Check if already processed for current year
+        status = self.db.query(YearEndStatus).filter(
+            YearEndStatus.year == current_year
+        ).first()
+
+        if status and status.processed:
+            logger.debug(f"Year-end processing already complete for {current_year}")
+            return None
+
+        # Run the processing
+        logger.info(f"Running automatic year-end processing for {current_year}")
+        results = self.process_year_transition(current_year)
+
+        # Record that processing is complete
+        if not status:
+            status = YearEndStatus(year=current_year)
+            self.db.add(status)
+
+        status.processed = True
+        status.processed_at = datetime.now()
+        status.balances_created = results['balances_created']
+        status.carryovers_applied = results['carryovers_applied']
+        status.holidays_created = results['holidays_created']
+
+        self.db.commit()
+        logger.info(f"Year-end processing for {current_year} recorded as complete")
+
+        return results
+
+    def is_year_processed(self, year: int) -> bool:
+        """Check if a year has been processed."""
+        status = self.db.query(YearEndStatus).filter(
+            YearEndStatus.year == year
+        ).first()
+        return status is not None and status.processed
+
+    def get_processing_record(self, year: int) -> Optional[YearEndStatus]:
+        """Get the processing record for a year."""
+        return self.db.query(YearEndStatus).filter(
+            YearEndStatus.year == year
+        ).first()
 
     def process_year_transition(self, new_year: int) -> Dict:
         """

@@ -14,6 +14,7 @@ from .carryover_request import CarryoverRequest
 from .audit_log import AuditLog
 from .password_reset import PasswordResetToken
 from .handbook_revision import HandbookRevision
+from .year_end_status import YearEndStatus
 
 # Make all models available when importing from this module
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     'AuditLog',
     'PasswordResetToken',
     'HandbookRevision',
+    'YearEndStatus',
 ]

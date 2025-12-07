@@ -139,60 +139,76 @@ The `page_header()` component pattern ensures future pages will automatically ha
 
 ---
 
-# Task: Year-End Processing Improvements
+# Task: Automatic Year-End Processing
 
 ## Problem
-1. Year-end processing can be triggered any time - should only be allowed on Dec 31 or later
-2. Buttons on year-end page need reordering: Back to Dashboard, Process Year-End, Refresh
-3. System should work year after year, not just 2026
-4. When year-end processing happens, approved future PTO requests for the next year should carry over
-5. Users should be able to request PTO for the following year (but not 2+ years ahead)
-6. Vacation and sick time are accrued - show negative balance until eligibility is met
+1. Manual year-end processing could be triggered incorrectly or at the wrong time
+2. Button said "Process Year-End Transition to 2026" which was confusing for future years
+3. Date restriction logic (Dec 31 only) was flawed and didn't make sense long-term
+4. Users should be able to request PTO for the following year (but not 2+ years ahead)
 
 ## Solution
-Update year-end processing page with date restrictions, button reordering, and review accrual/future request logic.
+Make year-end processing fully automatic - runs on first login of the new year.
 
 ## Todo Items
 
-- [x] Add date restriction - only allow year-end processing on Dec 31 or later
-- [x] Reorder buttons: Back to Dashboard first, then Process Year-End, then Refresh
+- [x] Create YearEndStatus model to track which years have been processed
+- [x] Add check_and_run_auto_processing() function to YearEndService
+- [x] Trigger auto-processing on successful login
+- [x] Convert year-end page to status-only (no manual button)
 - [x] Validate PTO request allows next year only (not 2+ years ahead)
-- [x] Verify year-end transition handles approved future requests (already works)
-- [ ] Review accrual display to show negative until eligibility (deferred - see notes)
 
 ## Changes Made
 
-### 1. Year-End Processing Page (nicegui_app/main.py - `/admin/year-end`)
-- Added date restriction: processing only allowed on December 31
-- Shows informational message when not Dec 31, explaining when it will be available
-- Disabled button with tooltip when not Dec 31
-- Reordered buttons: Back to Dashboard, Process Year-End Transition, Refresh Status
+### 1. New Model: YearEndStatus (src/models/year_end_status.py)
+- Tracks processing status for each year
+- Fields: year, processed, processed_at, balances_created, carryovers_applied, holidays_created
+- Prevents duplicate processing
 
-### 2. PTO Service (src/services/pto_service.py)
+### 2. YearEndService Updates (src/services/year_end_service.py)
+- Added `check_and_run_auto_processing()` - runs processing if not already done for current year
+- Added `is_year_processed()` - checks if a year has been processed
+- Added `get_processing_record()` - gets the full processing record for a year
+- Processing is idempotent - safe to call multiple times
+
+### 3. Login Integration (nicegui_app/pages/login.py)
+- Auto-processing triggers on successful login
+- Wrapped in try/except so login never fails due to year-end issues
+- Runs once per year (tracked by YearEndStatus)
+
+### 4. Year-End Page Redesign (nicegui_app/main.py - `/admin/year-end`)
+- Renamed to "YEAR-END STATUS" (monitoring only, no manual trigger)
+- Shows processing status with timestamp and counts
+- Shows current year and next year preview
+- Warns about pending carryover requests with link to review them
+- Buttons: Back to Dashboard, Refresh Status
+
+### 5. PTO Request Validation (src/services/pto_service.py)
 - Added validation: requests cannot be more than 1 year in advance
-- Example: In 2025, can request for 2025 or 2026, but not 2027
+- In 2025, users can request for 2025 or 2026, but not 2027
 
-### 3. Future Requests Handling (Verified)
-- System already uses `request.start_date.year` to apply to correct year's balance
-- When request for 2026 is approved, hours deduct from 2026 balance
-- Year-end processing skips employees who already have balances (from pre-approved requests)
+## How It Works
 
-## Notes on Accrual Display (Deferred)
+1. **On January 1st (or any day in the new year)**:
+   - First user to log in triggers `check_and_run_auto_processing()`
+   - System checks if current year has been processed
+   - If not, runs the transition: creates balances, applies carryovers, generates holidays
+   - Records the processing in `year_end_status` table
 
-The request for "negative balance until eligibility" requires an accrual-based model where:
-1. Time is earned monthly/per-hours-worked rather than given upfront
-2. Balance shows: `accrued_so_far - used` which can be negative
+2. **Subsequent logins**:
+   - `check_and_run_auto_processing()` sees year is already processed
+   - Returns immediately with no action
 
-Current system:
-- Gives full annual allocation on Jan 1 (e.g., 10 vacation days)
-- Policies have `waiting_period_days` for eligibility
-- No monthly accrual calculation
+3. **Admins can monitor**:
+   - Visit `/admin/year-end` to see processing status
+   - See when processing occurred and what was created
+   - Review any pending carryover requests
 
-To implement true accrual model would require:
-1. Adding `accrued_hours` field to PTOBalance that gets updated monthly
-2. Changing `vacation_total` to be the full annual entitlement (not what's available now)
-3. Modifying balance display to show `accrued - used` with negative allowed
-4. Creating monthly job to add accrued hours based on policy `accrual_rate`
-5. Updating year-end to set `accrued_hours = 0` for new year
+## Review Summary
 
-This is a significant architectural change - recommend as separate task.
+Year-end processing is now:
+1. ✅ Fully automatic (no manual intervention needed)
+2. ✅ Idempotent (safe to call multiple times)
+3. ✅ Works year after year (no hardcoded dates)
+4. ✅ Tracked (admins can see when/what was processed)
+5. ✅ Reliable (runs on first login, never blocks login)

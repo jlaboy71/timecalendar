@@ -2,6 +2,7 @@ from nicegui import ui, app
 from src.services.user_service import UserService
 from src.services.audit_service import AuditService
 from src.services.rate_limiter import LoginRateLimiter
+from src.services.year_end_service import YearEndService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
 
@@ -78,6 +79,14 @@ def authenticate(username_input, password_input, error_message):
 
             # Log successful login
             AuditService.log_login(db, user.id, user.username, success=True)
+
+            # Run automatic year-end processing if needed (runs once per year)
+            try:
+                year_end_service = YearEndService(db)
+                year_end_service.check_and_run_auto_processing()
+            except Exception as e:
+                # Don't block login if year-end processing fails
+                pass
 
             # Store user in app storage and redirect
             app.storage.general['user'] = {

@@ -2070,7 +2070,7 @@ def admin_handbook():
 
 @ui.page('/admin/year-end')
 def admin_year_end():
-    """Admin page for year-end processing."""
+    """Admin page for year-end processing status (automatic processing)."""
     if not require_auth():
         return
 
@@ -2089,22 +2089,20 @@ def admin_year_end():
         ui.navigate.to('/')
         return
 
-    today = datetime.now().date()
-    current_year = today.year
+    current_year = datetime.now().year
     next_year = current_year + 1
 
-    # Year-end processing is only allowed on Dec 31 or later (into new year before processing)
-    # This allows processing on last day of year or early January if delayed
-    is_year_end_allowed = today.month == 12 and today.day == 31
-
     with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
-        page_header(title='YEAR-END PROCESSING', show_back=True, back_url='/admin')
+        page_header(title='YEAR-END STATUS', show_back=True, back_url='/dashboard')
+
+        # Info card explaining automatic processing
+        with ui.card().classes('w-full p-4 mb-4 border-l-4 border-blue-500'):
+            ui.label('Automatic Year-End Processing').classes('font-semibold text-blue-600')
+            ui.label('Year-end processing runs automatically on the first login of each new year. '
+                     'This page shows the current status of balances, carryovers, and holidays.').classes('text-sm opacity-80')
 
         # Status cards container
         status_container = ui.column().classes('w-full gap-4')
-
-        # Store status for button logic
-        year_status = {'can_process': False, 'complete': False}
 
         def refresh_status():
             status_container.clear()
@@ -2115,15 +2113,38 @@ def admin_year_end():
                 # Current year status
                 current_status = service.get_year_end_status(current_year)
 
-                # Next year status
-                next_status = service.get_year_end_status(next_year)
-
-                # Update status for button logic
-                year_status['can_process'] = not next_status['balances_complete'] or next_status['holidays_created'] == 0
-                year_status['complete'] = next_status['balances_complete'] and next_status['holidays_created'] > 0
+                # Get processing record
+                processing_record = service.get_processing_record(current_year)
 
                 with status_container:
-                    # Current Year Card
+                    # Processing Status Card
+                    with ui.card().classes('w-full p-4'):
+                        ui.label(f'Year {current_year} Processing Status').classes('text-lg font-bold mb-2')
+
+                        if processing_record and processing_record.processed:
+                            with ui.row().classes('items-center gap-2 mb-2'):
+                                ui.icon('check_circle', color='green').classes('text-2xl')
+                                ui.label('Processing Complete').classes('text-green-600 font-semibold')
+
+                            ui.label(f"Processed: {processing_record.processed_at.strftime('%B %d, %Y at %I:%M %p')}").classes('text-sm opacity-70')
+
+                            with ui.row().classes('gap-6 mt-3'):
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(processing_record.balances_created)).classes('text-2xl font-bold text-blue-600')
+                                    ui.label('Balances Created').classes('text-xs opacity-60')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(processing_record.carryovers_applied)).classes('text-2xl font-bold text-purple-600')
+                                    ui.label('Carryovers Applied').classes('text-xs opacity-60')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(processing_record.holidays_created)).classes('text-2xl font-bold text-teal-600')
+                                    ui.label('Holidays Created').classes('text-xs opacity-60')
+                        else:
+                            with ui.row().classes('items-center gap-2 mb-2'):
+                                ui.icon('schedule', color='orange').classes('text-2xl')
+                                ui.label('Pending').classes('text-orange-600 font-semibold')
+                            ui.label('Year-end processing will run automatically on the first login of the new year.').classes('text-sm opacity-70')
+
+                    # Current Year Details Card
                     with ui.card().classes('w-full p-4'):
                         ui.label(f'Current Year: {current_year}').classes('text-lg font-bold mb-2')
                         with ui.row().classes('gap-8'):
@@ -2134,80 +2155,41 @@ def admin_year_end():
                                 ui.label(f"Pending Carryovers: {current_status['pending_carryovers']}")
                                 ui.label(f"Holidays: {current_status['holidays_created']}")
 
-                    # Next Year Card
+                    # Next Year Preview Card
+                    next_status = service.get_year_end_status(next_year)
+                    next_record = service.get_processing_record(next_year)
+
                     with ui.card().classes('w-full p-4'):
                         ui.label(f'Next Year: {next_year}').classes('text-lg font-bold mb-2')
+
+                        if next_record and next_record.processed:
+                            ui.badge('Already Processed', color='green').classes('mb-2')
+                        else:
+                            ui.badge('Will process on first login', color='blue').props('outline').classes('mb-2')
+
                         with ui.row().classes('gap-8'):
                             with ui.column():
-                                ui.label(f"Balances Created: {next_status['balances_created']} / {next_status['active_users']}")
-                                status_text = "Complete" if next_status['balances_complete'] else "Incomplete"
-                                status_color = "green" if next_status['balances_complete'] else "orange"
-                                ui.badge(status_text, color=status_color)
+                                ui.label(f"Balances: {next_status['balances_created']} / {next_status['active_users']}")
                             with ui.column():
-                                ui.label(f"Carryovers Applied: {next_status['approved_carryovers']}")
                                 ui.label(f"Holidays: {next_status['holidays_created']}")
 
-                    # Warnings
+                    # Warnings about pending carryovers
                     if current_status['pending_carryovers'] > 0:
                         with ui.card().classes('w-full p-4 border-l-4 border-amber-500'):
                             ui.label(f"⚠️ {current_status['pending_carryovers']} carryover requests pending").classes('font-semibold text-amber-600')
-                            ui.label("These should be approved or denied before year-end processing.").classes('text-sm')
-
-                    # Date restriction warning
-                    if not is_year_end_allowed and year_status['can_process']:
-                        with ui.card().classes('w-full p-4 border-l-4 border-blue-500'):
-                            ui.label(f"ℹ️ Year-end processing will be available on December 31, {current_year}").classes('font-semibold text-blue-600')
-                            ui.label("Processing can only be triggered on the last day of the year.").classes('text-sm')
-
-                    # Status message if complete
-                    if year_status['complete']:
-                        with ui.row().classes('w-full justify-center mt-4'):
-                            ui.label(f"✓ Year-end processing complete for {next_year}").classes('text-green-600 font-semibold')
+                            ui.label("Review these before year-end to ensure they are applied correctly.").classes('text-sm')
+                            ui.button('Review Carryover Requests', icon='approval',
+                                      on_click=lambda: ui.navigate.to('/manager/carryover')).props('flat dense color=amber').classes('mt-2')
 
             finally:
                 db.close()
 
-        def process_year_end():
-            if not is_year_end_allowed:
-                ui.notify('Year-end processing is only available on December 31', type='warning')
-                return
-
-            process_db = next(get_db())
-            try:
-                process_service = YearEndService(process_db)
-                results = process_service.process_year_transition(next_year)
-
-                if results['errors']:
-                    ui.notify(f"Completed with {len(results['errors'])} errors", type='warning')
-                else:
-                    ui.notify(
-                        f"Success! Created {results['balances_created']} balances, "
-                        f"applied {results['carryovers_applied']} carryovers, "
-                        f"generated {results['holidays_created']} holidays",
-                        type='positive'
-                    )
-                refresh_status()
-            finally:
-                process_db.close()
-
         # Initial load
         refresh_status()
 
-        # Action buttons - reordered: Back to Dashboard, Process Year-End, Refresh
+        # Action buttons
         with ui.row().classes('w-full gap-4 mt-4 justify-center'):
             ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'), icon='dashboard')
-
-            # Process button - disabled if not Dec 31 or already complete
-            process_btn = ui.button(
-                f'Process Year-End Transition to {next_year}',
-                on_click=process_year_end,
-                color='primary',
-                icon='play_arrow'
-            )
-            if not is_year_end_allowed:
-                process_btn.props('disable')
-                process_btn.tooltip(f'Available on December 31, {current_year}')
-
             ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
 
 
