@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import get_db
 from src.config import config
+from src.services.audit_service import AuditService
 from nicegui_app.pages.login import login_page
 from nicegui_app.pages.dashboard import dashboard_page
 from nicegui_app.pages.request_form import request_form_page
@@ -438,8 +439,14 @@ def manager_request_detail(request_id: int):
                 def approve():
                     db = next(get_db())
                     try:
-                        user_id = app.storage.general.get('user').get('id')
+                        current_user = app.storage.general.get('user')
+                        user_id = current_user.get('id')
+                        approver_name = f"{current_user.get('first_name')} {current_user.get('last_name')}"
                         if PTOService.approve_request(db, request_id, user_id):
+                            # Log the approval
+                            AuditService.log_pto_approve(
+                                db, user_id, approver_name, request_id, detail['employee_name']
+                            )
                             ui.notify('Request approved!', type='positive')
                             ui.navigate.to('/dashboard')
                         else:
@@ -451,8 +458,14 @@ def manager_request_detail(request_id: int):
                     db = next(get_db())
                     try:
                         reason = denial_input.value or 'No reason provided'
-                        user_id = app.storage.general.get('user').get('id')
+                        current_user = app.storage.general.get('user')
+                        user_id = current_user.get('id')
+                        approver_name = f"{current_user.get('first_name')} {current_user.get('last_name')}"
                         if PTOService.deny_request(db, request_id, user_id, reason):
+                            # Log the denial
+                            AuditService.log_pto_deny(
+                                db, user_id, approver_name, request_id, detail['employee_name'], reason
+                            )
                             ui.notify('Request denied', type='warning')
                             ui.navigate.to('/dashboard')
                         else:
@@ -1118,6 +1131,14 @@ def admin_employees_add():
                     user_service = UserService(db)
                     new_user = user_service.create_user(user_data)
 
+                    # Log user creation
+                    current_user = app.storage.general.get('user')
+                    AuditService.log_user_create(
+                        db, current_user.get('id'),
+                        f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                        new_user.id, new_user.username
+                    )
+
                     ui.notify(f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', type='positive')
                     ui.navigate.to('/admin/employees')
 
@@ -1345,6 +1366,13 @@ def admin_employees_edit(user_id: int):
                         updated_user = user_service.update_user(user_id, user_update)
 
                         if updated_user:
+                            # Log user update
+                            current_user = app.storage.general.get('user')
+                            AuditService.log_user_update(
+                                db, current_user.get('id'),
+                                f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                user_id, {'fields_updated': list(update_data.keys())}
+                            )
                             ui.notify(f'Employee updated successfully', type='positive')
                             ui.navigate.to('/admin/employees')
                         else:
@@ -1375,6 +1403,13 @@ def admin_employees_edit(user_id: int):
                                         try:
                                             user_service = UserService(db)
                                             if user_service.deactivate_user(user_id):
+                                                # Log user deactivation
+                                                current_user = app.storage.general.get('user')
+                                                AuditService.log_user_deactivate(
+                                                    db, current_user.get('id'),
+                                                    f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                    user_id, user.username
+                                                )
                                                 ui.notify('Employee deactivated', type='positive')
                                                 dialog.close()
                                                 ui.navigate.to('/admin/employees')
@@ -1400,6 +1435,15 @@ def admin_employees_edit(user_id: int):
                                     try:
                                         user_service = UserService(db)
                                         if user_service.delete_user(user_id):
+                                            # Log user deletion
+                                            current_user = app.storage.general.get('user')
+                                            AuditService.log(
+                                                db, action='user_delete',
+                                                user_id=current_user.get('id'),
+                                                username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                entity_type='user', entity_id=user_id,
+                                                details={'deleted_user': user.username}
+                                            )
                                             ui.notify('Employee deleted', type='positive')
                                             dialog.close()
                                             ui.navigate.to('/admin/employees')

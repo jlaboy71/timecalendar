@@ -3,10 +3,11 @@ from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
 from src.services.balance_service import BalanceService
 from src.services.user_service import UserService
+from src.services.audit_service import AuditService
 from src.database import get_db
 from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
 
@@ -497,12 +498,24 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         pto_request = pto_service.create_request(request_data)
 
+        # Log the PTO request submission
+        AuditService.log_pto_request(
+            db, user_id, employee.username, pto_request.id,
+            {'pto_type': pto_type, 'start_date': str(start_date), 'end_date': str(end_date), 'total_days': float(total_days)}
+        )
+
         # Auto-approve for managers, admins, and superadmins
         if employee.role in ['manager', 'admin', 'superadmin']:
             pto_request.status = 'approved'
             pto_request.approved_by = user_id
             pto_request.approved_at = datetime.now()
             db.commit()
+
+            # Log the auto-approval
+            AuditService.log_pto_approve(
+                db, user_id, f"{employee.first_name} {employee.last_name}",
+                pto_request.id, f"{employee.first_name} {employee.last_name} (self)"
+            )
 
             # Move from pending to used for vacation type
             if pto_type.lower() == 'vacation':
