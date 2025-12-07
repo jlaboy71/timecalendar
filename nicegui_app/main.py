@@ -698,10 +698,27 @@ def admin_departments():
     dept_dropdown_options = {0: '-- Select Department --'}
     dept_dropdown_options.update({d['id']: f"{d['name']} ({d['employee_count']} employees)" for d in dept_data})
 
+    # Get user info for greeting
+    current_user = app.storage.general.get('user', {})
+    first_name = current_user.get('first_name', '')
+    last_name = current_user.get('last_name', '')
+
+    # Get time-based greeting
+    from datetime import datetime
+    hour = datetime.now().hour
+    if hour < 12:
+        greeting = 'Good Morning'
+    elif hour < 17:
+        greeting = 'Good Afternoon'
+    else:
+        greeting = 'Good Evening'
+
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+        # Header with logo and greeting
         with ui.row().classes('w-full justify-between items-start mb-6'):
             with ui.column().classes('gap-2'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+                ui.label(f'{greeting}, {first_name} {last_name}').classes('text-sm opacity-70')
                 with ui.row().classes('items-center gap-2'):
                     ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to('/admin')).props('flat round')
                     ui.label('DEPARTMENT MANAGEMENT').classes('text-xl font-bold').style('color: #5a6a72;')
@@ -800,15 +817,18 @@ def admin_departments():
                         ]
 
                         def on_row_click(e):
-                            dept_select.value = e.args['id']
-                            on_dept_change(e.args['id'])
+                            # e.args is [evt, row, index] - row is the second element
+                            row_data = e.args[1] if len(e.args) > 1 else None
+                            if row_data and 'id' in row_data:
+                                dept_select.value = row_data['id']
+                                on_dept_change(row_data['id'])
 
                         ui.table(
                             columns=columns,
                             rows=rows,
                             row_key='id',
                             pagination={'rowsPerPage': 10}
-                        ).classes('w-full').on('row-click', on_row_click).props('dense')
+                        ).classes('w-full cursor-pointer').on('row-click', on_row_click).props('dense')
 
                         ui.label('Click a row to view department details').classes('text-xs opacity-50 mt-2')
                 else:
@@ -935,6 +955,9 @@ def admin_departments():
 
         # Initial render
         render_department_view()
+
+        # Back to Dashboard button
+        ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
 @ui.page('/admin/employees')
