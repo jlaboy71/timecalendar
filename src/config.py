@@ -14,14 +14,22 @@ class Config:
         """Initialize configuration by loading environment variables."""
         # Load environment variables from .env file (override=True ensures .env takes precedence)
         load_dotenv(override=True)
-        
+
         # Load required environment variables
         self.DATABASE_URL = os.getenv('DATABASE_URL')
         self.SECRET_KEY = os.getenv('SECRET_KEY')
         self.ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
-        
+
+        # Debug mode - only True in development
+        self.DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
+
         # Validate required variables are set
         self._validate_config()
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production environment."""
+        return self.ENVIRONMENT.lower() == 'production'
     
     def _validate_config(self):
         """

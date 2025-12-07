@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import get_db
+from src.config import config
 from nicegui_app.pages.login import login_page
 from nicegui_app.pages.dashboard import dashboard_page
 from nicegui_app.pages.request_form import request_form_page
@@ -1415,4 +1416,4 @@ def admin_employees_edit(user_id: int):
         db.close()
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(port=8080, host='0.0.0.0', storage_secret='your-secret-key-change-in-production')
+    ui.run(port=8080, host='0.0.0.0', storage_secret=config.SECRET_KEY)

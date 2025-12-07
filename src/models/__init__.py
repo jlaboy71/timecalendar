@@ -11,6 +11,7 @@ from .leave_type import LeaveType
 from .leave_policy import LeavePolicy
 from .vacation_accrual_tier import VacationAccrualTier
 from .carryover_request import CarryoverRequest
+from .audit_log import AuditLog
 
 # Make all models available when importing from this module
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     'LeavePolicy',
     'VacationAccrualTier',
     'CarryoverRequest',
+    'AuditLog',
 ]

@@ -3,6 +3,8 @@ from nicegui import ui, app
 from datetime import datetime
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
+from src.database import get_db
+from src.services.audit_service import AuditService
 
 
 def get_time_based_greeting():
@@ -63,4 +65,20 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
                     dark_mode.disable()
 
             ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round')
-            ui.button('Logout', on_click=lambda: [app.storage.general.clear(), ui.navigate.to('/')]).props('flat color=red')
+
+            def logout():
+                """Clear user session, log logout, and redirect to login."""
+                current_user = app.storage.general.get('user')
+                if current_user:
+                    try:
+                        db = next(get_db())
+                        AuditService.log_logout(db, current_user.get('id'), current_user.get('username'))
+                        db.close()
+                    except Exception:
+                        pass  # Don't block logout if audit logging fails
+
+                app.storage.general.pop('user', None)
+                app.storage.general.pop('dark_mode', None)
+                ui.navigate.to('/')
+
+            ui.button('Logout', on_click=logout).props('flat color=red')
