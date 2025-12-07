@@ -101,6 +101,14 @@ def reports():
         return
     reports_page()
 
+@ui.page('/analytics')
+def analytics():
+    """Analytics dashboard for managers and admins."""
+    if not require_auth():
+        return
+    from nicegui_app.pages.analytics import analytics_page
+    analytics_page()
+
 @ui.page('/requests')
 def requests():
     """User's PTO request history page with filtering and cancel functionality."""

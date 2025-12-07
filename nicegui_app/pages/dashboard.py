@@ -346,6 +346,7 @@ def dashboard_page():
                                 ui.button('Carryover Approvals', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Handbook AI', icon='smart_toy', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
@@ -502,6 +503,8 @@ def dashboard_page():
                                   on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
                         ui.button('Reports', icon='assessment',
                                   on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                        ui.button('Analytics', icon='insights',
+                                  on_click=lambda: ui.navigate.to('/analytics')).props('outline color=secondary').classes('flex-1 min-w-fit')
 
                     ui.separator().classes('my-3')
 
