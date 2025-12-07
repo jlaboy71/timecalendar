@@ -3114,7 +3114,28 @@ SMTP_FROM=noreply@company.com
                             refresh_logs()
                             refresh_log_cards()
 
-                        with ui.row().classes('gap-2'):
+                        # Auto-refresh state
+                        auto_refresh_state = {'enabled': False, 'timer': None}
+
+                        def toggle_auto_refresh():
+                            auto_refresh_state['enabled'] = not auto_refresh_state['enabled']
+                            if auto_refresh_state['enabled']:
+                                auto_refresh_btn.props('color=green')
+                                auto_refresh_label.set_text('Live')
+                                # Start auto-refresh timer
+                                auto_refresh_state['timer'] = ui.timer(2.0, refresh_all)
+                            else:
+                                auto_refresh_btn.props('color=gray')
+                                auto_refresh_label.set_text('Auto')
+                                # Stop timer
+                                if auto_refresh_state['timer']:
+                                    auto_refresh_state['timer'].cancel()
+                                    auto_refresh_state['timer'] = None
+
+                        with ui.row().classes('gap-2 items-center'):
+                            with ui.row().classes('items-center gap-1'):
+                                auto_refresh_btn = ui.button(icon='sync', on_click=toggle_auto_refresh).props('flat dense round color=gray')
+                                auto_refresh_label = ui.label('Auto').classes('text-xs')
                             ui.button('Refresh', icon='refresh', on_click=refresh_all).props('flat dense')
 
                     # Log viewer (tall to fill the viewing area)

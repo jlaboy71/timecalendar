@@ -54,9 +54,30 @@ def setup_logging():
     error_handler.setFormatter(logging.Formatter(log_format))
     root_logger.addHandler(error_handler)
 
-    # Set specific loggers
-    logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
-    logging.getLogger('nicegui').setLevel(logging.WARNING)
+    # Suppress noisy loggers from console output
+    # SQLAlchemy engine logs
+    sqlalchemy_logger = logging.getLogger('sqlalchemy.engine')
+    sqlalchemy_logger.setLevel(logging.WARNING)
+    sqlalchemy_logger.propagate = False
+    sqlalchemy_logger.addHandler(file_handler)  # Still log to file
+
+    # Watchfiles logs (hot reload)
+    watchfiles_logger = logging.getLogger('watchfiles')
+    watchfiles_logger.setLevel(logging.WARNING)
+    watchfiles_logger.propagate = False
+    watchfiles_logger.addHandler(file_handler)
+
+    # NiceGUI logs
+    nicegui_logger = logging.getLogger('nicegui')
+    nicegui_logger.setLevel(logging.WARNING)
+    nicegui_logger.propagate = False
+    nicegui_logger.addHandler(file_handler)
+
+    # Uvicorn access logs
+    uvicorn_access = logging.getLogger('uvicorn.access')
+    uvicorn_access.setLevel(logging.WARNING)
+    uvicorn_access.propagate = False
+    uvicorn_access.addHandler(file_handler)
 
     return root_logger
 
