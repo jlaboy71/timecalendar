@@ -184,6 +184,7 @@ _To be filled in as work progresses_
 - [x] Fixed N+1 query issue in reports.py team balance (added joinedload for department)
 - [x] Fixed N+1 query issue in manager_carryover.py (added joinedload for department)
 - [x] Added composite indexes: ix_pto_requests_user_status, ix_pto_requests_status_dates, ix_audit_logs_action_created
+- [x] Comprehensive Help Documentation rewrite (8 chapters, 28 articles covering all system features)
 
 ### Notes
 - Skeleton loaders created but require async restructuring to fully integrate
