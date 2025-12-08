@@ -5,16 +5,13 @@ from src.services.analytics_service import AnalyticsService
 from src.services.department_service import DepartmentService
 from datetime import date, timedelta
 from nicegui_app.components.header import page_header
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def analytics_page():
     """Analytics dashboard with PTO trends and insights."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # Check if user is logged in and has access
     user = app.storage.general.get('user')

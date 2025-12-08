@@ -5,16 +5,13 @@ from src.services.rate_limiter import LoginRateLimiter
 from src.services.year_end_service import YearEndService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def login_page(timeout: str = None):
     """Create a centered login page with Material Design styling."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
         with ui.card().classes('w-96 p-8'):

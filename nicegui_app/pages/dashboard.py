@@ -10,6 +10,7 @@ from datetime import datetime, date
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def format_days(hours: float) -> str:
@@ -32,6 +33,8 @@ def format_hours_and_days(hours: float) -> str:
 
 def dashboard_page():
     """Employee dashboard page with PTO balances, quick actions, and recent requests."""
+
+    apply_dark_mode()
 
     # Check if user is logged in
     if not app.storage.general.get('user'):

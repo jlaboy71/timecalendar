@@ -11,16 +11,13 @@ from src.models.pto_request import PTORequest
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def request_form_page():
     """PTO request form page with improved UX and intuitive date selection."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # Check if user is logged in
     user = app.storage.general.get('user')

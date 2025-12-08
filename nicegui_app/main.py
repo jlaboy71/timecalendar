@@ -24,6 +24,7 @@ from nicegui_app.pages.handbook import handbook_page
 from nicegui_app.pages.reports import reports_page
 from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.theme import apply_dark_mode
 from src.services.session_manager import SessionManager, require_auth
 from src.services.email_service import email_service
 
@@ -117,11 +118,7 @@ def requests():
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user = app.storage.general.get('user')
     user_role = user.get('role', 'employee')
@@ -383,11 +380,7 @@ def manager_request_detail(request_id: int):
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     current_user = app.storage.general.get('user', {})
     user_role = current_user.get('role')
@@ -568,11 +561,7 @@ def admin_panel():
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -649,11 +638,7 @@ def admin_departments():
     from src.services.user_service import UserService
     from src.models.user import User
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -957,11 +942,7 @@ def admin_approvals():
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     current_user = app.storage.general.get('user', {})
     user_role = current_user.get('role')
@@ -1091,11 +1072,7 @@ def admin_employees():
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -1298,11 +1275,7 @@ def admin_employees_add():
 
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -1505,11 +1478,7 @@ def admin_employees_edit(user_id: int):
     import json
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -1822,11 +1791,7 @@ def admin_handbook():
     from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -2311,11 +2276,7 @@ def admin_year_end():
     from src.services.year_end_service import YearEndService
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
@@ -2435,11 +2396,7 @@ def help_page():
     from src.services.help_service import HelpService
     from nicegui_app.components.header import page_header
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # State for current view
     current_view = {'chapter': None, 'article': None}
@@ -2578,11 +2535,7 @@ def admin_system():
     from pathlib import Path
     from src.config import config
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role != 'superadmin':

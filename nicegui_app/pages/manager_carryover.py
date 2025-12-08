@@ -10,16 +10,13 @@ from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
 from nicegui_app.components.header import page_header
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def manager_carryover_page():
     """Manager page for reviewing and approving/denying carryover requests."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # Check if user is logged in and has manager/admin role
     user = app.storage.general.get('user')

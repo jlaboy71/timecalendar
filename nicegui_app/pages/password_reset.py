@@ -6,16 +6,13 @@ from src.services.password_reset_service import PasswordResetService
 from src.services.audit_service import AuditService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def password_reset_request_page():
     """Page for requesting a password reset (enter username/email)."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
         with ui.card().classes('w-96 p-8'):
@@ -92,11 +89,7 @@ def password_reset_request_page():
 def password_reset_page(token: str):
     """Page for resetting password with a valid token."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
         with ui.card().classes('w-96 p-8'):

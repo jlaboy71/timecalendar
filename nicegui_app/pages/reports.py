@@ -11,16 +11,13 @@ from datetime import date, datetime
 from io import StringIO
 import csv
 from nicegui_app.components.header import page_header
+from nicegui_app.components.theme import apply_dark_mode
 
 
 def reports_page():
     """Reports page with personal and team reports."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # Check if user is logged in
     user = app.storage.general.get('user')

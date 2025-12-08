@@ -5,6 +5,7 @@ Uses database content (if available) for both display and AI search.
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
 from nicegui_app.components.header import page_header
+from nicegui_app.components.theme import apply_dark_mode
 from src.database import get_db
 
 
@@ -35,11 +36,7 @@ def get_active_handbook_content():
 def handbook_page():
     """Employee handbook page - AI chat for managers/admins, styled viewer for employees."""
 
-    # Apply dark mode if previously set
-    dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
-    if is_dark:
-        dark_mode.enable()
+    apply_dark_mode()
 
     # Check if user is logged in
     if not app.storage.general.get('user'):
