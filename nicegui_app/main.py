@@ -1231,6 +1231,12 @@ def admin_employees():
         'role': None,
     }
 
+    # Pagination state
+    pagination_state = {
+        'page': 1,
+        'per_page': 10,
+    }
+
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
         page_header(title='EMPLOYEE MANAGEMENT', show_back=False)
 
@@ -1299,7 +1305,7 @@ def admin_employees():
             )
 
         def filter_and_render():
-            """Filter rows based on current filter state and re-render table."""
+            """Filter rows based on current filter state and re-render table with pagination."""
             table_container.clear()
 
             # If no filters applied, show prompt to search
@@ -1332,31 +1338,89 @@ def admin_employees():
             elif filter_state['status'] == 'inactive':
                 filtered_rows = [r for r in filtered_rows if not r['is_active']]
 
-            # Update results count
-            results_label.text = f'Showing {len(filtered_rows)} of {len(all_rows)} employees'
+            # Calculate pagination
+            total_rows = len(filtered_rows)
+            per_page = pagination_state['per_page']
+            total_pages = max(1, (total_rows + per_page - 1) // per_page)
+
+            # Ensure current page is valid
+            if pagination_state['page'] > total_pages:
+                pagination_state['page'] = total_pages
+            if pagination_state['page'] < 1:
+                pagination_state['page'] = 1
+
+            # Get current page of rows
+            start_idx = (pagination_state['page'] - 1) * per_page
+            end_idx = start_idx + per_page
+            page_rows = filtered_rows[start_idx:end_idx]
+
+            # Update results count with pagination info
+            if total_rows > 0:
+                results_label.text = f'Showing {start_idx + 1}-{min(end_idx, total_rows)} of {total_rows} employees'
+            else:
+                results_label.text = f'0 employees found'
 
             with table_container:
                 if not filtered_rows:
                     ui.label('No employees match your filters').classes('text-gray-500 text-center py-8')
                 else:
-                    table = ui.table(columns=columns, rows=filtered_rows, row_key='id').classes('w-full')
+                    # Table with current page rows
+                    table = ui.table(columns=columns, rows=page_rows, row_key='id').classes('w-full')
                     table.on('row-click', lambda e: ui.navigate.to(f'/admin/employees/edit/{e.args[1]["id"]}'))
 
-        # Wire up filter handlers - use widget.value instead of event.value
+                    # Pagination controls (only show if more than one page)
+                    if total_pages > 1:
+                        with ui.row().classes('w-full justify-between items-center mt-4'):
+                            # Per page selector
+                            with ui.row().classes('items-center gap-2'):
+                                ui.label('Show:').classes('text-sm')
+
+                                def on_per_page_change(e):
+                                    pagination_state['per_page'] = e.value
+                                    pagination_state['page'] = 1  # Reset to first page
+                                    filter_and_render()
+
+                                ui.select(
+                                    {10: '10', 25: '25', 50: '50', 100: '100'},
+                                    value=per_page,
+                                    on_change=on_per_page_change
+                                ).props('dense outlined').classes('w-20')
+                                ui.label('per page').classes('text-sm')
+
+                            # Page navigation
+                            with ui.row().classes('items-center gap-1'):
+                                def go_to_page(page_num):
+                                    pagination_state['page'] = page_num
+                                    filter_and_render()
+
+                                # Previous button
+                                ui.button(icon='chevron_left', on_click=lambda: go_to_page(pagination_state['page'] - 1)).props('flat dense').set_enabled(pagination_state['page'] > 1)
+
+                                # Page info
+                                ui.label(f'Page {pagination_state["page"]} of {total_pages}').classes('text-sm mx-2')
+
+                                # Next button
+                                ui.button(icon='chevron_right', on_click=lambda: go_to_page(pagination_state['page'] + 1)).props('flat dense').set_enabled(pagination_state['page'] < total_pages)
+
+        # Wire up filter handlers - reset to page 1 when filters change
         def on_search_change(e):
             filter_state['search'] = search_input.value or ''
+            pagination_state['page'] = 1
             filter_and_render()
 
         def on_dept_change(e):
             filter_state['department_id'] = dept_select.value
+            pagination_state['page'] = 1
             filter_and_render()
 
         def on_role_change(e):
             filter_state['role'] = role_select.value
+            pagination_state['page'] = 1
             filter_and_render()
 
         def on_status_change(e):
             filter_state['status'] = status_select.value
+            pagination_state['page'] = 1
             filter_and_render()
 
         search_input.on('update:model-value', on_search_change)
