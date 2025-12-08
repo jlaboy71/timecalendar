@@ -871,24 +871,50 @@ def reports_page():
             ui.notify("PDF: Use your browser's 'Save as PDF' option in the print dialog", type='info')
 
         def show_email_dialog():
-            """Show dialog to email the report."""
-            with ui.dialog() as dialog, ui.card().classes('p-6 min-w-96'):
+            """Show dialog to email the report with format selection."""
+            report_name = filter_state["report_type"].replace("_", " ").title()
+
+            with ui.dialog() as dialog, ui.card().classes('p-6').style('min-width: 450px;'):
                 ui.label('Email Report').classes('text-xl font-semibold mb-4')
 
                 email_input = ui.input(
-                    label='Recipient Email',
                     placeholder='email@example.com'
-                ).classes('w-full mb-4')
+                ).classes('w-full mb-4').props('label="Recipient Email"')
 
                 subject_input = ui.input(
-                    label='Subject',
-                    value=f'PTO Report - {filter_state["report_type"].replace("_", " ").title()} ({filter_state["year"]})'
+                    value=f'PTO Report - {report_name} ({filter_state["year"]})'
+                ).classes('w-full mb-4').props('label="Subject"')
+
+                # Format selection
+                ui.label('Attachment Format').classes('text-sm text-gray-600 mb-1')
+                format_select = ui.select(
+                    options=['PDF (Print Format)', 'CSV (Data Export)', 'HTML (Web Format)'],
+                    value='PDF (Print Format)'
                 ).classes('w-full mb-4')
 
                 message_input = ui.textarea(
-                    label='Message (optional)',
                     placeholder='Add a personal message...'
-                ).classes('w-full mb-4')
+                ).classes('w-full mb-4').props('label="Message (optional)"')
+
+                # Attachment preview section
+                with ui.card().classes('w-full p-3 bg-gray-100 dark:bg-gray-800 mb-4'):
+                    ui.label('Attachment Preview').classes('text-sm font-semibold mb-2')
+                    attachment_preview = ui.row().classes('items-center gap-2')
+                    with attachment_preview:
+                        ui.icon('attach_file', color='primary')
+                        attachment_name = ui.label(f'{report_name.replace(" ", "_")}_{filter_state["year"]}.pdf').classes('text-sm')
+
+                def update_attachment_name():
+                    fmt = format_select.value
+                    base_name = f'{report_name.replace(" ", "_")}_{filter_state["year"]}'
+                    if 'PDF' in fmt:
+                        attachment_name.set_text(f'{base_name}.pdf')
+                    elif 'CSV' in fmt:
+                        attachment_name.set_text(f'{base_name}.csv')
+                    else:
+                        attachment_name.set_text(f'{base_name}.html')
+
+                format_select.on('update:model-value', lambda: update_attachment_name())
 
                 async def send_email():
                     if not email_input.value or '@' not in email_input.value:
@@ -898,14 +924,39 @@ def reports_page():
                     try:
                         from src.services.email_service import email_service
 
+                        fmt = format_select.value
                         html_content = get_report_html()
+                        base_name = f'{report_name.replace(" ", "_")}_{filter_state["year"]}'
 
-                        # Try to send email
+                        # Generate attachment based on format
+                        attachment_data = None
+                        attachment_name = None
+                        attachment_type = 'html'
+
+                        if 'CSV' in fmt:
+                            # Generate CSV content
+                            csv_content = generate_csv_for_email()
+                            if csv_content:
+                                attachment_data = csv_content.encode('utf-8')
+                                attachment_name = f'{base_name}.csv'
+                                attachment_type = 'csv'
+                        elif 'HTML' in fmt:
+                            attachment_data = html_content.encode('utf-8')
+                            attachment_name = f'{base_name}.html'
+                            attachment_type = 'html'
+                        else:  # PDF - send HTML for now with note
+                            attachment_data = html_content.encode('utf-8')
+                            attachment_name = f'{base_name}.html'
+                            attachment_type = 'html'
+
                         success = email_service.send_report_email(
                             to_email=email_input.value,
                             subject=subject_input.value,
                             html_content=html_content,
-                            message=message_input.value
+                            message=message_input.value,
+                            attachment_data=attachment_data,
+                            attachment_name=attachment_name,
+                            attachment_type=attachment_type
                         )
 
                         if success:
@@ -916,6 +967,68 @@ def reports_page():
 
                     except Exception as e:
                         ui.notify(f'Error sending email: {str(e)}', type='negative')
+
+                def generate_csv_for_email() -> str:
+                    """Generate CSV content for the current report."""
+                    db = next(get_db())
+                    try:
+                        report_type = filter_state['report_type']
+                        year = filter_state['year']
+                        output = StringIO()
+                        writer = csv.writer(output)
+
+                        if report_type == 'my_balance':
+                            user = db.query(User).filter(User.id == user_id).first()
+                            balance = db.query(PTOBalance).filter(
+                                PTOBalance.user_id == user_id,
+                                PTOBalance.year == year
+                            ).first()
+
+                            writer.writerow(['Leave Type', 'Total (Hours)', 'Used (Hours)', 'Available (Hours)'])
+                            if balance:
+                                writer.writerow(['Vacation', balance.vacation_total, balance.vacation_used,
+                                               balance.vacation_total - balance.vacation_used])
+                                writer.writerow(['Sick', balance.sick_total, balance.sick_used,
+                                               balance.sick_total - balance.sick_used])
+                                writer.writerow(['Personal', balance.personal_total, balance.personal_used,
+                                               balance.personal_total - balance.personal_used])
+
+                        elif report_type == 'my_history':
+                            requests = db.query(PTORequest).filter(
+                                PTORequest.user_id == user_id
+                            ).order_by(PTORequest.start_date.desc()).all()
+
+                            writer.writerow(['Type', 'Start Date', 'End Date', 'Days', 'Status', 'Notes'])
+                            for req in requests:
+                                writer.writerow([req.pto_type, req.start_date, req.end_date,
+                                               req.total_days, req.status, req.notes or ''])
+
+                        elif report_type == 'team_balance':
+                            query = db.query(User, PTOBalance).outerjoin(
+                                PTOBalance,
+                                (PTOBalance.user_id == User.id) & (PTOBalance.year == year)
+                            ).filter(User.is_active == True)
+
+                            if filter_state.get('department_id'):
+                                query = query.filter(User.department_id == filter_state['department_id'])
+
+                            results = query.order_by(User.last_name).all()
+
+                            writer.writerow(['Employee', 'Vac Total', 'Vac Used', 'Vac Avail',
+                                           'Sick Total', 'Sick Used', 'Pers Total', 'Pers Used'])
+                            for user, balance in results:
+                                if balance:
+                                    writer.writerow([
+                                        f'{user.first_name} {user.last_name}',
+                                        balance.vacation_total, balance.vacation_used,
+                                        balance.vacation_total - balance.vacation_used,
+                                        balance.sick_total, balance.sick_used,
+                                        balance.personal_total, balance.personal_used
+                                    ])
+
+                        return output.getvalue()
+                    finally:
+                        db.close()
 
                 with ui.row().classes('w-full justify-end gap-2'):
                     ui.button('Cancel', on_click=dialog.close).props('flat')

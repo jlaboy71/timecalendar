@@ -228,44 +228,110 @@ class EmailService:
         to_email: str,
         subject: str,
         html_content: str,
-        message: Optional[str] = None
+        message: Optional[str] = None,
+        attachment_data: Optional[bytes] = None,
+        attachment_name: Optional[str] = None,
+        attachment_type: str = 'html'
     ) -> bool:
         """
-        Send a formatted report via email.
+        Send a formatted report via email with optional attachment.
 
         Args:
             to_email: Recipient email address
             subject: Email subject
-            html_content: HTML report content
+            html_content: HTML report content (used in body if no attachment)
             message: Optional personal message to include
+            attachment_data: Raw bytes of attachment file
+            attachment_name: Filename for attachment
+            attachment_type: Type of attachment ('html', 'csv', 'pdf')
 
         Returns:
             True if sent successfully, False otherwise
         """
-        message_html = ""
-        if message:
-            message_html = f"""
-            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                <p style="margin: 0; color: #666;"><em>{message}</em></p>
-            </div>
+        if not self.is_configured():
+            return False
+
+        try:
+            msg = MIMEMultipart('mixed')
+            msg['Subject'] = subject
+            msg['From'] = self.from_email
+            msg['To'] = to_email
+
+            # Build email body
+            message_html = ""
+            if message:
+                message_html = f"""
+                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <p style="margin: 0; color: #666;"><em>{message}</em></p>
+                </div>
+                """
+
+            body_html = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+                <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0;">TJM Time Calendar Report</h1>
+                </div>
+                <div style="padding: 20px;">
+                    {message_html}
+                    <p>Please find the attached report.</p>
+                </div>
+            </body>
+            </html>
             """
 
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-            <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">TJM Time Calendar Report</h1>
-            </div>
-            <div style="padding: 20px;">
-                {message_html}
-                <p>Please find the attached report below:</p>
-                <hr style="border: 1px solid #ddd; margin: 20px 0;">
-                {html_content}
-            </div>
-        </body>
-        </html>
-        """
-        return self._send_email(to_email, subject, html)
+            # Attach body
+            msg.attach(MIMEText(body_html, 'html'))
+
+            # Add attachment if provided
+            if attachment_data and attachment_name:
+                from email.mime.base import MIMEBase
+                from email import encoders
+
+                if attachment_type == 'csv':
+                    part = MIMEBase('text', 'csv')
+                elif attachment_type == 'pdf':
+                    part = MIMEBase('application', 'pdf')
+                else:  # html
+                    part = MIMEBase('text', 'html')
+
+                part.set_payload(attachment_data)
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename="{attachment_name}"')
+                msg.attach(part)
+            else:
+                # No attachment - include report in body
+                full_html = f"""
+                <html>
+                <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+                    <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+                        <h1 style="margin: 0;">TJM Time Calendar Report</h1>
+                    </div>
+                    <div style="padding: 20px;">
+                        {message_html}
+                        <p>Please find the report below:</p>
+                        <hr style="border: 1px solid #ddd; margin: 20px 0;">
+                        {html_content}
+                    </div>
+                </body>
+                </html>
+                """
+                msg = MIMEMultipart('alternative')
+                msg['Subject'] = subject
+                msg['From'] = self.from_email
+                msg['To'] = to_email
+                msg.attach(MIMEText(full_html, 'html'))
+
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(self.from_email, to_email, msg.as_string())
+
+            logger.info(f"Report email sent successfully to {to_email}: {subject}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send report email to {to_email}: {str(e)}")
+            return False
 
 
 # Global instance
