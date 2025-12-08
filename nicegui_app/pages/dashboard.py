@@ -10,7 +10,7 @@ from datetime import datetime, date
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, skeleton_card
 
 
 def format_days(hours: float) -> str:

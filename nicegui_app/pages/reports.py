@@ -11,7 +11,7 @@ from datetime import date, datetime
 from io import StringIO
 import csv
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, skeleton_table
 
 
 def reports_page():
