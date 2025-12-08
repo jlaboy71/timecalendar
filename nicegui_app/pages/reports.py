@@ -6,6 +6,7 @@ from src.models.user import User
 from src.models.department import Department
 from src.models.pto_balance import PTOBalance
 from src.models.pto_request import PTORequest
+from src.models.audit_log import AuditLog
 from src.services.report_service import ReportService
 from datetime import date, datetime
 from io import StringIO
@@ -37,7 +38,11 @@ def reports_page():
         'department_id': None,
         # Admins don't have personal PTO, so default to team reports
         'report_type': 'team_balance' if is_admin_only else 'my_history',
-        'status_filter': 'all'  # 'all', 'approved', 'pending', 'denied'
+        'status_filter': 'all',  # 'all', 'approved', 'pending', 'denied'
+        # Audit log filters
+        'audit_action': 'all',  # filter by action type
+        'audit_date_from': None,  # date range start
+        'audit_date_to': None,  # date range end
     }
 
     # Main container
@@ -543,57 +548,134 @@ def reports_page():
                 db.close()
 
         def render_audit_report():
-            """Render audit log (managers/admins only)."""
+            """Render audit log with filters (managers/admins only)."""
             if not is_manager_or_admin:
                 ui.label('Access denied').classes('text-red-500')
                 return
 
             db = next(get_db())
             try:
-                query = db.query(PTORequest, User).join(
-                    User, PTORequest.user_id == User.id
-                ).filter(
-                    PTORequest.status.in_(['approved', 'denied']),
-                    PTORequest.updated_at >= date(filter_state['year'], 1, 1)
-                )
-
-                if filter_state['department_id']:
-                    query = query.filter(User.department_id == filter_state['department_id'])
-
-                results = query.order_by(PTORequest.updated_at.desc()).limit(100).all()
+                # Get distinct action types for filter dropdown
+                action_types = db.query(AuditLog.action).distinct().all()
+                action_options = {'all': 'All Actions'}
+                for (action,) in action_types:
+                    action_options[action] = action.replace('_', ' ').title()
 
                 with ui.card().classes('w-full'):
-                    ui.label(f'Audit Log - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
+                    ui.label('System Audit Log').classes('text-lg font-semibold mb-4')
+
+                    # Audit-specific filters
+                    with ui.row().classes('w-full gap-4 items-end flex-wrap mb-4'):
+                        def on_action_change(e):
+                            filter_state['audit_action'] = e.value
+                            render_report()
+
+                        def on_date_from_change(e):
+                            filter_state['audit_date_from'] = e.value
+                            render_report()
+
+                        def on_date_to_change(e):
+                            filter_state['audit_date_to'] = e.value
+                            render_report()
+
+                        ui.select(
+                            action_options,
+                            label='Action Type',
+                            value=filter_state['audit_action'],
+                            on_change=on_action_change
+                        ).classes('w-40')
+
+                        with ui.input('From Date').classes('w-40') as date_from:
+                            date_from.value = filter_state['audit_date_from'] or ''
+                            with date_from.add_slot('append'):
+                                ui.icon('event').on('click', lambda: menu_from.open()).classes('cursor-pointer')
+                            with ui.menu() as menu_from:
+                                ui.date(on_change=lambda e: (setattr(date_from, 'value', e.value), on_date_from_change(e), menu_from.close()))
+
+                        with ui.input('To Date').classes('w-40') as date_to:
+                            date_to.value = filter_state['audit_date_to'] or ''
+                            with date_to.add_slot('append'):
+                                ui.icon('event').on('click', lambda: menu_to.open()).classes('cursor-pointer')
+                            with ui.menu() as menu_to:
+                                ui.date(on_change=lambda e: (setattr(date_to, 'value', e.value), on_date_to_change(e), menu_to.close()))
+
+                        def clear_filters():
+                            filter_state['audit_action'] = 'all'
+                            filter_state['audit_date_from'] = None
+                            filter_state['audit_date_to'] = None
+                            render_report()
+
+                        ui.button('Clear', icon='clear', on_click=clear_filters).props('flat dense')
+
+                    # Build query with filters
+                    query = db.query(AuditLog)
+
+                    # Year filter (default)
+                    year_start = date(filter_state['year'], 1, 1)
+                    year_end = date(filter_state['year'], 12, 31)
+
+                    # Date range filters
+                    if filter_state['audit_date_from']:
+                        try:
+                            from_date = datetime.strptime(filter_state['audit_date_from'], '%Y-%m-%d')
+                            query = query.filter(AuditLog.created_at >= from_date)
+                        except ValueError:
+                            pass
+                    else:
+                        query = query.filter(AuditLog.created_at >= year_start)
+
+                    if filter_state['audit_date_to']:
+                        try:
+                            to_date = datetime.strptime(filter_state['audit_date_to'], '%Y-%m-%d')
+                            to_date = to_date.replace(hour=23, minute=59, second=59)
+                            query = query.filter(AuditLog.created_at <= to_date)
+                        except ValueError:
+                            pass
+                    else:
+                        query = query.filter(AuditLog.created_at <= year_end)
+
+                    # Action type filter
+                    if filter_state['audit_action'] != 'all':
+                        query = query.filter(AuditLog.action == filter_state['audit_action'])
+
+                    results = query.order_by(AuditLog.created_at.desc()).limit(200).all()
 
                     if not results:
                         ui.label('No audit records found for this period.').classes('opacity-60')
                         return
 
                     columns = [
-                        {'name': 'date', 'label': 'Date', 'field': 'date', 'sortable': True},
-                        {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'sortable': True, 'align': 'left'},
-                        {'name': 'type', 'label': 'Type', 'field': 'type', 'sortable': True, 'align': 'left'},
-                        {'name': 'action', 'label': 'Action', 'field': 'action', 'sortable': True},
-                        {'name': 'approved_by', 'label': 'By', 'field': 'approved_by', 'sortable': True, 'align': 'left'},
+                        {'name': 'date', 'label': 'Date/Time', 'field': 'date', 'sortable': True},
+                        {'name': 'user', 'label': 'User', 'field': 'user', 'sortable': True, 'align': 'left'},
+                        {'name': 'action', 'label': 'Action', 'field': 'action', 'sortable': True, 'align': 'left'},
+                        {'name': 'entity', 'label': 'Entity', 'field': 'entity', 'sortable': True, 'align': 'left'},
+                        {'name': 'details', 'label': 'Details', 'field': 'details', 'align': 'left'},
                     ]
 
-                    approver_ids = [r.approved_by for r, _ in results if r.approved_by]
-                    approvers = {u.id: f'{u.first_name} {u.last_name}'
-                                for u in db.query(User).filter(User.id.in_(approver_ids)).all()}
-
                     rows = []
-                    for request, user_obj in results:
+                    for log in results:
+                        # Parse details if available
+                        detail_str = ''
+                        if log.details:
+                            try:
+                                import json
+                                details = json.loads(log.details)
+                                if isinstance(details, dict):
+                                    detail_str = ', '.join(f'{k}: {v}' for k, v in list(details.items())[:3])
+                            except (json.JSONDecodeError, TypeError):
+                                detail_str = str(log.details)[:50]
+
                         rows.append({
-                            'id': request.id,
-                            'date': request.updated_at.strftime('%Y-%m-%d %H:%M') if request.updated_at else '-',
-                            'employee': f'{user_obj.first_name} {user_obj.last_name}',
-                            'type': request.pto_type.title(),
-                            'action': request.status.upper(),
-                            'approved_by': approvers.get(request.approved_by, 'Auto') if request.approved_by else '-',
+                            'id': log.id,
+                            'date': log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '-',
+                            'user': log.username or f'User #{log.user_id}' if log.user_id else 'System',
+                            'action': log.action.replace('_', ' ').title(),
+                            'entity': f'{log.entity_type or ""} #{log.entity_id}' if log.entity_id else log.entity_type or '-',
+                            'details': detail_str[:100] if detail_str else '-',
                         })
 
                     ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                    ui.label(f'Showing {len(rows)} most recent actions').classes('mt-2 opacity-60')
+                    ui.label(f'Showing {len(rows)} records (max 200)').classes('mt-2 opacity-60')
 
             finally:
                 db.close()
@@ -739,31 +821,52 @@ def reports_page():
                     filename = f'team_usage_{filter_state["year"]}.csv'
 
                 elif report_type == 'audit':
-                    writer.writerow(['Date', 'Employee', 'Type', 'Action', 'Approved By'])
+                    writer.writerow(['Date/Time', 'User', 'Action', 'Entity', 'Details'])
 
-                    query = db.query(PTORequest, User).join(
-                        User, PTORequest.user_id == User.id
-                    ).filter(
-                        PTORequest.status.in_(['approved', 'denied']),
-                        PTORequest.updated_at >= date(filter_state['year'], 1, 1)
-                    )
+                    # Build query with same filters as display
+                    query = db.query(AuditLog)
+                    year_start = date(filter_state['year'], 1, 1)
+                    year_end = date(filter_state['year'], 12, 31)
 
-                    if filter_state['department_id']:
-                        query = query.filter(User.department_id == filter_state['department_id'])
+                    if filter_state['audit_date_from']:
+                        try:
+                            from_date = datetime.strptime(filter_state['audit_date_from'], '%Y-%m-%d')
+                            query = query.filter(AuditLog.created_at >= from_date)
+                        except ValueError:
+                            query = query.filter(AuditLog.created_at >= year_start)
+                    else:
+                        query = query.filter(AuditLog.created_at >= year_start)
 
-                    results = query.order_by(PTORequest.updated_at.desc()).limit(100).all()
+                    if filter_state['audit_date_to']:
+                        try:
+                            to_date = datetime.strptime(filter_state['audit_date_to'], '%Y-%m-%d')
+                            to_date = to_date.replace(hour=23, minute=59, second=59)
+                            query = query.filter(AuditLog.created_at <= to_date)
+                        except ValueError:
+                            query = query.filter(AuditLog.created_at <= year_end)
+                    else:
+                        query = query.filter(AuditLog.created_at <= year_end)
 
-                    approver_ids = [r.approved_by for r, _ in results if r.approved_by]
-                    approvers = {u.id: f'{u.first_name} {u.last_name}'
-                                for u in db.query(User).filter(User.id.in_(approver_ids)).all()}
+                    if filter_state['audit_action'] != 'all':
+                        query = query.filter(AuditLog.action == filter_state['audit_action'])
 
-                    for request, user_obj in results:
+                    for log in query.order_by(AuditLog.created_at.desc()).limit(500).all():
+                        detail_str = ''
+                        if log.details:
+                            try:
+                                import json
+                                details = json.loads(log.details)
+                                if isinstance(details, dict):
+                                    detail_str = ', '.join(f'{k}: {v}' for k, v in details.items())
+                            except (json.JSONDecodeError, TypeError):
+                                detail_str = str(log.details)
+                        entity_str = f'{log.entity_type or ""} #{log.entity_id}' if log.entity_id else log.entity_type or ''
                         writer.writerow([
-                            request.updated_at.strftime('%Y-%m-%d %H:%M') if request.updated_at else '',
-                            f'{user_obj.first_name} {user_obj.last_name}',
-                            request.pto_type.title(),
-                            request.status.upper(),
-                            approvers.get(request.approved_by, 'Auto') if request.approved_by else ''
+                            log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '',
+                            log.username or f'User #{log.user_id}' if log.user_id else 'System',
+                            log.action.replace('_', ' ').title(),
+                            entity_str,
+                            detail_str
                         ])
 
                     filename = f'audit_log_{filter_state["year"]}.csv'
