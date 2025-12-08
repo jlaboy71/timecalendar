@@ -130,7 +130,7 @@ def requests():
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Different title for managers vs employees
         page_title = 'MY TIME OFF' if is_manager_or_admin else 'REQUEST HISTORY'
-        page_header(title=page_title, show_back=True)
+        page_header(title=page_title, show_back=False)
 
         db = next(get_db())
         try:
@@ -411,7 +411,7 @@ def manager_request_detail(request_id: int):
         balance = detail['balance']
 
         with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
-            page_header(title='PTO REQUEST REVIEW', show_back=True)
+            page_header(title='PTO REQUEST REVIEW', show_back=False)
             
             # Employee Info Card
             with ui.card().classes('w-full p-4 mb-4'):
@@ -569,7 +569,7 @@ def admin_panel():
         return
 
     with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
-        page_header(title='ADMIN PANEL', show_back=True)
+        page_header(title='ADMIN PANEL', show_back=False)
 
         # Navigation cards
         with ui.row().classes('w-full gap-6 justify-center'):
@@ -694,7 +694,7 @@ def admin_departments():
     from nicegui_app.components.header import page_header
 
     with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
-        page_header(title='DEPARTMENT MANAGEMENT', show_back=True, back_url='/admin')
+        page_header(title='DEPARTMENT MANAGEMENT', show_back=False)
 
         # Create New Department Card (collapsible)
         with ui.expansion('Create New Department', icon='add_business').classes('w-full mb-4'):
@@ -963,7 +963,7 @@ def admin_approvals():
         all_departments = DepartmentService.get_all_departments(db)
 
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-            page_header(title='PENDING PTO APPROVALS', show_back=True)
+            page_header(title='PENDING PTO APPROVALS', show_back=False)
 
             if not pending_requests:
                 with ui.card().classes('w-full p-6 text-center'):
@@ -1462,7 +1462,7 @@ def admin_employees_add():
         db.close()
 
     with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
-        page_header(title='ADD NEW EMPLOYEE', show_back=True, back_url='/admin/employees')
+        page_header(title='ADD NEW EMPLOYEE', show_back=False)
 
         # Basic Information Section
         with ui.card().classes('w-full p-6 mb-4'):
@@ -1685,7 +1685,7 @@ def admin_employees_edit(user_id: int):
 
         with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
             # Header using shared component
-            page_header(title='EDIT EMPLOYEE', show_back=True, back_url='/admin/employees')
+            page_header(title='EDIT EMPLOYEE', show_back=False)
 
             # Employee name display
             with ui.card().classes('w-full p-4 mb-4').style('border-left: 4px solid #5a6a72'):
@@ -2456,7 +2456,7 @@ def admin_year_end():
     next_year = current_year + 1
 
     with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
-        page_header(title='YEAR-END STATUS', show_back=True, back_url='/dashboard')
+        page_header(title='YEAR-END STATUS', show_back=False)
 
         # Info card explaining automatic processing
         with ui.card().classes('w-full p-4 mb-4 border-l-4 border-blue-500'):
@@ -2573,7 +2573,7 @@ def help_page():
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Header using shared component (no help button on help page itself)
-        page_header(title='HELP CENTER', show_back=True)
+        page_header(title='HELP CENTER', show_back=False)
 
         # Search bar (debounce to reduce processing)
         search_input = ui.input(placeholder='Search help articles...').classes('w-full mb-4').props('outlined dense clearable debounce="300"')
@@ -2716,7 +2716,7 @@ def admin_system():
 
     with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
         # Header
-        page_header(title='SYSTEM ADMINISTRATION', show_back=True, back_url='/admin')
+        page_header(title='SYSTEM ADMINISTRATION', show_back=False)
 
         # System Status Overview - Quick health check at a glance
         db_url = config.DATABASE_URL
