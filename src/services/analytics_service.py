@@ -449,3 +449,351 @@ class AnalyticsService:
             'utilization_rate': round(utilization_rate, 1),
             'employees_tracked': users_with_balance
         }
+
+    def get_attendance_by_date_range(
+        self, start_date: date, end_date: date, department_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Calculate attendance for each day in the range.
+        Returns list of dicts with attendance rates.
+        """
+        from src.models.pto_request import PTORequest
+        from src.models.user import User
+
+        # Get total active employees
+        emp_query = self.db.query(User).filter(User.is_active == True)
+        if department_id:
+            emp_query = emp_query.filter(User.department_id == department_id)
+        total_employees = emp_query.count()
+
+        if total_employees == 0:
+            return []
+
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in emp_query.all()]
+
+        results = []
+        current = start_date
+
+        while current <= end_date:
+            # Skip weekends
+            if current.weekday() >= 5:
+                current += timedelta(days=1)
+                continue
+
+            # Count approved absences for this date
+            query = self.db.query(PTORequest).filter(
+                PTORequest.status == 'approved',
+                PTORequest.start_date <= current,
+                PTORequest.end_date >= current
+            )
+            if user_ids is not None:
+                query = query.filter(PTORequest.user_id.in_(user_ids))
+            absent_count = query.count()
+
+            present_count = total_employees - absent_count
+            attendance_rate = (present_count / total_employees * 100) if total_employees > 0 else 0
+
+            results.append({
+                'date': current,
+                'total_employees': total_employees,
+                'absent_count': absent_count,
+                'present_count': present_count,
+                'attendance_rate': round(attendance_rate, 1)
+            })
+
+            current += timedelta(days=1)
+
+        return results
+
+    def get_carryover_risk_employees(
+        self, year: int, days_until_expiry: int = 90,
+        min_remaining_pct: float = 50.0, department_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Identify employees at risk of losing PTO due to carryover limits.
+
+        Args:
+            year: Year to analyze
+            days_until_expiry: Days until year end (or policy expiry)
+            min_remaining_pct: Minimum % remaining to be considered at risk
+            department_id: Optional department filter
+        """
+        from src.models.pto_balance import PTOBalance
+        from src.models.user import User
+        from src.models.department import Department
+
+        results = []
+
+        user_query = self.db.query(User).filter(User.is_active == True)
+        if department_id:
+            user_query = user_query.filter(User.department_id == department_id)
+        users = user_query.all()
+
+        for user in users:
+            balance = self.db.query(PTOBalance).filter(
+                PTOBalance.user_id == user.id,
+                PTOBalance.year == year
+            ).first()
+
+            if not balance:
+                continue
+
+            vacation_remaining = float(balance.vacation_total - balance.vacation_used)
+            vacation_total = float(balance.vacation_total)
+
+            if vacation_total == 0:
+                continue
+
+            pct_remaining = (vacation_remaining / vacation_total) * 100
+
+            if pct_remaining >= min_remaining_pct:
+                dept = self.db.query(Department).filter(Department.id == user.department_id).first()
+                dept_name = dept.name if dept else "Unknown"
+
+                # Calculate risk level
+                if pct_remaining >= 80 and days_until_expiry <= 60:
+                    risk_level = "HIGH"
+                elif pct_remaining >= 60 and days_until_expiry <= 90:
+                    risk_level = "MEDIUM"
+                else:
+                    risk_level = "LOW"
+
+                results.append({
+                    'user_id': user.id,
+                    'name': f"{user.first_name} {user.last_name}",
+                    'department': dept_name,
+                    'vacation_remaining': round(vacation_remaining, 1),
+                    'vacation_total': round(vacation_total, 1),
+                    'pct_remaining': round(pct_remaining, 1),
+                    'days_until_expiry': days_until_expiry,
+                    'risk_level': risk_level
+                })
+
+        # Sort by risk level then remaining days
+        risk_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+        results.sort(key=lambda x: (risk_order[x['risk_level']], -x['vacation_remaining']))
+
+        return results
+
+    def get_optimal_meeting_dates(
+        self, days_ahead: int = 30, min_attendance_pct: float = 85.0,
+        max_results: int = 5, department_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Find the best dates for all-hands meetings based on expected attendance.
+
+        Args:
+            days_ahead: How many days into the future to search
+            min_attendance_pct: Minimum attendance threshold
+            max_results: Maximum number of dates to return
+            department_id: Optional department filter
+        """
+        start = date.today()
+        end = start + timedelta(days=days_ahead)
+
+        # Get attendance data
+        attendance_data = self.get_attendance_by_date_range(start, end, department_id)
+
+        # Filter and sort by attendance rate
+        candidates = []
+        for day in attendance_data:
+            if day['attendance_rate'] >= min_attendance_pct:
+                candidates.append({
+                    'date': day['date'],
+                    'date_str': day['date'].strftime('%B %d, %Y'),
+                    'day_of_week': day['date'].strftime('%A'),
+                    'expected_attendance': day['attendance_rate'],
+                    'absent_count': day['absent_count']
+                })
+
+        # Sort by attendance rate descending
+        candidates.sort(key=lambda x: -x['expected_attendance'])
+
+        return candidates[:max_results]
+
+    def get_day_of_week_patterns(self, year: int, department_id: Optional[int] = None) -> Dict[str, float]:
+        """
+        Analyze PTO patterns by day of week.
+        Returns average PTO days taken for each weekday.
+        """
+        from src.models.pto_request import PTORequest
+        from src.models.user import User
+
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        patterns = {day: 0.0 for day in days}
+
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
+
+        query = self.db.query(PTORequest).filter(
+            PTORequest.status == 'approved',
+            extract('year', PTORequest.start_date) == year
+        )
+        if user_ids is not None:
+            query = query.filter(PTORequest.user_id.in_(user_ids))
+        requests = query.all()
+
+        for req in requests:
+            current = req.start_date
+            while current <= req.end_date:
+                if current.weekday() < 5:  # Weekday
+                    day_name = days[current.weekday()]
+                    patterns[day_name] += 1
+                current += timedelta(days=1)
+
+        # Calculate weekly average (divide by ~52 weeks)
+        weeks_in_year = 52
+        return {day: round(patterns[day] / weeks_in_year, 1) for day in days}
+
+    def get_monthly_pto_by_type(self, year: int, department_id: Optional[int] = None) -> List[Dict]:
+        """
+        Get monthly PTO breakdown by type (vacation, sick, personal).
+        """
+        from src.models.pto_request import PTORequest
+        from src.models.user import User
+
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
+
+        results = []
+
+        for month in range(1, 13):
+            query = self.db.query(PTORequest).filter(
+                PTORequest.status == 'approved',
+                extract('year', PTORequest.start_date) == year,
+                extract('month', PTORequest.start_date) == month
+            )
+            if user_ids is not None:
+                query = query.filter(PTORequest.user_id.in_(user_ids))
+            requests = query.all()
+
+            vacation_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() == 'vacation')
+            sick_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() == 'sick')
+            personal_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() == 'personal')
+            other_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal'])
+
+            results.append({
+                'month': month,
+                'month_name': date(year, month, 1).strftime('%B'),
+                'vacation_days': round(vacation_days, 1),
+                'sick_days': round(sick_days, 1),
+                'personal_days': round(personal_days, 1),
+                'other_days': round(other_days, 1),
+                'total_days': round(vacation_days + sick_days + personal_days + other_days, 1)
+            })
+
+        return results
+
+    def get_department_utilization_rates(self, year: int) -> List[Dict]:
+        """
+        Get PTO utilization rates for all departments.
+        """
+        from src.models.pto_balance import PTOBalance
+        from src.models.user import User
+        from src.models.department import Department
+
+        departments = self.db.query(Department).all()
+        results = []
+
+        for dept in departments:
+            users = self.db.query(User).filter(
+                User.department_id == dept.id,
+                User.is_active == True
+            ).all()
+
+            if not users:
+                continue
+
+            total_allocated = 0.0
+            total_used = 0.0
+
+            for user in users:
+                balance = self.db.query(PTOBalance).filter(
+                    PTOBalance.user_id == user.id,
+                    PTOBalance.year == year
+                ).first()
+
+                if balance:
+                    total_allocated += float(balance.vacation_total + balance.sick_total + balance.personal_total)
+                    total_used += float(balance.vacation_used + balance.sick_used + balance.personal_used)
+
+            utilization_rate = (total_used / total_allocated * 100) if total_allocated > 0 else 0
+
+            results.append({
+                'department_id': dept.id,
+                'department_name': dept.name,
+                'employee_count': len(users),
+                'total_allocated': round(total_allocated, 1),
+                'total_used': round(total_used, 1),
+                'utilization_rate': round(utilization_rate, 1)
+            })
+
+        # Sort by utilization rate descending
+        results.sort(key=lambda x: x['utilization_rate'], reverse=True)
+        return results
+
+    def generate_recommendations(self, year: int, department_id: Optional[int] = None) -> List[Dict]:
+        """
+        Analyze data and generate actionable recommendations.
+        """
+        recommendations = []
+        days_until_year_end = (date(year, 12, 31) - date.today()).days
+
+        # Check carryover risk
+        carryover_risk = self.get_carryover_risk_employees(year, days_until_year_end, department_id=department_id)
+        high_risk = [e for e in carryover_risk if e['risk_level'] == "HIGH"]
+        if high_risk:
+            recommendations.append({
+                'priority': 'HIGH',
+                'category': 'Carryover Risk',
+                'title': f'{len(high_risk)} employees at high carryover risk',
+                'action': 'Send reminder emails to use PTO before year-end',
+                'affected': [e['name'] for e in high_risk[:5]]
+            })
+
+        # Check department utilization
+        dept_util = self.get_department_utilization_rates(year)
+        low_util_depts = [d for d in dept_util if d['utilization_rate'] < 50]
+        if low_util_depts:
+            recommendations.append({
+                'priority': 'MEDIUM',
+                'category': 'Work-Life Balance',
+                'title': f'{len(low_util_depts)} departments with low PTO utilization',
+                'action': 'Consider manager outreach to encourage time off',
+                'affected': [d['department_name'] for d in low_util_depts]
+            })
+
+        # Check coverage gaps
+        gaps = self.get_coverage_gaps(department_id, date.today(), date.today() + timedelta(days=14), 0.4) if department_id else []
+        if gaps:
+            recommendations.append({
+                'priority': 'HIGH',
+                'category': 'Coverage',
+                'title': f'{len(gaps)} days with potential coverage gaps',
+                'action': 'Arrange backup coverage or hold pending approvals',
+                'affected': [f"{g['date_str']} ({g['absence_rate']}% out)" for g in gaps[:3]]
+            })
+
+        # Optimal meeting date suggestion
+        optimal = self.get_optimal_meeting_dates(days_ahead=30, department_id=department_id)
+        if optimal:
+            recommendations.append({
+                'priority': 'INFO',
+                'category': 'Scheduling',
+                'title': f'Best all-hands date: {optimal[0]["date_str"]}',
+                'action': f'Schedule meetings for {optimal[0]["expected_attendance"]:.0f}% expected attendance',
+                'affected': []
+            })
+
+        return recommendations

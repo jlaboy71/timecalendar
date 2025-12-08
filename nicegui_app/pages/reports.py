@@ -1220,6 +1220,7 @@ def reports_page():
         render_filters()
         render_report()
 
-        # Back to Dashboard button at bottom
-        with ui.row().classes('w-full mt-6'):
+        # Navigation buttons at bottom
+        with ui.row().classes('w-full justify-between mt-6'):
             ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('View Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline')
