@@ -1,4 +1,5 @@
 """Reports page - Personal reports for all users, Team reports for managers/admins."""
+import asyncio
 from nicegui import ui, app
 from src.database import get_db
 from src.models.user import User
@@ -145,11 +146,31 @@ def reports_page():
                     ui.button('Refresh', icon='refresh', on_click=render_report).props('outline')
 
                     # Export dropdown with multiple options
-                    with ui.dropdown_button('Export', icon='download', auto_close=True).props('color=secondary'):
-                        ui.item('Download CSV', on_click=export_csv)
-                        ui.item('Print Preview', on_click=show_print_preview)
-                        ui.item('Download PDF', on_click=download_pdf)
-                        ui.item('Email Report', on_click=show_email_dialog)
+                    with ui.dropdown_button('Export', icon='download', auto_close=True).props('color=secondary') as export_dropdown:
+                        async def handle_export_csv():
+                            export_dropdown.close()
+                            await asyncio.sleep(0.1)
+                            export_csv()
+
+                        async def handle_print_preview():
+                            export_dropdown.close()
+                            await asyncio.sleep(0.1)
+                            show_print_preview()
+
+                        async def handle_download_pdf():
+                            export_dropdown.close()
+                            await asyncio.sleep(0.1)
+                            download_pdf()
+
+                        async def handle_email_dialog():
+                            export_dropdown.close()
+                            await asyncio.sleep(0.1)
+                            show_email_dialog()
+
+                        ui.item('Download CSV', on_click=handle_export_csv)
+                        ui.item('Print Preview', on_click=handle_print_preview)
+                        ui.item('Download PDF', on_click=handle_download_pdf)
+                        ui.item('Email Report', on_click=handle_email_dialog)
 
         def update_filter(key, value):
             filter_state[key] = value
