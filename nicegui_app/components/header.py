@@ -7,6 +7,9 @@ from src.database import get_db
 from src.services.audit_service import AuditService
 from src.services.session_manager import SessionManager
 
+# Warning threshold in minutes (show warning when this many minutes remain)
+SESSION_WARNING_MINUTES = 5
+
 
 def get_time_based_greeting():
     """Get greeting based on Chicago timezone time of day."""
@@ -88,3 +91,73 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
                 ui.navigate.to('/')
 
             ui.button('Logout', on_click=logout).props('flat color=red')
+
+    # Session timeout warning system
+    _setup_session_timeout_warning()
+
+
+def _setup_session_timeout_warning():
+    """
+    Set up a timer to check session timeout and show warning modal.
+
+    Checks every 30 seconds if session is about to expire (within 5 minutes).
+    Shows a modal warning with countdown and option to extend session.
+    """
+    warning_shown = {'value': False}
+    timer_ref = {'timer': None}
+
+    # Create the warning dialog (hidden initially)
+    with ui.dialog() as warning_dialog:
+        warning_dialog.props('persistent')
+        with ui.card().classes('p-6 text-center').style('min-width: 350px;'):
+            ui.icon('warning', color='amber', size='xl').classes('mb-4')
+            ui.label('Session Expiring Soon').classes('text-xl font-bold mb-2')
+            countdown_label = ui.label('Your session will expire in 5 minutes.').classes('mb-4')
+            ui.label('Click below to stay logged in.').classes('text-sm opacity-70 mb-4')
+
+            with ui.row().classes('w-full justify-center gap-4'):
+                def extend_session():
+                    SessionManager.update_activity()
+                    warning_shown['value'] = False
+                    warning_dialog.close()
+                    ui.notify('Session extended', type='positive')
+
+                def logout_now():
+                    warning_dialog.close()
+                    SessionManager.clear_session()
+                    ui.navigate.to('/')
+
+                ui.button('Stay Logged In', on_click=extend_session).props('color=primary')
+                ui.button('Logout', on_click=logout_now).props('flat color=red')
+
+    async def check_session():
+        """Check session status and show warning if needed."""
+        user = app.storage.general.get('user')
+        if not user:
+            # No longer logged in, stop checking
+            if timer_ref['timer']:
+                timer_ref['timer'].deactivate()
+            return
+
+        minutes_remaining = SessionManager.get_minutes_remaining()
+
+        # Session expired - redirect to login
+        if minutes_remaining <= 0:
+            if timer_ref['timer']:
+                timer_ref['timer'].deactivate()
+            SessionManager.clear_session()
+            ui.navigate.to('/?timeout=1')
+            return
+
+        # Show warning if within threshold and not already shown
+        if minutes_remaining <= SESSION_WARNING_MINUTES and not warning_shown['value']:
+            warning_shown['value'] = True
+            countdown_label.set_text(f'Your session will expire in {minutes_remaining} minute{"s" if minutes_remaining != 1 else ""}.')
+            warning_dialog.open()
+
+        # Update countdown if warning is shown
+        elif warning_shown['value'] and warning_dialog.value:
+            countdown_label.set_text(f'Your session will expire in {minutes_remaining} minute{"s" if minutes_remaining != 1 else ""}.')
+
+    # Start checking every 30 seconds
+    timer_ref['timer'] = ui.timer(30, check_session)
