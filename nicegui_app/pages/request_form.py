@@ -384,7 +384,7 @@ def request_form_page():
                                 ui.label(f'This request exceeds your available balance by {(hours_requested - available)/8:.1f} days').classes('text-red-500')
 
             with ui.row().classes('w-full gap-4'):
-                ui.button(
+                submit_btn = ui.button(
                     'Submit Request',
                     icon='send',
                     on_click=lambda: submit_request(
@@ -393,7 +393,8 @@ def request_form_page():
                         state['start_date'],
                         state['end_date'],
                         state['is_half_day'],
-                        description.value
+                        description.value,
+                        submit_btn
                     )
                 ).classes('flex-1').props('color=primary size=lg')
 
@@ -420,7 +421,7 @@ def request_form_page():
         update_warning()
 
 
-def submit_request(user_id, pto_type, start_date, end_date, half_day, description):
+def submit_request(user_id, pto_type, start_date, end_date, half_day, description, submit_btn=None):
     """Submit PTO request with validation and database operations."""
     from datetime import datetime
 
@@ -428,8 +429,14 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         ui.notify('Start date and end date are required', type='negative')
         return
 
+    # Show loading state
+    if submit_btn:
+        submit_btn.props('loading disabled')
+
     if start_date > end_date:
         ui.notify('Start date cannot be after end date', type='negative')
+        if submit_btn:
+            submit_btn.props(remove='loading disabled')
         return
 
     db = None
@@ -442,6 +449,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         if leave_type and leave_type.requires_documentation and not description.strip():
             ui.notify(f'Description is required for {leave_type.name}', type='negative')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
             return
 
         user_service = UserService(db)
@@ -449,6 +458,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         if not employee:
             ui.notify('User not found', type='negative')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
             return
 
         accrual_service = AccrualService(db)
@@ -456,6 +467,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         can_use, reason = accrual_service.can_use_leave(employee, pto_type.upper())
         if not can_use:
             ui.notify(f'Cannot use {leave_type.name if leave_type else pto_type}: {reason}', type='negative')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
             return
 
         policy = accrual_service.get_policy_for_employee(employee, pto_type.upper())
@@ -471,6 +484,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                     f'Minimum request is {policy.min_increment_hours} hours for your location',
                     type='negative'
                 )
+                if submit_btn:
+                    submit_btn.props(remove='loading disabled')
                 return
 
         if policy and policy.advance_notice_days and policy.advance_notice_days > 0:
@@ -565,6 +580,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
     except Exception as e:
         ui.notify(f'Error submitting request: {str(e)}', type='negative')
+        if submit_btn:
+            submit_btn.props(remove='loading disabled')
 
     finally:
         if db:

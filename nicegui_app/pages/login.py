@@ -28,22 +28,28 @@ def login_page(timeout: str = None):
 
             # Username input
             username_input = ui.input(label='Username').classes('w-full mb-4')
-            
+
             # Password input
             password_input = ui.input(label='Password', password=True).classes('w-full mb-4')
-            
+
             # Error message area (hidden by default)
             error_message = ui.label('').classes('text-red-500 text-sm mb-4')
             error_message.set_visibility(False)
-            
+
             # Login button
-            ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message)).classes('w-full bg-blue-500 text-white mb-4')
+            login_btn = ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message, login_btn)).classes('w-full bg-blue-500 text-white mb-4')
+
+            # Support Enter key to submit login form
+            def handle_enter():
+                authenticate(username_input, password_input, error_message, login_btn)
+            username_input.on('keydown.enter', handle_enter)
+            password_input.on('keydown.enter', handle_enter)
 
             # Forgot password link
             ui.button('Forgot Password?', on_click=lambda: ui.navigate.to('/forgot-password')).props('flat dense').classes('w-full text-sm')
 
 
-def authenticate(username_input, password_input, error_message):
+def authenticate(username_input, password_input, error_message, login_btn):
     """Authenticate user credentials and handle login."""
     # Validate inputs with visual feedback
     valid = True
@@ -66,6 +72,9 @@ def authenticate(username_input, password_input, error_message):
         error_message.text = f'Account temporarily locked. Try again in {minutes_remaining} minute(s).'
         error_message.set_visibility(True)
         return
+
+    # Show loading state
+    login_btn.props('loading disabled')
 
     # Get database session
     db = next(get_db())
@@ -117,10 +126,12 @@ def authenticate(username_input, password_input, error_message):
             else:
                 error_message.text = 'Invalid credentials'
             error_message.set_visibility(True)
+            login_btn.props(remove='loading disabled')
 
     except Exception as e:
         # Handle any database or service errors
         error_message.text = 'Login failed. Please try again.'
         error_message.set_visibility(True)
+        login_btn.props(remove='loading disabled')
     finally:
         db.close()

@@ -1,5 +1,6 @@
 """Manager carryover approval page for reviewing and processing employee carryover requests."""
 from nicegui import ui, app
+from sqlalchemy.orm import joinedload
 from src.services.balance_service import BalanceService
 from src.services.accrual_service import AccrualService
 from src.services.user_service import UserService
@@ -86,7 +87,9 @@ def manager_carryover_page():
                 # Build lookup dictionaries
                 leave_types = {lt.id: lt for lt in db.query(LeaveType).all()}
                 employee_ids = set(r.employee_id for r in pending_requests + processed_requests)
-                employees = {emp.id: emp for emp in db.query(User).filter(User.id.in_(employee_ids)).all()}
+                employees = {emp.id: emp for emp in db.query(User).options(
+                    joinedload(User.department)
+                ).filter(User.id.in_(employee_ids)).all()}
 
                 # Display pending requests
                 with pending_container:
@@ -316,4 +319,4 @@ def manager_carryover_page():
 
         # Back button
         with ui.row().classes('w-full mt-6'):
-            ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'))
+            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')

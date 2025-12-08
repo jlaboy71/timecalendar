@@ -188,11 +188,11 @@ def calendar_page():
         with ui.row().classes('w-full justify-between items-center mb-4'):
             # Month/Year navigation
             with ui.row().classes('gap-2 items-center'):
-                ui.button(icon='chevron_left', on_click=lambda: navigate_month(-1)).props('flat')
+                ui.button(icon='chevron_left', on_click=lambda: navigate_month(-1)).props('flat aria-label="Previous month"')
 
                 month_label = ui.label().classes('text-xl font-semibold min-w-48 text-center')
 
-                ui.button(icon='chevron_right', on_click=lambda: navigate_month(1)).props('flat')
+                ui.button(icon='chevron_right', on_click=lambda: navigate_month(1)).props('flat aria-label="Next month"')
 
                 ui.button('Today', on_click=lambda: go_to_today()).props('flat')
 
@@ -271,7 +271,7 @@ def calendar_page():
                         ui.label('Other').classes('text-sm font-medium')
 
         # Back button
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-6')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
         # ===== MODAL FUNCTIONS =====
 

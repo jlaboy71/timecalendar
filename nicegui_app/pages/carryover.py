@@ -447,4 +447,4 @@ def carryover_page():
                     ui.label('No carryover requests submitted yet').classes('opacity-70')
 
         # Back button
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')

@@ -1,6 +1,7 @@
 """Reports page - Personal reports for all users, Team reports for managers/admins."""
 import asyncio
 from nicegui import ui, app
+from sqlalchemy.orm import joinedload
 from src.database import get_db
 from src.models.user import User
 from src.models.department import Department
@@ -154,11 +155,13 @@ def reports_page():
                     with ui.dropdown_button('Download', icon='download', auto_close=True).props('color=secondary') as download_dropdown:
                         async def handle_download_csv():
                             download_dropdown.close()
+                            ui.notify('Generating CSV...', type='info')
                             await asyncio.sleep(0.1)
                             export_csv()
 
                         async def handle_download_pdf():
                             download_dropdown.close()
+                            ui.notify('Generating PDF...', type='info')
                             await asyncio.sleep(0.1)
                             download_pdf()
 
@@ -211,7 +214,9 @@ def reports_page():
                     ui.label(f'My PTO History - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not requests:
-                        ui.label('No PTO requests found for this period.').classes('opacity-60')
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No PTO requests found for this period.').classes('opacity-60')
                         return
 
                     # Summary stats
@@ -287,7 +292,9 @@ def reports_page():
                     ui.label(f'My Balance Summary - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not balance:
-                        ui.label('No balance record found for this year.').classes('opacity-60')
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('account_balance_wallet', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No balance record found for this year.').classes('opacity-60')
                         return
 
                     # Helper to format hours as days (8 hours = 1 day)
@@ -408,7 +415,9 @@ def reports_page():
 
             db = next(get_db())
             try:
-                query = db.query(User, PTOBalance).outerjoin(
+                query = db.query(User, PTOBalance).options(
+                    joinedload(User.department)
+                ).outerjoin(
                     PTOBalance,
                     (PTOBalance.user_id == User.id) & (PTOBalance.year == filter_state['year'])
                 ).filter(User.is_active == True)
@@ -422,7 +431,9 @@ def reports_page():
                     ui.label(f'Team Balance Summary - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not results:
-                        ui.label('No employees found.').classes('opacity-60')
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('people_outline', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No employees found.').classes('opacity-60')
                         return
 
                     columns = [
@@ -501,7 +512,9 @@ def reports_page():
                     ui.label(f'Team Usage Report - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not results:
-                        ui.label('No requests found for this period.').classes('opacity-60')
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No requests found for this period.').classes('opacity-60')
                         return
 
                     # Summary by type
@@ -641,7 +654,9 @@ def reports_page():
                     results = query.order_by(AuditLog.created_at.desc()).limit(200).all()
 
                     if not results:
-                        ui.label('No audit records found for this period.').classes('opacity-60')
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('history', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No audit records found for this period.').classes('opacity-60')
                         return
 
                     columns = [

@@ -51,13 +51,13 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
             if title:
                 with ui.row().classes('items-center gap-2'):
                     if show_back:
-                        ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to(back_url)).props('flat round dense')
+                        ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to(back_url)).props('flat round dense aria-label="Go back"')
                     ui.label(title).classes('text-xl font-bold uppercase').style('color: #5a6a72;')
             ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-lg font-medium').style('color: #5a6a72;')
 
         with ui.row().classes('items-center gap-2'):
             # Help button
-            ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round').tooltip('Help Center')
+            ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
 
             # Dark mode toggle
             dark_mode = ui.dark_mode()
@@ -74,7 +74,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
                 else:
                     dark_mode.disable()
 
-            ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round').tooltip('Toggle Dark Mode')
+            ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode')
 
             def logout():
                 """Clear user session, log logout, and redirect to login."""

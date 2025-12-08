@@ -244,9 +244,18 @@ def requests():
                                     # Cancel button for pending requests (employees only)
                                     if not is_manager_or_admin and req.status == 'pending':
                                         def create_cancel_handler(request_id, pto_type, total_days, start_year):
-                                            def cancel():
-                                                cancel_user_request(request_id, pto_type, total_days, start_year)
-                                            return cancel
+                                            def show_cancel_dialog():
+                                                with ui.dialog() as cancel_dialog, ui.card().classes('p-4'):
+                                                    ui.label('Cancel PTO Request?').classes('text-lg font-semibold mb-2')
+                                                    ui.label('This will cancel your pending request and restore your balance.').classes('text-sm opacity-70 mb-4')
+                                                    with ui.row().classes('w-full justify-end gap-2'):
+                                                        ui.button('Keep Request', on_click=cancel_dialog.close).props('flat')
+                                                        def confirm_cancel():
+                                                            cancel_dialog.close()
+                                                            cancel_user_request(request_id, pto_type, total_days, start_year)
+                                                        ui.button('Cancel Request', on_click=confirm_cancel).props('color=red')
+                                                cancel_dialog.open()
+                                            return show_cancel_dialog
                                         ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id, req.pto_type, float(req.total_days), req.start_date.year)).props('flat color=red size=sm')
 
             def apply_type_filter(pto_type):
@@ -626,7 +635,7 @@ def admin_panel():
                         ui.label('Database, email config, logs, and system settings').classes('text-gray-600 text-center')
                         ui.button('System Settings', on_click=lambda: ui.navigate.to('/admin/system'), color='warning')
 
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-8')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-8')
 
 @ui.page('/admin/departments')
 def admin_departments():
@@ -705,8 +714,13 @@ def admin_departments():
                     create_manager_select = ui.select(manager_options, label='Manager', value=0).props('outlined dense').classes('flex-1')
 
                     def create_dept():
-                        if not name_input.value or not code_input.value:
-                            ui.notify('Name and code are required', type='negative')
+                        valid = True
+                        if not validate_required(name_input, 'Department Name'):
+                            valid = False
+                        if not validate_required(code_input, 'Department Code'):
+                            valid = False
+                        if not valid:
+                            ui.notify('Please fix the highlighted errors', type='warning')
                             return
                         db = next(get_db())
                         try:
@@ -839,8 +853,13 @@ def admin_departments():
                                             edit_manager = ui.select(manager_options, label='Manager', value=d['manager_id']).props('outlined').classes('w-full mb-4')
 
                                             def save_changes():
-                                                if not edit_name.value or not edit_code.value:
-                                                    ui.notify('Name and code are required', type='negative')
+                                                valid = True
+                                                if not validate_required(edit_name, 'Department Name'):
+                                                    valid = False
+                                                if not validate_required(edit_code, 'Department Code'):
+                                                    valid = False
+                                                if not valid:
+                                                    ui.notify('Please fix the highlighted errors', type='warning')
                                                     return
                                                 db = next(get_db())
                                                 try:
@@ -931,7 +950,7 @@ def admin_departments():
         render_department_view()
 
         # Back to Dashboard button
-        ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
 @ui.page('/admin/approvals')
@@ -1004,6 +1023,7 @@ def admin_approvals():
                             if not selected_requests:
                                 ui.notify('No requests selected', type='warning')
                                 return
+                            approve_btn.props('loading disabled')
                             count = len(selected_requests)
                             for req_id in selected_requests:
                                 try:
@@ -1024,6 +1044,7 @@ def admin_approvals():
                                 reason_input = ui.textarea(label='Denial Reason (optional)').classes('w-full mb-4')
 
                                 def confirm_deny():
+                                    deny_confirm_btn.props('loading disabled')
                                     count = len(selected_requests)
                                     reason = reason_input.value or 'Denied via bulk action'
                                     for req_id in selected_requests:
@@ -1038,11 +1059,11 @@ def admin_approvals():
 
                                 with ui.row().classes('w-full justify-end gap-2'):
                                     ui.button('Cancel', on_click=deny_dialog.close).props('flat')
-                                    ui.button('Deny All', on_click=confirm_deny).props('color=red')
+                                    deny_confirm_btn = ui.button('Deny All', on_click=confirm_deny).props('color=red')
 
                             deny_dialog.open()
 
-                        ui.button('Approve Selected', icon='check', on_click=bulk_approve).props('color=green')
+                        approve_btn = ui.button('Approve Selected', icon='check', on_click=bulk_approve).props('color=green')
                         ui.button('Deny Selected', icon='close', on_click=bulk_deny).props('color=red outline')
 
                 # Select all checkbox
@@ -1072,7 +1093,9 @@ def admin_approvals():
 
                     if not filtered:
                         with request_container:
-                            ui.label('No pending requests in this department').classes('text-sm opacity-70 italic')
+                            with ui.column().classes('w-full items-center py-8'):
+                                ui.icon('check_circle', size='3rem', color='green').classes('opacity-50 mb-2')
+                                ui.label('No pending requests in this department').classes('opacity-70')
                         return
 
                     # Select all checkbox
@@ -1163,7 +1186,7 @@ def admin_approvals():
                 selected_dept.on('update:model-value', lambda e: render_requests(e.args))
 
             # Back to Dashboard button
-            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
     finally:
         db.close()
@@ -1362,7 +1385,9 @@ def admin_employees():
 
             with table_container:
                 if not filtered_rows:
-                    ui.label('No employees match your filters').classes('text-gray-500 text-center py-8')
+                    with ui.column().classes('w-full items-center py-8'):
+                        ui.icon('person_search', size='3rem').classes('opacity-30 mb-2')
+                        ui.label('No employees match your filters').classes('text-gray-500')
                 else:
                     # Table with current page rows
                     table = ui.table(columns=columns, rows=page_rows, row_key='id').classes('w-full')
@@ -1394,13 +1419,13 @@ def admin_employees():
                                     filter_and_render()
 
                                 # Previous button
-                                ui.button(icon='chevron_left', on_click=lambda: go_to_page(pagination_state['page'] - 1)).props('flat dense').set_enabled(pagination_state['page'] > 1)
+                                ui.button(icon='chevron_left', on_click=lambda: go_to_page(pagination_state['page'] - 1)).props('flat dense aria-label="Previous page"').set_enabled(pagination_state['page'] > 1)
 
                                 # Page info
                                 ui.label(f'Page {pagination_state["page"]} of {total_pages}').classes('text-sm mx-2')
 
                                 # Next button
-                                ui.button(icon='chevron_right', on_click=lambda: go_to_page(pagination_state['page'] + 1)).props('flat dense').set_enabled(pagination_state['page'] < total_pages)
+                                ui.button(icon='chevron_right', on_click=lambda: go_to_page(pagination_state['page'] + 1)).props('flat dense aria-label="Next page"').set_enabled(pagination_state['page'] < total_pages)
 
         # Wire up filter handlers - reset to page 1 when filters change
         def on_search_change(e):
@@ -1574,6 +1599,7 @@ def admin_employees_add():
 
                 if not valid:
                     ui.notify('Please fix the highlighted errors', type='warning')
+                    create_btn.props(remove='loading disabled')
                     return
 
                 # Parse hire date
@@ -1582,6 +1608,7 @@ def admin_employees_add():
                     hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
                 except ValueError:
                     ui.notify('Invalid hire date format', type='negative')
+                    create_btn.props(remove='loading disabled')
                     return
 
                 # Build remote schedule JSON
@@ -1629,10 +1656,15 @@ def admin_employees_add():
 
                 except Exception as e:
                     ui.notify(f'Error creating employee: {str(e)}', type='negative')
+                    create_btn.props(remove='loading disabled')
                 finally:
                     db.close()
 
-            ui.button('Create Employee', on_click=create_employee, color='positive', icon='person_add')
+            def on_create_click():
+                create_btn.props('loading disabled')
+                create_employee()
+
+            create_btn = ui.button('Create Employee', on_click=on_create_click, color='positive', icon='person_add')
 
 @ui.page('/admin/employees/edit/{user_id}')
 def admin_employees_edit(user_id: int):
@@ -1676,7 +1708,7 @@ def admin_employees_edit(user_id: int):
                     remote_schedule = json.loads(user.remote_schedule)
                 elif isinstance(user.remote_schedule, dict):
                     remote_schedule = user.remote_schedule
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 remote_schedule = {}
 
         with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
@@ -1698,7 +1730,7 @@ def admin_employees_edit(user_id: int):
 
                 with ui.row().classes('w-full gap-4 mt-2'):
                     username_input = ui.input('Username', value=user.username).props('outlined').classes('flex-1')
-                    email_input = ui.input('Email', value=user.email, validation={'Invalid email format': lambda v: bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v)) if v else False}).props('outlined').classes('flex-1')
+                    email_input = ui.input('Email', value=user.email).props('outlined').classes('flex-1')
 
                 with ui.row().classes('w-full gap-4 mt-2'):
                     password_input = ui.input('New Password', password=True).props('outlined').classes('flex-1')
@@ -1780,28 +1812,27 @@ def admin_employees_edit(user_id: int):
                 ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat')
 
                 def save_changes():
-                    # Validate required fields
-                    if not first_name_input.value:
-                        ui.notify('First Name is required', type='negative')
-                        return
-                    if not last_name_input.value:
-                        ui.notify('Last Name is required', type='negative')
-                        return
-                    if not username_input.value:
-                        ui.notify('Username is required', type='negative')
-                        return
-                    if not email_input.value:
-                        ui.notify('Email is required', type='negative')
-                        return
-                    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                    if not re.match(email_pattern, email_input.value):
-                        ui.notify('Please enter a valid email address', type='negative')
-                        return
-                    if password_input.value and len(password_input.value) < 8:
-                        ui.notify('Password must be at least 8 characters if changing', type='negative')
-                        return
-                    if not hire_date_input.value:
-                        ui.notify('Hire Date is required', type='negative')
+                    # Validate required fields with inline feedback
+                    valid = True
+                    if not validate_required(first_name_input, 'First Name'):
+                        valid = False
+                    if not validate_required(last_name_input, 'Last Name'):
+                        valid = False
+                    if not validate_required(username_input, 'Username'):
+                        valid = False
+                    if not validate_required(email_input, 'Email'):
+                        valid = False
+                    elif not validate_email(email_input):
+                        valid = False
+                    # Password is optional on edit - only validate if provided
+                    if password_input.value and not validate_min_length(password_input, 8, 'Password'):
+                        valid = False
+                    if not validate_required(hire_date_input, 'Hire Date'):
+                        valid = False
+
+                    if not valid:
+                        ui.notify('Please fix the highlighted errors', type='warning')
+                        save_btn.props(remove='loading disabled')
                         return
 
                     # Parse hire date
@@ -1810,6 +1841,7 @@ def admin_employees_edit(user_id: int):
                         hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
                     except ValueError:
                         ui.notify('Invalid hire date format', type='negative')
+                        save_btn.props(remove='loading disabled')
                         return
 
                     # Build remote schedule JSON
@@ -1859,13 +1891,19 @@ def admin_employees_edit(user_id: int):
                             ui.navigate.to('/admin/employees')
                         else:
                             ui.notify('Error updating employee', type='negative')
+                            save_btn.props(remove='loading disabled')
 
                     except Exception as e:
                         ui.notify(f'Error updating employee: {str(e)}', type='negative')
+                        save_btn.props(remove='loading disabled')
                     finally:
                         db.close()
 
-                ui.button('Save Changes', on_click=save_changes, color='positive', icon='save')
+                def on_save_click():
+                    save_btn.props('loading disabled')
+                    save_changes()
+
+                save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
 
             # Danger Zone section
             with ui.card().classes('w-full p-6 mt-6').style('border: 1px solid #ef4444'):
@@ -1874,7 +1912,7 @@ def admin_employees_edit(user_id: int):
                 with ui.row().classes('gap-4'):
                     if user.is_active:
                         def confirm_deactivate():
-                            with ui.dialog() as dialog, ui.card():
+                            with ui.dialog() as dialog, ui.card().classes('p-6'):
                                 ui.label(f'Deactivate {user.first_name} {user.last_name}?').classes('text-lg font-bold mb-2')
                                 ui.label('This will set the employee as inactive but preserve their records.').classes('text-sm opacity-70 mb-4')
                                 with ui.row().classes('gap-4 justify-end'):
@@ -1905,7 +1943,7 @@ def admin_employees_edit(user_id: int):
                         ui.button('Deactivate', on_click=confirm_deactivate, color='orange', icon='person_off')
 
                     def confirm_delete():
-                        with ui.dialog() as dialog, ui.card():
+                        with ui.dialog() as dialog, ui.card().classes('p-6'):
                             ui.label(f'Delete {user.first_name} {user.last_name}?').classes('text-lg font-bold text-red-600 mb-2')
                             ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm text-red-500 mb-2')
                             ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600 mb-4')
@@ -1939,7 +1977,7 @@ def admin_employees_edit(user_id: int):
                     ui.button('Delete', on_click=confirm_delete, color='red', icon='delete_forever')
 
             # Back to Dashboard button
-            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
     finally:
         db.close()
@@ -2011,7 +2049,7 @@ def admin_handbook():
                         with ui.dialog() as dialog, ui.card().classes('w-full max-w-4xl max-h-screen'):
                             with ui.row().classes('w-full justify-between items-center mb-4'):
                                 ui.label('Employee Handbook').classes('text-xl font-bold')
-                                ui.button(icon='close', on_click=dialog.close).props('flat round')
+                                ui.button(icon='close', on_click=dialog.close).props('flat round aria-label="Close dialog"')
                             with ui.scroll_area().classes('w-full').style('height: 70vh'):
                                 ui.markdown(content_to_display).classes('text-sm')
                         dialog.open()
@@ -2548,7 +2586,7 @@ def admin_year_end():
 
         # Action buttons
         with ui.row().classes('w-full gap-4 mt-4 justify-center'):
-            ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard'), icon='dashboard')
+            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
             ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
 
 
@@ -2685,7 +2723,7 @@ def help_page():
         show_chapters()
 
         # Back to Dashboard button
-        ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-6')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 
 
 @ui.page('/admin/system')
@@ -2951,8 +2989,8 @@ def admin_system():
                                                 dialog.open()
                                             return delete
 
-                                        ui.button(icon='restore', on_click=create_restore_handler(bf)).props('flat dense').tooltip('Restore this backup')
-                                        ui.button(icon='delete', on_click=create_delete_handler(bf)).props('flat dense color=red').tooltip('Delete this backup')
+                                        ui.button(icon='restore', on_click=create_restore_handler(bf)).props('flat dense aria-label="Restore this backup"').tooltip('Restore this backup')
+                                        ui.button(icon='delete', on_click=create_delete_handler(bf)).props('flat dense color=red aria-label="Delete this backup"').tooltip('Delete this backup')
 
                     refresh_backups()
 
@@ -3253,7 +3291,7 @@ SMTP_FROM=noreply@company.com
 
                         with ui.row().classes('gap-2 items-center'):
                             with ui.row().classes('items-center gap-1'):
-                                auto_refresh_btn = ui.button(icon='sync', on_click=toggle_auto_refresh).props('flat dense round color=gray')
+                                auto_refresh_btn = ui.button(icon='sync', on_click=toggle_auto_refresh).props('flat dense round color=gray aria-label="Toggle auto-refresh"')
                                 auto_refresh_label = ui.label('Auto').classes('text-xs')
                             ui.button('Refresh', icon='refresh', on_click=refresh_all).props('flat dense')
 
@@ -3572,7 +3610,7 @@ LOG CONTENT:
 
         # Back button
         with ui.row().classes('w-full mt-6'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat')
+            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
 
 
 # ============================================================

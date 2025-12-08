@@ -174,7 +174,7 @@ def render_ai_chat():
                 # Scroll to bottom
                 await ui.run_javascript('document.querySelector(".max-h-96").scrollTop = document.querySelector(".max-h-96").scrollHeight')
 
-            ui.button(icon='send', on_click=send_question).props('color=primary round')
+            ui.button(icon='send', on_click=send_question).props('color=primary round aria-label="Send question"')
             question_input.on('keydown.enter', send_question)
 
         # Quick question buttons

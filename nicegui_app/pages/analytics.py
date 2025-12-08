@@ -312,4 +312,4 @@ def analytics_page():
         refresh_dashboard()
 
         # Back button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat').classes('mt-6')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')

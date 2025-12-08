@@ -88,7 +88,7 @@ def dashboard_page():
 
                 with ui.row().classes('items-center gap-2'):
                     # Help button
-                    ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round').tooltip('Help Center')
+                    ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
 
                     # Dark mode toggle
                     dark_mode = ui.dark_mode()
@@ -227,9 +227,18 @@ def dashboard_page():
                                     ui.label(f'{format_days(days_display * 8)} days').classes('font-medium')
 
                                     def create_cancel_handler(request_id):
-                                        def cancel():
-                                            cancel_request(request_id)
-                                        return cancel
+                                        def show_cancel_dialog():
+                                            with ui.dialog() as cancel_dialog, ui.card().classes('p-4'):
+                                                ui.label('Cancel PTO Request?').classes('text-lg font-semibold mb-2')
+                                                ui.label('This will cancel your pending request and restore your balance.').classes('text-sm opacity-70 mb-4')
+                                                with ui.row().classes('w-full justify-end gap-2'):
+                                                    ui.button('Keep Request', on_click=cancel_dialog.close).props('flat')
+                                                    def confirm_cancel():
+                                                        cancel_dialog.close()
+                                                        cancel_request(request_id)
+                                                    ui.button('Cancel Request', on_click=confirm_cancel).props('color=red')
+                                            cancel_dialog.open()
+                                        return show_cancel_dialog
 
                                     ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id)).props('flat dense color=red size=sm')
 
