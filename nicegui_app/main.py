@@ -752,7 +752,7 @@ def admin_departments():
 
                 employee_filter_input = ui.input(
                     placeholder='Filter employees by name or email...'
-                ).props('outlined dense clearable').classes('flex-1')
+                ).props('outlined dense clearable debounce="300"').classes('flex-1')
                 employee_filter_input.set_visibility(False)
 
         # Results Container
@@ -771,6 +771,7 @@ def admin_departments():
 
         employee_filter_input.on('keydown.enter', lambda: filter_employees())
         employee_filter_input.on('clear', lambda: filter_employees())
+        employee_filter_input.on('update:model-value', lambda: filter_employees())  # Real-time filtering with debounce
 
         def render_department_view():
             results_container.clear()
@@ -1159,11 +1160,11 @@ def admin_employees():
             ui.label('Search & Filter').classes('text-sm font-semibold uppercase opacity-60 mb-3')
 
             with ui.row().classes('w-full gap-4 items-end flex-wrap'):
-                # Search input with autocomplete
+                # Search input with autocomplete (debounce to reduce queries)
                 search_input = ui.input(
                     placeholder='Search by name or username...',
                     autocomplete=employee_names
-                ).classes('flex-grow min-w-48').props('clearable outlined dense')
+                ).classes('flex-grow min-w-48').props('clearable outlined dense debounce="300"')
 
                 # Department filter
                 dept_options = {None: 'All Departments'}
@@ -2448,8 +2449,8 @@ def help_page():
         # Header using shared component (no help button on help page itself)
         page_header(title='HELP CENTER', show_back=True)
 
-        # Search bar
-        search_input = ui.input(placeholder='Search help articles...').classes('w-full mb-4').props('outlined dense clearable')
+        # Search bar (debounce to reduce processing)
+        search_input = ui.input(placeholder='Search help articles...').classes('w-full mb-4').props('outlined dense clearable debounce="300"')
 
         # Content container
         content_container = ui.column().classes('w-full')
