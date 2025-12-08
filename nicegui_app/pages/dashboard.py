@@ -312,6 +312,50 @@ def dashboard_page():
                         with ui.row().classes('w-full justify-center mt-2'):
                             ui.label(f'+ {len(team_pending_requests) - 5} more pending requests').classes('text-sm opacity-60')
 
+            # ============ MY TEAM (Managers only) ============
+            if user_role == 'manager':
+                # Get team members from manager's department
+                manager_user = user_service.get_user_by_id(user_id)
+                if manager_user and manager_user.department_id:
+                    team_members = user_service.get_users_by_department(manager_user.department_id)
+                    # Exclude the manager themselves and inactive users
+                    team_members = [m for m in team_members if m.id != user_id and m.is_active]
+
+                    if team_members:
+                        with ui.card().classes('w-full mb-4'):
+                            with ui.row().classes('w-full justify-between items-center mb-3'):
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.icon('groups', color='teal').classes('text-xl')
+                                    ui.label('My Team').classes('text-lg font-semibold')
+                                ui.badge(f'{len(team_members)} members', color='teal').props('outline')
+
+                            # Team member list with click to view PTO history
+                            for member in team_members[:8]:  # Show first 8
+                                def create_member_click_handler(member_id, member_name):
+                                    def handler():
+                                        show_employee_pto_history(member_id, member_name, current_year)
+                                    return handler
+
+                                with ui.card().classes('w-full p-3 mb-2 cursor-pointer hover:shadow-md').on('click', create_member_click_handler(member.id, member.full_name)):
+                                    with ui.row().classes('w-full justify-between items-center'):
+                                        with ui.row().classes('gap-3 items-center'):
+                                            ui.icon('person').classes('text-gray-400')
+                                            with ui.column().classes('gap-0'):
+                                                ui.label(member.full_name).classes('font-medium')
+                                                ui.label(member.email).classes('text-xs opacity-60')
+
+                                        # Show quick balance info
+                                        member_balance = balance_service.get_or_create_balance(member.id, current_year)
+                                        if member_balance:
+                                            vacation_avail = float(member_balance.vacation_available)
+                                            with ui.row().classes('gap-2 items-center'):
+                                                ui.label(f'{format_days(vacation_avail)} vacation days').classes('text-xs opacity-70')
+                                                ui.icon('chevron_right').classes('text-gray-400')
+
+                            if len(team_members) > 8:
+                                with ui.row().classes('w-full justify-center mt-2'):
+                                    ui.label(f'+ {len(team_members) - 8} more team members').classes('text-sm opacity-60')
+
             # ============ QUICK ACTIONS (employees and managers only) ============
             if user_role not in ['admin', 'superadmin']:
                 with ui.card().classes('w-full mb-4 p-4'):
@@ -680,3 +724,245 @@ def cancel_request(request_id: int):
     finally:
         if db:
             db.close()
+
+
+def show_employee_pto_history(employee_id: int, employee_name: str, default_year: int):
+    """Show a dialog with employee's PTO history, filtering, and clickable events."""
+    db = None
+    try:
+        db = next(get_db())
+        balance_service = BalanceService(db)
+        user_service = UserService(db)
+
+        # Get employee info
+        employee = user_service.get_user_by_id(employee_id)
+        if not employee:
+            ui.notify('Employee not found', type='negative')
+            return
+
+        # Get available years (current year and previous)
+        current_year = date.today().year
+        available_years = [current_year, current_year - 1]
+
+        # Create dialog
+        with ui.dialog() as history_dialog, ui.card().classes('w-full max-w-4xl p-0'):
+            # Header
+            with ui.row().classes('w-full justify-between items-center p-4 bg-teal-500 text-white'):
+                with ui.column().classes('gap-0'):
+                    ui.label(employee_name).classes('text-xl font-bold')
+                    ui.label(employee.email).classes('text-sm opacity-80')
+                ui.button(icon='close', on_click=history_dialog.close).props('flat round dense color=white')
+
+            # Content area with state
+            content_container = ui.column().classes('w-full')
+
+            # State variables
+            state = {'year': default_year, 'filter_type': 'all'}
+
+            def render_content():
+                content_container.clear()
+                with content_container:
+                    selected_year = state['year']
+                    filter_type = state['filter_type']
+
+                    # Get balance for selected year
+                    balance = balance_service.get_or_create_balance(employee_id, selected_year)
+
+                    # Balance Summary Card
+                    with ui.card().classes('w-full m-4 p-4'):
+                        with ui.row().classes('w-full justify-between items-center mb-3'):
+                            ui.label(f'{selected_year} PTO Summary').classes('text-lg font-semibold')
+
+                            # Year selector
+                            def on_year_change(e):
+                                state['year'] = int(e.value)
+                                render_content()
+
+                            ui.select(
+                                options={y: str(y) for y in available_years},
+                                value=selected_year,
+                                on_change=on_year_change
+                            ).props('dense outlined').classes('w-24')
+
+                        if balance:
+                            with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
+                                # Vacation
+                                with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-blue-500 text-center'):
+                                    ui.label('Vacation').classes('text-xs font-semibold text-blue-600')
+                                    ui.label(f'{format_days(float(balance.vacation_used))}').classes('text-2xl font-bold text-blue-600')
+                                    ui.label('days used').classes('text-xs opacity-60')
+                                    total = float(balance.vacation_total) + float(balance.vacation_carryover)
+                                    ui.label(f'of {format_days(total)} total').classes('text-xs opacity-40')
+
+                                # Sick
+                                with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-green-500 text-center'):
+                                    ui.label('Sick').classes('text-xs font-semibold text-green-600')
+                                    ui.label(f'{format_days(float(balance.sick_used))}').classes('text-2xl font-bold text-green-600')
+                                    ui.label('days used').classes('text-xs opacity-60')
+                                    total = float(balance.sick_total) + float(balance.sick_carryover)
+                                    ui.label(f'of {format_days(total)} total').classes('text-xs opacity-40')
+
+                                # Personal
+                                with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-purple-500 text-center'):
+                                    ui.label('Personal').classes('text-xs font-semibold text-purple-600')
+                                    ui.label(f'{format_days(float(balance.personal_used))}').classes('text-2xl font-bold text-purple-600')
+                                    ui.label('days used').classes('text-xs opacity-60')
+                                    total = float(balance.personal_total) + float(balance.personal_carryover)
+                                    ui.label(f'of {format_days(total)} total').classes('text-xs opacity-40')
+
+                    # Filter buttons
+                    with ui.row().classes('w-full px-4 gap-2 flex-wrap'):
+                        ui.label('Filter by:').classes('text-sm opacity-60 self-center')
+
+                        def create_filter_handler(f_type):
+                            def handler():
+                                state['filter_type'] = f_type
+                                render_content()
+                            return handler
+
+                        filter_buttons = [
+                            ('all', 'All', 'grey'),
+                            ('vacation', 'Vacation', 'blue'),
+                            ('sick', 'Sick', 'green'),
+                            ('personal', 'Personal', 'purple'),
+                        ]
+
+                        for f_type, f_label, f_color in filter_buttons:
+                            is_active = filter_type == f_type
+                            btn = ui.button(
+                                f_label,
+                                on_click=create_filter_handler(f_type)
+                            )
+                            if is_active:
+                                btn.props(f'color={f_color}')
+                            else:
+                                btn.props(f'outline color={f_color}')
+
+                    # Get PTO requests for selected year
+                    all_requests = PTOService.get_user_requests(db, employee_id)
+                    year_requests = [
+                        r for r in all_requests
+                        if r.start_date.year == selected_year or r.end_date.year == selected_year
+                    ]
+
+                    # Apply filter
+                    if filter_type != 'all':
+                        year_requests = [r for r in year_requests if r.pto_type.lower() == filter_type]
+
+                    # Sort by date descending
+                    year_requests.sort(key=lambda x: x.start_date, reverse=True)
+
+                    # Request list
+                    with ui.column().classes('w-full p-4 gap-2'):
+                        ui.label(f'Time Off History ({len(year_requests)} records)').classes('text-sm font-semibold opacity-70 mb-2')
+
+                        if year_requests:
+                            type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                            type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                            status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
+
+                            for req in year_requests:
+                                pto_type_lower = req.pto_type.lower()
+                                border_color = type_colors.get(pto_type_lower, 'gray')
+
+                                def create_detail_handler(request):
+                                    def show_detail():
+                                        show_pto_detail_dialog(request)
+                                    return show_detail
+
+                                with ui.card().classes(f'w-full p-3 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', create_detail_handler(req)):
+                                    with ui.row().classes('w-full justify-between items-center'):
+                                        with ui.row().classes('gap-3 items-center'):
+                                            ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                            with ui.column().classes('gap-0'):
+                                                with ui.row().classes('gap-2 items-center'):
+                                                    ui.label(req.pto_type.title()).classes('font-medium')
+                                                    ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey')).props('dense')
+
+                                                if req.start_date == req.end_date:
+                                                    ui.label(req.start_date.strftime('%B %d, %Y')).classes('text-sm opacity-70')
+                                                else:
+                                                    ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+
+                                        with ui.row().classes('gap-2 items-center'):
+                                            days = float(req.total_days)
+                                            ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+                                            ui.icon('chevron_right').classes('text-gray-400')
+                        else:
+                            with ui.row().classes('w-full justify-center py-8'):
+                                with ui.column().classes('items-center gap-2'):
+                                    ui.icon('event_busy', color='grey').classes('text-4xl')
+                                    filter_text = f' {filter_type}' if filter_type != 'all' else ''
+                                    ui.label(f'No{filter_text} time off records for {selected_year}').classes('opacity-60')
+
+            # Initial render
+            render_content()
+
+        history_dialog.open()
+
+    except Exception as e:
+        ui.notify(f'Error loading employee history: {str(e)}', type='negative')
+    finally:
+        if db:
+            db.close()
+
+
+def show_pto_detail_dialog(request):
+    """Show detailed information about a PTO request."""
+    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+    status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
+
+    pto_type_lower = request.pto_type.lower()
+    header_color = type_colors.get(pto_type_lower, 'gray')
+
+    with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
+        # Header
+        with ui.row().classes(f'w-full justify-between items-center p-4 bg-{header_color}-500 text-white'):
+            with ui.row().classes('gap-2 items-center'):
+                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                ui.icon(type_icons.get(pto_type_lower, 'event')).classes('text-2xl')
+                ui.label(f'{request.pto_type.title()} Time Off').classes('text-lg font-bold')
+            ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense color=white')
+
+        # Content
+        with ui.column().classes('w-full p-4 gap-4'):
+            # Status badge
+            with ui.row().classes('w-full justify-center'):
+                ui.badge(request.status.title(), color=status_colors.get(request.status, 'grey')).classes('text-lg px-4 py-1')
+
+            # Date info
+            with ui.card().classes('w-full p-3'):
+                ui.label('Dates').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                if request.start_date == request.end_date:
+                    ui.label(request.start_date.strftime('%A, %B %d, %Y')).classes('font-medium')
+                else:
+                    ui.label(f"{request.start_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
+                    ui.label('to').classes('text-xs opacity-60')
+                    ui.label(f"{request.end_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
+
+            # Duration
+            with ui.card().classes('w-full p-3'):
+                ui.label('Duration').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                days = float(request.total_days)
+                hours = days * 8
+                ui.label(f'{format_days(hours)} days ({int(hours)} hours)').classes('font-medium')
+
+            # Notes (if any)
+            if request.notes:
+                with ui.card().classes('w-full p-3'):
+                    ui.label('Notes').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                    ui.label(request.notes).classes('text-sm')
+
+            # Denial reason (if denied)
+            if request.status == 'denied' and request.denial_reason:
+                with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
+                    ui.label('Denial Reason').classes('text-xs font-semibold uppercase text-red-500 mb-2')
+                    ui.label(request.denial_reason).classes('text-sm')
+
+            # Submission info
+            with ui.row().classes('w-full justify-between text-xs opacity-50'):
+                ui.label(f'Submitted: {request.created_at.strftime("%b %d, %Y")}')
+                if request.approved_at:
+                    ui.label(f'Processed: {request.approved_at.strftime("%b %d, %Y")}')
+
+    detail_dialog.open()
