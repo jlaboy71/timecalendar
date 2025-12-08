@@ -63,7 +63,7 @@ def analytics_page():
                     # ===== ROW 1: Overview Cards =====
                     overview = analytics.get_company_overview(year)
 
-                    with ui.row().classes('w-full gap-4 flex-wrap'):
+                    with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4'):
                         # Total Requests Card
                         with ui.card().classes('flex-1 min-w-48 p-4'):
                             with ui.column().classes('items-center'):
@@ -100,9 +100,9 @@ def analytics_page():
                                 ui.label('Avg Days/Employee').classes('text-sm opacity-70')
 
                     # ===== ROW 2: Monthly Trends & Leave Type Breakdown =====
-                    with ui.row().classes('w-full gap-4'):
+                    with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4'):
                         # Monthly Trends Chart
-                        with ui.card().classes('flex-1 p-4'):
+                        with ui.card().classes('lg:col-span-2 p-4'):
                             with ui.row().classes('items-center gap-2 mb-4'):
                                 ui.icon('trending_up', color='blue')
                                 ui.label('Monthly PTO Trends').classes('text-lg font-semibold')
@@ -129,7 +129,7 @@ def analytics_page():
                                 ui.label(f'Total: {sum(m["days_taken"] for m in monthly_data)} days').classes('text-sm opacity-70')
 
                         # Leave Type Breakdown
-                        with ui.card().classes('w-80 p-4'):
+                        with ui.card().classes('p-4'):
                             with ui.row().classes('items-center gap-2 mb-4'):
                                 ui.icon('pie_chart', color='purple')
                                 ui.label('By Leave Type').classes('text-lg font-semibold')
@@ -151,9 +151,9 @@ def analytics_page():
                                 ui.label('No data available').classes('opacity-50')
 
                     # ===== ROW 3: Department Comparison & Top Users =====
-                    with ui.row().classes('w-full gap-4'):
+                    with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4'):
                         # Department Comparison
-                        with ui.card().classes('flex-1 p-4'):
+                        with ui.card().classes('lg:col-span-2 p-4'):
                             with ui.row().classes('items-center gap-2 mb-4'):
                                 ui.icon('business', color='amber')
                                 ui.label('Department Comparison').classes('text-lg font-semibold')
@@ -161,24 +161,57 @@ def analytics_page():
                             dept_data = analytics.get_department_comparison(year)
 
                             if dept_data:
-                                # Table header
-                                with ui.row().classes('w-full border-b pb-2 mb-2'):
-                                    ui.label('Department').classes('flex-1 font-semibold text-sm')
-                                    ui.label('Employees').classes('w-20 text-center font-semibold text-sm')
-                                    ui.label('Total Days').classes('w-24 text-center font-semibold text-sm')
-                                    ui.label('Avg/Person').classes('w-24 text-center font-semibold text-sm')
+                                # Sort state
+                                sort_state = {'column': 'department_name', 'ascending': True}
+                                dept_table_container = ui.column().classes('w-full')
 
-                                for dept in dept_data[:8]:  # Show top 8
-                                    with ui.row().classes('w-full items-center py-1 hover:bg-gray-50 dark:hover:bg-gray-800'):
-                                        ui.label(dept['department_name']).classes('flex-1 text-sm')
-                                        ui.label(str(dept['employee_count'])).classes('w-20 text-center text-sm')
-                                        ui.label(str(dept['total_days'])).classes('w-24 text-center text-sm')
-                                        ui.label(str(dept['avg_days_per_employee'])).classes('w-24 text-center text-sm font-semibold')
+                                def render_dept_table():
+                                    dept_table_container.clear()
+                                    # Sort the data
+                                    sorted_data = sorted(
+                                        dept_data,
+                                        key=lambda x: x[sort_state['column']],
+                                        reverse=not sort_state['ascending']
+                                    )
+
+                                    with dept_table_container:
+                                        # Table header with sortable columns
+                                        with ui.row().classes('w-full border-b pb-2 mb-2'):
+                                            def make_sort_header(label, col_key, width_class):
+                                                icon = ''
+                                                if sort_state['column'] == col_key:
+                                                    icon = '▲' if sort_state['ascending'] else '▼'
+
+                                                def on_click():
+                                                    if sort_state['column'] == col_key:
+                                                        sort_state['ascending'] = not sort_state['ascending']
+                                                    else:
+                                                        sort_state['column'] = col_key
+                                                        sort_state['ascending'] = True
+                                                    render_dept_table()
+
+                                                ui.button(f'{label} {icon}', on_click=on_click).props('flat dense').classes(f'{width_class} text-sm font-semibold')
+
+                                            make_sort_header('Department', 'department_name', 'flex-1')
+                                            make_sort_header('Employees', 'employee_count', 'w-24')
+                                            make_sort_header('Total Days', 'total_days', 'w-24')
+                                            make_sort_header('Avg/Person', 'avg_days_per_employee', 'w-24')
+
+                                        # Scrollable table body - show all departments
+                                        with ui.scroll_area().classes('w-full').style('max-height: 250px;'):
+                                            for dept in sorted_data:
+                                                with ui.row().classes('w-full items-center py-1 hover:bg-gray-50 dark:hover:bg-gray-800'):
+                                                    ui.label(dept['department_name']).classes('flex-1 text-sm')
+                                                    ui.label(str(dept['employee_count'])).classes('w-24 text-center text-sm')
+                                                    ui.label(str(dept['total_days'])).classes('w-24 text-center text-sm')
+                                                    ui.label(str(dept['avg_days_per_employee'])).classes('w-24 text-center text-sm font-semibold')
+
+                                render_dept_table()
                             else:
                                 ui.label('No department data available').classes('opacity-50')
 
                         # Top PTO Users
-                        with ui.card().classes('w-96 p-4'):
+                        with ui.card().classes('p-4'):
                             with ui.row().classes('items-center gap-2 mb-4'):
                                 ui.icon('emoji_events', color='amber')
                                 ui.label('Top PTO Users').classes('text-lg font-semibold')
