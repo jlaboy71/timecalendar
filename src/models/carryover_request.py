@@ -67,6 +67,7 @@ class CarryoverRequest(Base):
         String(20),
         default="pending",
         nullable=False,
+        index=True,
         comment="pending, approved, denied"
     )
     approved_by: Mapped[Optional[int]] = mapped_column(

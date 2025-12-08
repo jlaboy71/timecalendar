@@ -37,17 +37,18 @@ class User(Base):
     
     # Department and role
     department_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
-        ForeignKey("departments.id"), 
-        nullable=True
+        Integer,
+        ForeignKey("departments.id"),
+        nullable=True,
+        index=True
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="employee")
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="employee", index=True)
     
     # Employment information
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
     anniversary_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     remote_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
     # Location information (for state-specific leave policies)
     location_state: Mapped[Optional[str]] = mapped_column(
