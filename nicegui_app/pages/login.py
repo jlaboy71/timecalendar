@@ -5,7 +5,7 @@ from src.services.rate_limiter import LoginRateLimiter
 from src.services.year_end_service import YearEndService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, validate_required
 
 
 def login_page(timeout: str = None):
@@ -45,15 +45,20 @@ def login_page(timeout: str = None):
 
 def authenticate(username_input, password_input, error_message):
     """Authenticate user credentials and handle login."""
+    # Validate inputs with visual feedback
+    valid = True
+    if not validate_required(username_input, 'Username'):
+        valid = False
+    if not validate_required(password_input, 'Password'):
+        valid = False
+
+    if not valid:
+        error_message.set_visibility(False)
+        return
+
     # Get values from inputs
     username = username_input.value.strip()
     password = password_input.value
-
-    # Validate inputs
-    if not username or not password:
-        error_message.text = 'Please enter both username and password'
-        error_message.set_visibility(True)
-        return
 
     # Check if user is locked out due to too many failed attempts
     is_locked, minutes_remaining = LoginRateLimiter.is_locked_out(username)
