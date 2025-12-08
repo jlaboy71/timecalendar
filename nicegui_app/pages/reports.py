@@ -30,13 +30,32 @@ def reports_page():
     user_id = user.get('id')
     user_role = user.get('role')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
+    is_manager_only = user_role == 'manager'
+
+    # Get manager's department if applicable
+    manager_department_id = None
+    manager_team_members = []
+    if is_manager_only:
+        db = next(get_db())
+        try:
+            from src.services.user_service import UserService
+            user_service = UserService(db)
+            manager_user = user_service.get_user_by_id(user_id)
+            if manager_user and manager_user.department_id:
+                manager_department_id = manager_user.department_id
+                # Get team members for individual reports
+                team_members = user_service.get_users_by_department(manager_department_id)
+                manager_team_members = [m for m in team_members if m.id != user_id and m.is_active]
+        finally:
+            db.close()
 
     # State for filters
     current_year = date.today().year
     is_admin_only = user_role in ['admin', 'superadmin']
     filter_state = {
         'year': current_year,
-        'department_id': None,
+        # Managers auto-filter to their department
+        'department_id': manager_department_id,
         # Admins don't have personal PTO, so default to team reports
         'report_type': 'team_balance' if is_admin_only else 'my_history',
         'status_filter': 'all',  # 'all', 'approved', 'pending', 'denied'
@@ -44,6 +63,8 @@ def reports_page():
         'audit_action': 'all',  # filter by action type
         'audit_date_from': None,  # date range start
         'audit_date_to': None,  # date range end
+        # Individual employee filter (for managers)
+        'employee_id': None,
     }
 
     # Main container
@@ -134,17 +155,39 @@ def reports_page():
                     if filter_state['report_type'] in ['team_balance', 'team_usage', 'audit']:
                         db = next(get_db())
                         try:
-                            departments = db.query(Department).filter(Department.is_active == True).all()
-                            dept_options = {None: 'All Departments'}
-                            dept_options.update({d.id: d.name for d in departments})
-                            ui.select(
-                                dept_options,
-                                label='Department',
-                                value=filter_state['department_id'],
-                                on_change=lambda e: update_filter('department_id', e.value)
-                            ).classes('w-48')
+                            # Managers can only see their own department
+                            if is_manager_only:
+                                dept = db.query(Department).filter(Department.id == manager_department_id).first()
+                                if dept:
+                                    ui.label(f'Department: {dept.name}').classes('self-center text-sm font-medium px-3 py-2 rounded').style('background: rgba(0,128,128,0.1)')
+                            else:
+                                # Admins can select any department
+                                departments = db.query(Department).filter(Department.is_active == True).all()
+                                dept_options = {None: 'All Departments'}
+                                dept_options.update({d.id: d.name for d in departments})
+                                ui.select(
+                                    dept_options,
+                                    label='Department',
+                                    value=filter_state['department_id'],
+                                    on_change=lambda e: update_filter('department_id', e.value)
+                                ).classes('w-48')
                         finally:
                             db.close()
+
+                    # Individual employee filter (managers only, for team reports)
+                    if is_manager_only and filter_state['report_type'] in ['team_balance', 'team_usage'] and manager_team_members:
+                        employee_options = {None: 'All Team Members'}
+                        employee_options.update({
+                            m.id: f"{m.first_name} {m.last_name}"
+                            for m in sorted(manager_team_members, key=lambda x: x.last_name)
+                        })
+                        ui.select(
+                            employee_options,
+                            label='Employee',
+                            value=filter_state['employee_id'],
+                            on_change=lambda e: update_filter('employee_id', e.value),
+                            with_input=True
+                        ).props('dense outlined use-input clearable').classes('w-56')
 
                 # Row 2: Action buttons aligned below filters
                 with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
@@ -425,6 +468,10 @@ def reports_page():
                 if filter_state['department_id']:
                     query = query.filter(User.department_id == filter_state['department_id'])
 
+                # Filter by specific employee (for managers)
+                if filter_state.get('employee_id'):
+                    query = query.filter(User.id == filter_state['employee_id'])
+
                 results = query.order_by(User.last_name, User.first_name).all()
 
                 with ui.card().classes('w-full'):
@@ -505,6 +552,10 @@ def reports_page():
 
                 if filter_state['department_id']:
                     query = query.filter(User.department_id == filter_state['department_id'])
+
+                # Filter by specific employee (for managers)
+                if filter_state.get('employee_id'):
+                    query = query.filter(User.id == filter_state['employee_id'])
 
                 results = query.order_by(PTORequest.start_date.desc()).all()
 

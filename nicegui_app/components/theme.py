@@ -52,6 +52,27 @@ def apply_dark_mode():
     Call this at the start of each page to ensure consistent dark mode behavior.
     Returns the dark_mode object in case the page needs to toggle it.
     """
+    # Add custom background colors for light and dark modes
+    # NiceGUI/Quasar uses body--light and body--dark classes
+    ui.add_head_html('''
+    <style>
+        /* Light mode - Medium Cream (softer than pure white) */
+        body.body--light {
+            background-color: #F5F3EE !important;
+        }
+        body.body--light .q-page {
+            background-color: #F5F3EE !important;
+        }
+        /* Dark mode - Dark Slate Gray */
+        body.body--dark {
+            background-color: #1E2328 !important;
+        }
+        body.body--dark .q-page {
+            background-color: #1E2328 !important;
+        }
+    </style>
+    ''')
+
     dark_mode = ui.dark_mode()
     is_dark = app.storage.general.get('dark_mode', False)
     if is_dark:

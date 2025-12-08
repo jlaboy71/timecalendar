@@ -18,9 +18,13 @@ class AnalyticsService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_company_overview(self, year: int) -> Dict:
+    def get_company_overview(self, year: int, department_id: Optional[int] = None) -> Dict:
         """
-        Get company-wide PTO overview for a year.
+        Get PTO overview for a year, optionally filtered by department.
+
+        Args:
+            year: Year to analyze
+            department_id: Optional department filter (for managers)
 
         Returns:
             Dict with total requests, approved, denied, pending counts
@@ -28,10 +32,19 @@ class AnalyticsService:
         from src.models.pto_request import PTORequest
         from src.models.user import User
 
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
+
         # Total requests for the year
         base_query = self.db.query(PTORequest).filter(
             extract('year', PTORequest.start_date) == year
         )
+        if user_ids is not None:
+            base_query = base_query.filter(PTORequest.user_id.in_(user_ids))
 
         total = base_query.count()
         approved = base_query.filter(PTORequest.status == 'approved').count()
@@ -40,11 +53,20 @@ class AnalyticsService:
         cancelled = base_query.filter(PTORequest.status == 'cancelled').count()
 
         # Total days taken
-        approved_requests = base_query.filter(PTORequest.status == 'approved').all()
+        approved_requests = self.db.query(PTORequest).filter(
+            extract('year', PTORequest.start_date) == year,
+            PTORequest.status == 'approved'
+        )
+        if user_ids is not None:
+            approved_requests = approved_requests.filter(PTORequest.user_id.in_(user_ids))
+        approved_requests = approved_requests.all()
         total_days = sum(float(r.total_days) for r in approved_requests)
 
         # Active employees
-        active_employees = self.db.query(User).filter(User.is_active == True).count()
+        emp_query = self.db.query(User).filter(User.is_active == True)
+        if department_id:
+            emp_query = emp_query.filter(User.department_id == department_id)
+        active_employees = emp_query.count()
 
         # Average days per employee
         avg_days = total_days / active_employees if active_employees > 0 else 0
@@ -62,14 +84,26 @@ class AnalyticsService:
             'approval_rate': round((approved / total * 100) if total > 0 else 0, 1)
         }
 
-    def get_monthly_trends(self, year: int) -> List[Dict]:
+    def get_monthly_trends(self, year: int, department_id: Optional[int] = None) -> List[Dict]:
         """
-        Get monthly PTO trends for a year.
+        Get monthly PTO trends for a year, optionally filtered by department.
+
+        Args:
+            year: Year to analyze
+            department_id: Optional department filter (for managers)
 
         Returns:
             List of monthly data with request counts and days taken
         """
         from src.models.pto_request import PTORequest
+        from src.models.user import User
+
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
 
         monthly_data = []
 
@@ -81,11 +115,14 @@ class AnalyticsService:
                 month_end = date(year, month + 1, 1) - timedelta(days=1)
 
             # Requests that overlap with this month
-            requests = self.db.query(PTORequest).filter(
+            query = self.db.query(PTORequest).filter(
                 PTORequest.status == 'approved',
                 PTORequest.start_date <= month_end,
                 PTORequest.end_date >= month_start
-            ).all()
+            )
+            if user_ids is not None:
+                query = query.filter(PTORequest.user_id.in_(user_ids))
+            requests = query.all()
 
             # Calculate days actually in this month
             days_in_month = 0
@@ -147,9 +184,13 @@ class AnalyticsService:
 
         return result
 
-    def get_department_comparison(self, year: int) -> List[Dict]:
+    def get_department_comparison(self, year: int, department_id: Optional[int] = None) -> List[Dict]:
         """
         Compare PTO usage across departments.
+
+        Args:
+            year: Year to analyze
+            department_id: Optional department filter (for managers - shows only their dept)
 
         Returns:
             List of departments with usage statistics
@@ -158,7 +199,11 @@ class AnalyticsService:
         from src.models.user import User
         from src.models.department import Department
 
-        departments = self.db.query(Department).all()
+        # If department_id specified, only show that department
+        if department_id:
+            departments = self.db.query(Department).filter(Department.id == department_id).all()
+        else:
+            departments = self.db.query(Department).all()
 
         result = []
         for dept in departments:
@@ -197,9 +242,14 @@ class AnalyticsService:
 
         return result
 
-    def get_top_users_by_pto(self, year: int, limit: int = 10) -> List[Dict]:
+    def get_top_users_by_pto(self, year: int, limit: int = 10, department_id: Optional[int] = None) -> List[Dict]:
         """
         Get employees with most PTO taken.
+
+        Args:
+            year: Year to analyze
+            limit: Max number of users to return
+            department_id: Optional department filter (for managers)
 
         Returns:
             List of top users by PTO days
@@ -208,11 +258,21 @@ class AnalyticsService:
         from src.models.user import User
         from src.models.department import Department
 
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
+
         # Get all approved requests for the year
-        requests = self.db.query(PTORequest).filter(
+        query = self.db.query(PTORequest).filter(
             PTORequest.status == 'approved',
             extract('year', PTORequest.start_date) == year
-        ).all()
+        )
+        if user_ids is not None:
+            query = query.filter(PTORequest.user_id.in_(user_ids))
+        requests = query.all()
 
         # Aggregate by user
         user_days = defaultdict(float)
@@ -337,9 +397,13 @@ class AnalyticsService:
             'oldest_request': min((r.submitted_at for r in pending), default=None)
         }
 
-    def get_utilization_rate(self, year: int) -> Dict:
+    def get_utilization_rate(self, year: int, department_id: Optional[int] = None) -> Dict:
         """
         Calculate PTO utilization rate (used vs allocated).
+
+        Args:
+            year: Year to analyze
+            department_id: Optional department filter (for managers)
 
         Returns:
             Dict with utilization statistics
@@ -347,9 +411,17 @@ class AnalyticsService:
         from src.models.pto_balance import PTOBalance
         from src.models.user import User
 
-        balances = self.db.query(PTOBalance).filter(
-            PTOBalance.year == year
-        ).all()
+        # Get user IDs if department filter is set
+        user_ids = None
+        if department_id:
+            user_ids = [u.id for u in self.db.query(User).filter(
+                User.department_id == department_id
+            ).all()]
+
+        query = self.db.query(PTOBalance).filter(PTOBalance.year == year)
+        if user_ids is not None:
+            query = query.filter(PTOBalance.user_id.in_(user_ids))
+        balances = query.all()
 
         total_allocated = 0
         total_used = 0
@@ -357,7 +429,10 @@ class AnalyticsService:
 
         for bal in balances:
             # Check if user is active
-            user = self.db.query(User).filter(User.id == bal.user_id, User.is_active == True).first()
+            user_query = self.db.query(User).filter(User.id == bal.user_id, User.is_active == True)
+            if department_id:
+                user_query = user_query.filter(User.department_id == department_id)
+            user = user_query.first()
             if not user:
                 continue
 

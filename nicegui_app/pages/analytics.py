@@ -19,18 +19,43 @@ def analytics_page():
         ui.navigate.to('/')
         return
 
+    user_id = user.get('id')
     user_role = user.get('role')
     if user_role not in ['manager', 'admin', 'superadmin']:
         ui.notify('Access denied. Manager or higher role required.', type='negative')
         ui.navigate.to('/dashboard')
         return
 
+    is_manager_only = user_role == 'manager'
+
+    # Get manager's department if applicable
+    manager_department_id = None
+    manager_department_name = None
+    if is_manager_only:
+        db = next(get_db())
+        try:
+            from src.services.user_service import UserService
+            from src.models.department import Department
+            user_service = UserService(db)
+            manager_user = user_service.get_user_by_id(user_id)
+            if manager_user and manager_user.department_id:
+                manager_department_id = manager_user.department_id
+                dept = db.query(Department).filter(Department.id == manager_department_id).first()
+                if dept:
+                    manager_department_name = dept.name
+        finally:
+            db.close()
+
     # State
     current_year = date.today().year
     selected_year = {'value': current_year}
 
     with ui.column().classes('w-full max-w-7xl mx-auto mt-8 p-6'):
-        page_header(title='ANALYTICS DASHBOARD', show_back=False)
+        # Show department scope for managers
+        if is_manager_only and manager_department_name:
+            page_header(title=f'ANALYTICS - {manager_department_name.upper()}', show_back=False)
+        else:
+            page_header(title='ANALYTICS DASHBOARD', show_back=False)
 
         # Year selector
         with ui.row().classes('w-full items-center gap-4 mb-6'):
@@ -57,8 +82,11 @@ def analytics_page():
                 analytics = AnalyticsService(db)
 
                 with dashboard_container:
+                    # Department filter for managers (None for admins = all departments)
+                    dept_filter = manager_department_id if is_manager_only else None
+
                     # ===== ROW 1: Overview Cards =====
-                    overview = analytics.get_company_overview(year)
+                    overview = analytics.get_company_overview(year, department_id=dept_filter)
 
                     with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4'):
                         # Total Requests Card
@@ -104,7 +132,7 @@ def analytics_page():
                                 ui.icon('trending_up', color='blue')
                                 ui.label('Monthly PTO Trends').classes('text-lg font-semibold')
 
-                            monthly_data = analytics.get_monthly_trends(year)
+                            monthly_data = analytics.get_monthly_trends(year, department_id=dept_filter)
 
                             # Simple bar chart using divs
                             max_days = max((m['days_taken'] for m in monthly_data), default=1)
@@ -131,7 +159,7 @@ def analytics_page():
                                 ui.icon('pie_chart', color='purple')
                                 ui.label('By Leave Type').classes('text-lg font-semibold')
 
-                            type_data = analytics.get_leave_type_breakdown(year)
+                            type_data = analytics.get_leave_type_breakdown(year, department_id=dept_filter)
 
                             if type_data:
                                 for item in type_data:
@@ -155,7 +183,7 @@ def analytics_page():
                                 ui.icon('business', color='amber')
                                 ui.label('Department Comparison').classes('text-lg font-semibold')
 
-                            dept_data = analytics.get_department_comparison(year)
+                            dept_data = analytics.get_department_comparison(year, department_id=dept_filter)
 
                             if dept_data:
                                 # Sort state
@@ -213,7 +241,7 @@ def analytics_page():
                                 ui.icon('emoji_events', color='amber')
                                 ui.label('Top PTO Users').classes('text-lg font-semibold')
 
-                            top_users = analytics.get_top_users_by_pto(year, limit=8)
+                            top_users = analytics.get_top_users_by_pto(year, limit=8, department_id=dept_filter)
 
                             if top_users:
                                 for idx, user_data in enumerate(top_users):
@@ -233,39 +261,43 @@ def analytics_page():
                             else:
                                 ui.label('No data available').classes('opacity-50')
 
-                    # ===== ROW 4: Coverage Gaps (Admin/Superadmin only) =====
-                    if user_role in ['admin', 'superadmin']:
-                        with ui.card().classes('w-full p-4'):
-                            with ui.row().classes('items-center gap-2 mb-4'):
-                                ui.icon('warning', color='red')
-                                ui.label('Coverage Gap Analysis').classes('text-lg font-semibold')
-                                ui.label('(Next 30 days)').classes('text-sm opacity-60')
+                    # ===== ROW 4: Coverage Gaps =====
+                    with ui.card().classes('w-full p-4'):
+                        with ui.row().classes('items-center gap-2 mb-4'):
+                            ui.icon('warning', color='red')
+                            ui.label('Coverage Gap Analysis').classes('text-lg font-semibold')
+                            ui.label('(Next 30 days)').classes('text-sm opacity-60')
 
-                            # Department selector for gap analysis
+                        gap_container = ui.column().classes('w-full')
+
+                        def analyze_gaps(dept_id: int):
+                            gap_container.clear()
+                            start = date.today()
+                            end = start + timedelta(days=30)
+                            gaps = analytics.get_coverage_gaps(dept_id, start, end, threshold=0.3)
+
+                            with gap_container:
+                                if gaps:
+                                    ui.label(f'Found {len(gaps)} potential coverage issues:').classes('mb-2 text-amber-600')
+                                    for gap in gaps[:10]:  # Show first 10
+                                        with ui.row().classes('w-full items-center gap-4 p-2 bg-red-50 dark:bg-red-900/20 rounded mb-1'):
+                                            ui.icon('warning', color='red', size='xs')
+                                            ui.label(f"{gap['day_name']}, {gap['date_str']}").classes('font-medium')
+                                            ui.label(f"{gap['absent_count']}/{gap['team_size']} out ({gap['absence_rate']}%)").classes('text-sm')
+                                            ui.label(', '.join(gap['absent_employees'][:3])).classes('text-xs opacity-70')
+                                else:
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('check_circle', color='green')
+                                        ui.label('No coverage gaps detected in the next 30 days').classes('text-green-600')
+
+                        # Managers see only their department, admins can select
+                        if is_manager_only and manager_department_id:
+                            # Auto-analyze manager's department
+                            analyze_gaps(manager_department_id)
+                        else:
+                            # Admins can select department
                             departments = DepartmentService.get_all_departments(db)
                             dept_options = {d.id: d.name for d in departments}
-
-                            gap_container = ui.column().classes('w-full')
-
-                            def analyze_gaps(dept_id: int):
-                                gap_container.clear()
-                                start = date.today()
-                                end = start + timedelta(days=30)
-                                gaps = analytics.get_coverage_gaps(dept_id, start, end, threshold=0.3)
-
-                                with gap_container:
-                                    if gaps:
-                                        ui.label(f'Found {len(gaps)} potential coverage issues:').classes('mb-2 text-amber-600')
-                                        for gap in gaps[:10]:  # Show first 10
-                                            with ui.row().classes('w-full items-center gap-4 p-2 bg-red-50 dark:bg-red-900/20 rounded mb-1'):
-                                                ui.icon('warning', color='red', size='xs')
-                                                ui.label(f"{gap['day_name']}, {gap['date_str']}").classes('font-medium')
-                                                ui.label(f"{gap['absent_count']}/{gap['team_size']} out ({gap['absence_rate']}%)").classes('text-sm')
-                                                ui.label(', '.join(gap['absent_employees'][:3])).classes('text-xs opacity-70')
-                                    else:
-                                        with ui.row().classes('items-center gap-2'):
-                                            ui.icon('check_circle', color='green')
-                                            ui.label('No coverage gaps detected in the next 30 days').classes('text-green-600')
 
                             if dept_options:
                                 first_dept_id = list(dept_options.keys())[0]
@@ -289,7 +321,7 @@ def analytics_page():
                             ui.icon('speed', color='green')
                             ui.label('PTO Utilization').classes('text-lg font-semibold')
 
-                        utilization = analytics.get_utilization_rate(year)
+                        utilization = analytics.get_utilization_rate(year, department_id=dept_filter)
 
                         with ui.row().classes('w-full gap-8 items-center'):
                             # Progress bar

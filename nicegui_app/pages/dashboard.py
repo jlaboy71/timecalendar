@@ -326,35 +326,30 @@ def dashboard_page():
                             with ui.row().classes('w-full justify-between items-center mb-3'):
                                 with ui.row().classes('items-center gap-2'):
                                     ui.icon('groups', color='teal').classes('text-xl')
-                                    ui.label('My Team').classes('text-lg font-semibold')
+                                    ui.label('Team PTO History').classes('text-lg font-semibold')
                                 ui.badge(f'{len(team_members)} members', color='teal').props('outline')
 
-                            # Team member list with click to view PTO history
-                            for member in team_members[:8]:  # Show first 8
-                                def create_member_click_handler(member_id, member_name):
-                                    def handler():
-                                        show_employee_pto_history(member_id, member_name, current_year)
-                                    return handler
+                            # Build options for searchable dropdown
+                            team_options = {
+                                m.id: f"{m.full_name} ({m.email})" for m in sorted(team_members, key=lambda x: x.full_name)
+                            }
 
-                                with ui.card().classes('w-full p-3 mb-2 cursor-pointer hover:shadow-md').on('click', create_member_click_handler(member.id, member.full_name)):
-                                    with ui.row().classes('w-full justify-between items-center'):
-                                        with ui.row().classes('gap-3 items-center'):
-                                            ui.icon('person').classes('text-gray-400')
-                                            with ui.column().classes('gap-0'):
-                                                ui.label(member.full_name).classes('font-medium')
-                                                ui.label(member.email).classes('text-xs opacity-60')
+                            def on_employee_select(e):
+                                if e.value:
+                                    selected_member = next((m for m in team_members if m.id == e.value), None)
+                                    if selected_member:
+                                        show_employee_pto_history(selected_member.id, selected_member.full_name, current_year)
+                                    # Reset selection after viewing
+                                    e.sender.value = None
 
-                                        # Show quick balance info
-                                        member_balance = balance_service.get_or_create_balance(member.id, current_year)
-                                        if member_balance:
-                                            vacation_avail = float(member_balance.vacation_available)
-                                            with ui.row().classes('gap-2 items-center'):
-                                                ui.label(f'{format_days(vacation_avail)} vacation days').classes('text-xs opacity-70')
-                                                ui.icon('chevron_right').classes('text-gray-400')
-
-                            if len(team_members) > 8:
-                                with ui.row().classes('w-full justify-center mt-2'):
-                                    ui.label(f'+ {len(team_members) - 8} more team members').classes('text-sm opacity-60')
+                            with ui.row().classes('w-full items-center gap-3'):
+                                ui.select(
+                                    options=team_options,
+                                    with_input=True,
+                                    on_change=on_employee_select,
+                                    label='Search team member...'
+                                ).props('dense outlined use-input input-debounce="300" clearable').classes('flex-1').style('min-width: 250px')
+                                ui.label('Select to view PTO history').classes('text-xs opacity-50')
 
             # ============ QUICK ACTIONS (employees and managers only) ============
             if user_role not in ['admin', 'superadmin']:
@@ -810,7 +805,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                     total = float(balance.personal_total) + float(balance.personal_carryover)
                                     ui.label(f'of {format_days(total)} total').classes('text-xs opacity-40')
 
-                    # Filter buttons
+                    # Filter buttons - all leave types
                     with ui.row().classes('w-full px-4 gap-2 flex-wrap'):
                         ui.label('Filter by:').classes('text-sm opacity-60 self-center')
 
@@ -820,11 +815,17 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                 render_content()
                             return handler
 
+                        # All leave types with distinct colors
                         filter_buttons = [
                             ('all', 'All', 'grey'),
                             ('vacation', 'Vacation', 'blue'),
                             ('sick', 'Sick', 'green'),
                             ('personal', 'Personal', 'purple'),
+                            ('bereavement', 'Bereavement', 'brown'),
+                            ('fmla', 'FMLA', 'teal'),
+                            ('jury_duty', 'Jury Duty', 'indigo'),
+                            ('voting', 'Voting', 'cyan'),
+                            ('military', 'Military', 'deep-orange'),
                         ]
 
                         for f_type, f_label, f_color in filter_buttons:
@@ -832,7 +833,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                             btn = ui.button(
                                 f_label,
                                 on_click=create_filter_handler(f_type)
-                            )
+                            ).props('dense size=sm')
                             if is_active:
                                 btn.props(f'color={f_color}')
                             else:
@@ -857,13 +858,21 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                         ui.label(f'Time Off History ({len(year_requests)} records)').classes('text-sm font-semibold opacity-70 mb-2')
 
                         if year_requests:
-                            type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                            type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                            type_colors = {
+                                'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
+                                'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
+                                'voting': 'cyan', 'military': 'deep-orange'
+                            }
+                            type_icons = {
+                                'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
+                                'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
+                                'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
+                            }
                             status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
                             for req in year_requests:
                                 pto_type_lower = req.pto_type.lower()
-                                border_color = type_colors.get(pto_type_lower, 'gray')
+                                border_color = type_colors.get(pto_type_lower, 'grey')
 
                                 def create_detail_handler(request):
                                     def show_detail():
@@ -909,17 +918,25 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
 def show_pto_detail_dialog(request):
     """Show detailed information about a PTO request."""
-    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+    type_colors = {
+        'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
+        'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
+        'voting': 'cyan', 'military': 'deep-orange'
+    }
     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
     pto_type_lower = request.pto_type.lower()
-    header_color = type_colors.get(pto_type_lower, 'gray')
+    header_color = type_colors.get(pto_type_lower, 'grey')
 
     with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
         # Header
         with ui.row().classes(f'w-full justify-between items-center p-4 bg-{header_color}-500 text-white'):
             with ui.row().classes('gap-2 items-center'):
-                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                type_icons = {
+                    'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
+                    'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
+                    'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
+                }
                 ui.icon(type_icons.get(pto_type_lower, 'event')).classes('text-2xl')
                 ui.label(f'{request.pto_type.title()} Time Off').classes('text-lg font-bold')
             ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense color=white')
