@@ -877,9 +877,7 @@ def reports_page():
             with ui.dialog() as dialog, ui.card().classes('p-6').style('min-width: 450px;'):
                 ui.label('Email Report').classes('text-xl font-semibold mb-4')
 
-                email_input = ui.input(
-                    placeholder='email@example.com'
-                ).classes('w-full mb-4').props('label="Recipient Email"')
+                email_input = ui.input().classes('w-full mb-4').props('label="Recipient Email"')
 
                 subject_input = ui.input(
                     value=f'PTO Report - {report_name} ({filter_state["year"]})'
@@ -892,9 +890,7 @@ def reports_page():
                     value='PDF (Print Format)'
                 ).classes('w-full mb-4')
 
-                message_input = ui.textarea(
-                    placeholder='Add a personal message...'
-                ).classes('w-full mb-4').props('label="Message (optional)"')
+                message_input = ui.textarea().classes('w-full mb-4').props('label="Message (optional)"')
 
                 # Attachment preview section
                 with ui.card().classes('w-full p-3 bg-gray-100 dark:bg-gray-800 mb-4'):
