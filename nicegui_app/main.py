@@ -24,7 +24,7 @@ from nicegui_app.pages.handbook import handbook_page
 from nicegui_app.pages.reports import reports_page
 from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length
 from src.services.session_manager import SessionManager, require_auth
 from src.services.email_service import email_service
 
@@ -1553,31 +1553,27 @@ def admin_employees_add():
             ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat')
 
             def create_employee():
-                # Validate required fields
-                if not first_name_input.value:
-                    ui.notify('First Name is required', type='negative')
-                    return
-                if not last_name_input.value:
-                    ui.notify('Last Name is required', type='negative')
-                    return
-                if not username_input.value:
-                    ui.notify('Username is required', type='negative')
-                    return
-                if not email_input.value:
-                    ui.notify('Email is required', type='negative')
-                    return
-                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                if not re.match(email_pattern, email_input.value):
-                    ui.notify('Please enter a valid email address', type='negative')
-                    return
-                if not password_input.value:
-                    ui.notify('Password is required', type='negative')
-                    return
-                if len(password_input.value) < 8:
-                    ui.notify('Password must be at least 8 characters', type='negative')
-                    return
-                if not hire_date_input.value:
-                    ui.notify('Hire Date is required', type='negative')
+                # Validate required fields with inline visual feedback
+                valid = True
+                if not validate_required(first_name_input, 'First Name'):
+                    valid = False
+                if not validate_required(last_name_input, 'Last Name'):
+                    valid = False
+                if not validate_required(username_input, 'Username'):
+                    valid = False
+                if not validate_required(email_input, 'Email'):
+                    valid = False
+                elif not validate_email(email_input):
+                    valid = False
+                if not validate_required(password_input, 'Password'):
+                    valid = False
+                elif not validate_min_length(password_input, 8, 'Password'):
+                    valid = False
+                if not validate_required(hire_date_input, 'Hire Date'):
+                    valid = False
+
+                if not valid:
+                    ui.notify('Please fix the highlighted errors', type='warning')
                     return
 
                 # Parse hire date
