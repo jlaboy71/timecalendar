@@ -104,6 +104,7 @@ def reports_page():
         def render_filters():
             filters_card.clear()
             with filters_card:
+                # Row 1: Filters
                 with ui.row().classes('w-full gap-4 items-end flex-wrap'):
                     # Year filter (common to all reports)
                     years = list(range(current_year - 2, current_year + 2))
@@ -139,35 +140,31 @@ def reports_page():
                         finally:
                             db.close()
 
+                # Row 2: Action buttons aligned below filters
+                with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
                     # Refresh button
                     ui.button('Refresh', icon='refresh', on_click=render_report).props('outline')
 
-                    # Export dropdown with multiple options
-                    with ui.dropdown_button('Export', icon='download', auto_close=True).props('color=secondary') as export_dropdown:
-                        async def handle_export_csv():
-                            export_dropdown.close()
+                    # Download dropdown (renamed from Export)
+                    with ui.dropdown_button('Download', icon='download', auto_close=True).props('color=secondary') as download_dropdown:
+                        async def handle_download_csv():
+                            download_dropdown.close()
                             await asyncio.sleep(0.1)
                             export_csv()
 
-                        async def handle_print_preview():
-                            export_dropdown.close()
-                            await asyncio.sleep(0.1)
-                            show_print_preview()
-
                         async def handle_download_pdf():
-                            export_dropdown.close()
+                            download_dropdown.close()
                             await asyncio.sleep(0.1)
                             download_pdf()
 
-                        async def handle_email_dialog():
-                            export_dropdown.close()
-                            await asyncio.sleep(0.1)
-                            show_email_dialog()
-
-                        ui.item('Download CSV', on_click=handle_export_csv)
-                        ui.item('Print Preview', on_click=handle_print_preview)
+                        ui.item('Download CSV', on_click=handle_download_csv)
                         ui.item('Download PDF', on_click=handle_download_pdf)
-                        ui.item('Email Report', on_click=handle_email_dialog)
+
+                    # Print Preview button (separate from dropdown)
+                    ui.button('Print Preview', icon='print', on_click=show_print_preview).props('outline')
+
+                    # Email Report button (separate from dropdown)
+                    ui.button('Email Report', icon='email', on_click=show_email_dialog).props('outline')
 
         def update_filter(key, value):
             filter_state[key] = value
