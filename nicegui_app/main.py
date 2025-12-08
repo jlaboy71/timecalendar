@@ -1801,7 +1801,7 @@ def admin_handbook():
     current_user = app.storage.general.get('user')
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        page_header(title='HANDBOOK MANAGEMENT', show_back=True, back_url='/admin')
+        page_header(title='HANDBOOK MANAGEMENT', show_back=False)
 
         # Tabs for different views
         with ui.tabs().classes('w-full') as tabs:
