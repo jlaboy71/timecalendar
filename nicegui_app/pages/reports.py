@@ -827,24 +827,30 @@ def reports_page():
         def show_print_preview():
             """Show print preview dialog with formatted report."""
             import base64
-            html_content = get_report_html()
-            # Encode HTML as base64 to avoid escaping issues
-            b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
+            try:
+                html_content = get_report_html()
+                # Encode HTML as base64 to avoid escaping issues
+                b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
 
-            with ui.dialog().props('maximized') as dialog, ui.card().classes('w-full h-full'):
-                with ui.row().classes('w-full justify-between items-center p-4 border-b'):
-                    ui.label('Print Preview').classes('text-xl font-semibold')
-                    with ui.row().classes('gap-2'):
-                        ui.button('Print', icon='print', on_click=lambda: ui.run_javascript('''
-                            const iframe = document.getElementById("print-frame");
-                            iframe.contentWindow.print();
-                        ''')).props('color=primary')
-                        ui.button('Close', icon='close', on_click=dialog.close).props('flat')
+                dialog = ui.dialog().props('maximized')
+                with dialog, ui.card().classes('w-full h-full'):
+                    with ui.row().classes('w-full justify-between items-center p-4 border-b'):
+                        ui.label('Print Preview').classes('text-xl font-semibold')
+                        with ui.row().classes('gap-2'):
+                            ui.button('Print', icon='print', on_click=lambda: ui.run_javascript('''
+                                const iframe = document.getElementById("print-frame");
+                                if (iframe && iframe.contentWindow) {
+                                    iframe.contentWindow.print();
+                                }
+                            ''')).props('color=primary')
+                            ui.button('Close', icon='close', on_click=dialog.close).props('flat')
 
-                # Use data URI to load HTML content into iframe
-                ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
+                    # Use data URI to load HTML content into iframe
+                    ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
 
-            dialog.open()
+                dialog.open()
+            except Exception as e:
+                ui.notify(f'Error generating print preview: {str(e)}', type='negative')
 
         def download_pdf():
             """Download report as PDF (using browser print-to-PDF)."""

@@ -18,7 +18,7 @@ if config.DATABASE_URL.startswith('sqlite'):
 # Create database engine using SQLAlchemy 2.0 syntax
 engine = create_engine(
     config.DATABASE_URL,
-    echo=config.ENVIRONMENT == 'development',  # Enable SQL logging in development
+    echo=False,  # Disable SQL echo - logs go to file via logging_config
     future=True,  # Use SQLAlchemy 2.0 style
     connect_args=connect_args
 )
