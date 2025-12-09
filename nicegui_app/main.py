@@ -88,6 +88,84 @@ def manager_carryover():
         return
     manager_carryover_page()
 
+@ui.page('/manager/team')
+def manager_team():
+    """Manager team management page."""
+    if not require_auth():
+        return
+
+    from nicegui_app.components.header import page_header
+    apply_dark_mode()
+
+    current_user = app.storage.general.get('user', {})
+    user_role = current_user.get('role')
+    department_id = current_user.get('department_id')
+
+    # Only managers can access this page
+    if user_role != 'manager':
+        ui.navigate.to('/dashboard')
+        return
+
+    if not department_id:
+        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+            page_header(title='MY TEAM', show_back=False)
+            ui.label('You are not assigned to a department').classes('text-lg text-center')
+        return
+
+    # Load team data
+    db = next(get_db())
+    try:
+        from src.services.user_service import UserService
+        from src.services.department_service import DepartmentService
+
+        user_service = UserService(db)
+        department = DepartmentService.get_department_by_id(db, department_id)
+        dept_name = department.name if department else 'Unknown'
+
+        # Get all employees in the manager's department (excluding the manager)
+        team_members = user_service.get_users_by_department(department_id)
+        # Filter to only employees (not other managers/admins) and active users
+        team_members = [m for m in team_members if m.id != current_user.get('id') and m.role == 'employee' and m.is_active]
+
+    finally:
+        db.close()
+
+    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+        page_header(title=f'MY TEAM - {dept_name.upper()}', show_back=False)
+
+        if not team_members:
+            with ui.card().classes('w-full p-6 text-center'):
+                ui.icon('group_off', size='xl').classes('opacity-40')
+                ui.label('No team members found').classes('text-lg mt-2')
+                ui.label('Employees in your department will appear here').classes('text-sm opacity-60')
+        else:
+            ui.label(f'{len(team_members)} team members').classes('text-sm opacity-60 mb-4')
+
+            # Team member cards
+            for member in sorted(team_members, key=lambda x: x.full_name):
+                with ui.card().classes('w-full mb-3 p-4 hover:shadow-md transition-shadow'):
+                    with ui.row().classes('w-full justify-between items-center'):
+                        # Employee info
+                        with ui.column().classes('gap-1'):
+                            ui.label(member.full_name).classes('text-lg font-semibold')
+                            with ui.row().classes('gap-3 items-center'):
+                                ui.label(f'@{member.username}').classes('text-sm opacity-60')
+                                ui.label(f'• {member.email}').classes('text-sm opacity-60')
+                            if member.hire_date:
+                                ui.label(f'Hired: {member.hire_date.strftime("%b %d, %Y")}').classes('text-xs opacity-50')
+
+                        # Actions
+                        with ui.row().classes('gap-2'):
+                            def create_edit_handler(user_id):
+                                def edit():
+                                    ui.navigate.to(f'/admin/employees/edit/{user_id}')
+                                return edit
+                            ui.button('Edit', icon='edit', on_click=create_edit_handler(member.id)).props('flat dense color=primary')
+
+        # Navigation buttons
+        with ui.row().classes('w-full justify-center mt-6 gap-4'):
+            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+
 @ui.page('/handbook')
 def handbook():
     """Employee handbook page."""
@@ -1677,10 +1755,17 @@ def admin_employees_edit(user_id: int):
 
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
-    if user_role not in ['admin', 'superadmin']:
+    current_user = app.storage.general.get('user', {})
+    user_role = current_user.get('role')
+    current_user_id = current_user.get('id')
+    current_department_id = current_user.get('department_id')
+
+    # Allow admin, superadmin, and managers (managers restricted to their department below)
+    if user_role not in ['admin', 'superadmin', 'manager']:
         ui.navigate.to('/')
         return
+
+    is_manager_editing = user_role == 'manager'
 
     # Fetch the user by ID
     db = next(get_db())
@@ -1694,6 +1779,23 @@ def admin_employees_edit(user_id: int):
             ui.notify('Employee not found', type='negative')
             ui.navigate.to('/admin/employees')
             return
+
+        # Manager access restriction: can only edit employees in their own department
+        if is_manager_editing:
+            if user.department_id != current_department_id:
+                ui.notify('You can only edit employees in your department', type='negative')
+                ui.navigate.to('/dashboard')
+                return
+            # Managers cannot edit other managers or admins
+            if user.role in ['manager', 'admin', 'superadmin']:
+                ui.notify('You cannot edit managers or administrators', type='negative')
+                ui.navigate.to('/dashboard')
+                return
+            # Managers cannot edit themselves via this page
+            if user.id == current_user_id:
+                ui.notify('Use your profile to edit your own information', type='warning')
+                ui.navigate.to('/dashboard')
+                return
 
         # Get departments for dropdown
         departments = DepartmentService.get_all_departments(db)
@@ -1756,13 +1858,22 @@ def admin_employees_edit(user_id: int):
                                 ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
                     with ui.column().classes('flex-1'):
-                        department_select = ui.select(dept_options, label='Department', value=user.department_id).props('outlined').classes('w-full')
+                        # Managers cannot change department
+                        dept_props = 'outlined disabled' if is_manager_editing else 'outlined'
+                        department_select = ui.select(dept_options, label='Department', value=user.department_id).props(dept_props).classes('w-full')
+                        if is_manager_editing:
+                            ui.label('Department cannot be changed').classes('text-xs opacity-50 -mt-1')
 
                 with ui.row().classes('w-full gap-4 mt-2'):
                     role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
-                    role_select = ui.select(role_options, label='Role', value=user.role).props('outlined').classes('flex-1')
+                    # Managers cannot change role
+                    role_props = 'outlined disabled' if is_manager_editing else 'outlined'
+                    role_select = ui.select(role_options, label='Role', value=user.role).props(role_props).classes('flex-1')
 
+                    # Managers cannot deactivate employees
                     is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('flex-1 self-center')
+                    if is_manager_editing:
+                        is_active_check.disable()
 
             # Work Location Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -1809,7 +1920,9 @@ def admin_employees_edit(user_id: int):
 
             # Action Buttons
             with ui.row().classes('w-full justify-between mt-4'):
-                ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat')
+                # Navigate back to appropriate page based on role
+                back_url = '/manager/team' if is_manager_editing else '/admin/employees'
+                ui.button('Cancel', on_click=lambda: ui.navigate.to(back_url)).props('flat')
 
                 def save_changes():
                     # Validate required fields with inline feedback
@@ -1863,14 +1976,17 @@ def admin_employees_edit(user_id: int):
                             'email': email_input.value,
                             'first_name': first_name_input.value,
                             'last_name': last_name_input.value,
-                            'department_id': department_select.value,
-                            'role': role_select.value,
                             'hire_date': hire_date,
                             'remote_schedule': json.dumps(new_remote_schedule),
-                            'is_active': is_active_check.value,
                             'location_state': location_state_select.value,
                             'location_city': location_city_select.value if location_city_select.value else None
                         }
+
+                        # Only admins can change department, role, and active status
+                        if not is_manager_editing:
+                            update_data['department_id'] = department_select.value
+                            update_data['role'] = role_select.value
+                            update_data['is_active'] = is_active_check.value
 
                         if password_input.value:
                             update_data['password'] = password_input.value
@@ -1881,14 +1997,14 @@ def admin_employees_edit(user_id: int):
 
                         if updated_user:
                             # Log user update
-                            current_user = app.storage.general.get('user')
+                            logged_user = app.storage.general.get('user')
                             AuditService.log_user_update(
-                                db, current_user.get('id'),
-                                f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                db, logged_user.get('id'),
+                                f"{logged_user.get('first_name')} {logged_user.get('last_name')}",
                                 user_id, {'fields_updated': list(update_data.keys())}
                             )
                             ui.notify(f'Employee updated successfully', type='positive')
-                            ui.navigate.to('/admin/employees')
+                            ui.navigate.to(back_url)
                         else:
                             ui.notify('Error updating employee', type='negative')
                             save_btn.props(remove='loading disabled')
