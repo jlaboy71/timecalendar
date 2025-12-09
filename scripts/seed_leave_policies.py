@@ -59,7 +59,7 @@ def seed_leave_policies():
         # ===============================================================
         # SICK TIME POLICIES
         # ===============================================================
-        # Default (FL uses this)
+        # Default (FL uses this) - Medical Sick Time
         {
             "leave_type_id": sick.id,
             "location_state": None,
@@ -68,7 +68,7 @@ def seed_leave_policies():
             "accrual_period": "per_hours_worked",
             "accrual_hours_divisor": 40,  # 1 hr per 40 hrs worked
             "max_annual_hours": Decimal("40"),
-            "max_carryover_hours": Decimal("60"),
+            "max_carryover_hours": Decimal("80"),  # 80 hours per handbook
             "waiting_period_days": 90,
             "min_increment_hours": Decimal("4"),
             "effective_date": date(2024, 1, 1),
@@ -110,7 +110,7 @@ def seed_leave_policies():
             "accrual_period": "per_hours_worked",
             "accrual_hours_divisor": 40,  # 1 hr per 40 hrs worked
             "max_annual_hours": Decimal("40"),
-            "max_carryover_hours": Decimal("60"),
+            "max_carryover_hours": Decimal("40"),  # 40 hours per handbook
             "waiting_period_days": 90,
             "min_increment_hours": Decimal("4"),
             "effective_date": date(2024, 1, 1),
@@ -124,7 +124,7 @@ def seed_leave_policies():
             "accrual_period": "per_hours_worked",
             "accrual_hours_divisor": 30,  # 1 hr per 30 hrs worked
             "max_annual_hours": Decimal("40"),
-            "max_carryover_hours": Decimal("60"),
+            "max_carryover_hours": Decimal("40"),  # 40 hours per handbook
             "waiting_period_days": 90,
             "min_increment_hours": Decimal("4"),
             "effective_date": date(2024, 1, 1),

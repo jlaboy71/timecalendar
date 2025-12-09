@@ -22,7 +22,14 @@ class EmailService:
         self.smtp_user = os.getenv('SMTP_USER', '')
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
         self.from_email = os.getenv('EMAIL_FROM', 'noreply@tjm.com')
+        self.from_name = os.getenv('EMAIL_FROM_NAME', 'TJM Calendar')
         self.enabled = os.getenv('EMAIL_ENABLED', 'false').lower() == 'true'
+
+        # Format the From address with display name
+        if self.from_name:
+            self.from_address = f'"{self.from_name}" <{self.from_email}>'
+        else:
+            self.from_address = self.from_email
 
     def is_configured(self) -> bool:
         """Check if email is properly configured."""
@@ -46,7 +53,7 @@ class EmailService:
         try:
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
-            msg['From'] = self.from_email
+            msg['From'] = self.from_address
             msg['To'] = to_email
 
             html_part = MIMEText(html_body, 'html')
@@ -254,7 +261,7 @@ class EmailService:
         try:
             msg = MIMEMultipart('mixed')
             msg['Subject'] = subject
-            msg['From'] = self.from_email
+            msg['From'] = self.from_address
             msg['To'] = to_email
 
             # Build email body
@@ -318,7 +325,7 @@ class EmailService:
                 """
                 msg = MIMEMultipart('alternative')
                 msg['Subject'] = subject
-                msg['From'] = self.from_email
+                msg['From'] = self.from_address
                 msg['To'] = to_email
                 msg.attach(MIMEText(full_html, 'html'))
 

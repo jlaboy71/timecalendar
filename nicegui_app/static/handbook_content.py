@@ -57,15 +57,16 @@ Vacation time is based on years of service:
 
 ---
 
-## Paid Sick Time
+## Paid Sick Time (Medical Use Only)
 
 **Default Policy:**
 - All employees accrue up to **40 hours (5 days)** of paid sick time per year
 - Sick time begins accruing from date of hire
-- Unused sick time carries over to the following year, up to a maximum of **60 hours**
+- Unused sick time carries over to the following year, up to a maximum of **80 hours**
 - Minimum increment: 4 hours (half day)
+- **NOT paid out at termination**
 
-**Permitted Uses:**
+**Permitted Uses (Medical Only):**
 - Personal illness, injury, or medical appointments
 - Caring for a sick family member
 - Preventive medical care
@@ -79,13 +80,53 @@ Vacation time is based on years of service:
 
 ---
 
+## Chicago Paid Sick and Safe Leave (Any Reason)
+
+**For Chicago employees only - This is a SEPARATE leave bank from Medical Sick Time**
+
+Under the Chicago Paid Leave and Paid Sick and Safe Leave Ordinance (Effective July 1, 2024):
+
+**Accrual & Caps:**
+- **Accrual:** 1 hour for every 35 hours worked
+- **Annual Cap:** 40 hours per year
+- **Carryover:** Up to **16 hours** may carry over to the next year
+- **Minimum Increment:** 2 hours (or full shift if shorter)
+
+**Permitted Uses (Any Reason):**
+- Any personal reason
+- Appointments
+- Mental health days
+- Emergencies
+- Family needs
+- Safety-related issues
+
+**Key Difference from Medical Sick Time:**
+- This leave can be used for ANY reason, not just medical
+- Medical sick time (80 hr carryover) is separate from this bank (16 hr carryover)
+- These hours do NOT combine - they are tracked separately
+- Paid out on separation only if Chicago law requires
+
+---
+
 ## State-Specific Sick Time Policies
+
+### Chicago, IL - Summary Table
+
+| Leave Type | Carryover Allowed | Maximum Carryover |
+|------------|-------------------|-------------------|
+| Vacation | Only with written senior management approval | Not defined |
+| Chicago Paid Sick and Safe Leave (any reason) | Yes | 16 hours |
+| Paid Sick Time (medical only) | Yes | 80 hours |
+| Paid Personal Days | No | 0 |
+| Bereavement | Not applicable | Not applicable |
 
 ### Chicago, IL (Effective July 1, 2024)
 Under the Chicago Paid Leave and Paid Sick and Safe Leave Ordinance:
-- **Accrual:** 1 hour for every 35 hours worked
-- **Annual Cap:** 40 hours paid sick leave + 40 hours paid leave
-- **Carryover:** Up to 80 hours of sick leave; paid leave does not carry over
+- **Two separate leave banks** are required:
+  1. **Paid Sick Time (Medical):** Up to 80 hours carryover, medical use only
+  2. **Paid Leave (Any Reason):** Up to 16 hours carryover, any purpose
+- **Accrual:** 1 hour for every 35 hours worked (each bank)
+- **Annual Cap:** 40 hours per bank (80 hours total across both)
 - **Minimum Increment:** 2 hours (or full shift if shorter)
 - **Covered Uses:** Safe leave for domestic violence, sexual assault, stalking, or human trafficking
 
@@ -251,22 +292,38 @@ All employees receive **2 paid personal days** (16 hours) per calendar year.
         "title": "Paid Sick Time",
         "icon": "medical_services",
         "content": """
-**Default Policy:**
+**Paid Sick Time (Medical Use Only):**
 - Max annual: 40 hours (5 days)
-- Max carryover: 60 hours
+- Max carryover: **80 hours**
 - Minimum increment: 4 hours (half day)
+- NOT paid out at termination
 
 **Permitted Uses:** Personal illness, medical appointments, caring for sick family, domestic violence/stalking related, public health emergencies.
 
-**State-Specific Variations:**
+---
 
-**Chicago, IL (July 2024):** 1 hr/35 hrs worked, 40 hr sick + 40 hr paid leave, 80 hr carryover, 2-hr minimum
+**Chicago Paid Sick and Safe Leave (Any Reason) - SEPARATE BANK:**
+- Max annual: 40 hours
+- Max carryover: **16 hours**
+- Minimum increment: 2 hours
+- Can be used for ANY reason (not just medical)
+- Paid out on separation only if Chicago law requires
 
-**New York:** 1 hr/30 hrs worked, 56 hr max annual
+---
 
-**New Jersey:** 1 hr/30 hrs worked, 40 hr max, 40 hr carryover
+**Chicago Carryover Summary:**
+| Leave Type | Carryover |
+|------------|-----------|
+| Vacation | Only with written approval |
+| Chicago Paid Leave (any reason) | 16 hours |
+| Paid Sick Time (medical) | 80 hours |
+| Personal Days | 0 (no carryover) |
+| Bereavement | N/A |
 
-**Connecticut:** 1 hr/40 hrs worked, 40 hr max, 40 hr carryover
+**Other States:**
+- **New York:** 1 hr/30 hrs worked, 56 hr max annual
+- **New Jersey:** 1 hr/30 hrs worked, 40 hr max, 40 hr carryover
+- **Connecticut:** 1 hr/40 hrs worked, 40 hr max, 40 hr carryover
         """
     },
     {
