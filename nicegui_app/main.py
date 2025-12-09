@@ -1870,10 +1870,8 @@ def admin_employees_edit(user_id: int):
                     role_props = 'outlined disabled' if is_manager_editing else 'outlined'
                     role_select = ui.select(role_options, label='Role', value=user.role).props(role_props).classes('flex-1')
 
-                    # Managers cannot deactivate employees
+                    # Managers CAN activate/deactivate employees
                     is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('flex-1 self-center')
-                    if is_manager_editing:
-                        is_active_check.disable()
 
             # Work Location Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -1979,14 +1977,14 @@ def admin_employees_edit(user_id: int):
                             'hire_date': hire_date,
                             'remote_schedule': json.dumps(new_remote_schedule),
                             'location_state': location_state_select.value,
-                            'location_city': location_city_select.value if location_city_select.value else None
+                            'location_city': location_city_select.value if location_city_select.value else None,
+                            'is_active': is_active_check.value  # Managers can activate/deactivate
                         }
 
-                        # Only admins can change department, role, and active status
+                        # Only admins can change department and role
                         if not is_manager_editing:
                             update_data['department_id'] = department_select.value
                             update_data['role'] = role_select.value
-                            update_data['is_active'] = is_active_check.value
 
                         if password_input.value:
                             update_data['password'] = password_input.value
@@ -2021,76 +2019,77 @@ def admin_employees_edit(user_id: int):
 
                 save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
 
-            # Danger Zone section
-            with ui.card().classes('w-full p-6 mt-6').style('border: 1px solid #ef4444'):
-                ui.label('Danger Zone').classes('text-lg font-semibold text-red-600 mb-4')
+            # Danger Zone section - only for admins (managers cannot delete)
+            if not is_manager_editing:
+                with ui.card().classes('w-full p-6 mt-6').style('border: 1px solid #ef4444'):
+                    ui.label('Danger Zone').classes('text-lg font-semibold text-red-600 mb-4')
 
-                with ui.row().classes('gap-4'):
-                    if user.is_active:
-                        def confirm_deactivate():
+                    with ui.row().classes('gap-4'):
+                        if user.is_active:
+                            def confirm_deactivate():
+                                with ui.dialog() as dialog, ui.card().classes('p-6'):
+                                    ui.label(f'Deactivate {user.first_name} {user.last_name}?').classes('text-lg font-bold mb-2')
+                                    ui.label('This will set the employee as inactive but preserve their records.').classes('text-sm opacity-70 mb-4')
+                                    with ui.row().classes('gap-4 justify-end'):
+                                        ui.button('Cancel', on_click=dialog.close).props('flat')
+                                        async def do_deactivate():
+                                            from src.services.user_service import UserService
+                                            db = next(get_db())
+                                            try:
+                                                user_service = UserService(db)
+                                                if user_service.deactivate_user(user_id):
+                                                    # Log user deactivation
+                                                    current_user = app.storage.general.get('user')
+                                                    AuditService.log_user_deactivate(
+                                                        db, current_user.get('id'),
+                                                        f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                        user_id, user.username
+                                                    )
+                                                    ui.notify('Employee deactivated', type='positive')
+                                                    dialog.close()
+                                                    ui.navigate.to('/admin/employees')
+                                                else:
+                                                    ui.notify('Error deactivating employee', type='negative')
+                                            finally:
+                                                db.close()
+                                        ui.button('Deactivate', on_click=do_deactivate, color='orange')
+                                dialog.open()
+
+                            ui.button('Deactivate', on_click=confirm_deactivate, color='orange', icon='person_off')
+
+                        def confirm_delete():
                             with ui.dialog() as dialog, ui.card().classes('p-6'):
-                                ui.label(f'Deactivate {user.first_name} {user.last_name}?').classes('text-lg font-bold mb-2')
-                                ui.label('This will set the employee as inactive but preserve their records.').classes('text-sm opacity-70 mb-4')
+                                ui.label(f'Delete {user.first_name} {user.last_name}?').classes('text-lg font-bold text-red-600 mb-2')
+                                ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm text-red-500 mb-2')
+                                ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600 mb-4')
                                 with ui.row().classes('gap-4 justify-end'):
                                     ui.button('Cancel', on_click=dialog.close).props('flat')
-                                    async def do_deactivate():
+                                    async def do_delete():
                                         from src.services.user_service import UserService
                                         db = next(get_db())
                                         try:
                                             user_service = UserService(db)
-                                            if user_service.deactivate_user(user_id):
-                                                # Log user deactivation
+                                            if user_service.delete_user(user_id):
+                                                # Log user deletion
                                                 current_user = app.storage.general.get('user')
-                                                AuditService.log_user_deactivate(
-                                                    db, current_user.get('id'),
-                                                    f"{current_user.get('first_name')} {current_user.get('last_name')}",
-                                                    user_id, user.username
+                                                AuditService.log(
+                                                    db, action='user_delete',
+                                                    user_id=current_user.get('id'),
+                                                    username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                    entity_type='user', entity_id=user_id,
+                                                    details={'deleted_user': user.username}
                                                 )
-                                                ui.notify('Employee deactivated', type='positive')
+                                                ui.notify('Employee deleted', type='positive')
                                                 dialog.close()
                                                 ui.navigate.to('/admin/employees')
                                             else:
-                                                ui.notify('Error deactivating employee', type='negative')
+                                                ui.notify('Error deleting employee', type='negative')
                                         finally:
                                             db.close()
-                                    ui.button('Deactivate', on_click=do_deactivate, color='orange')
+                                    ui.button('Delete Permanently', on_click=do_delete, color='red')
                             dialog.open()
 
-                        ui.button('Deactivate', on_click=confirm_deactivate, color='orange', icon='person_off')
-
-                    def confirm_delete():
-                        with ui.dialog() as dialog, ui.card().classes('p-6'):
-                            ui.label(f'Delete {user.first_name} {user.last_name}?').classes('text-lg font-bold text-red-600 mb-2')
-                            ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm text-red-500 mb-2')
-                            ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600 mb-4')
-                            with ui.row().classes('gap-4 justify-end'):
-                                ui.button('Cancel', on_click=dialog.close).props('flat')
-                                async def do_delete():
-                                    from src.services.user_service import UserService
-                                    db = next(get_db())
-                                    try:
-                                        user_service = UserService(db)
-                                        if user_service.delete_user(user_id):
-                                            # Log user deletion
-                                            current_user = app.storage.general.get('user')
-                                            AuditService.log(
-                                                db, action='user_delete',
-                                                user_id=current_user.get('id'),
-                                                username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
-                                                entity_type='user', entity_id=user_id,
-                                                details={'deleted_user': user.username}
-                                            )
-                                            ui.notify('Employee deleted', type='positive')
-                                            dialog.close()
-                                            ui.navigate.to('/admin/employees')
-                                        else:
-                                            ui.notify('Error deleting employee', type='negative')
-                                    finally:
-                                        db.close()
-                                ui.button('Delete Permanently', on_click=do_delete, color='red')
-                        dialog.open()
-
-                    ui.button('Delete', on_click=confirm_delete, color='red', icon='delete_forever')
+                        ui.button('Delete', on_click=confirm_delete, color='red', icon='delete_forever')
 
             # Back to Dashboard button
             ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
