@@ -9,6 +9,7 @@ from src.models.pto_balance import PTOBalance
 from src.models.pto_request import PTORequest
 from src.models.audit_log import AuditLog
 from src.services.report_service import ReportService
+from src.services.export_service import ExportService
 from datetime import date, datetime
 from io import StringIO
 import csv
@@ -30,19 +31,21 @@ def reports_page():
     user_id = user.get('id')
     user_role = user.get('role')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
-    is_manager_only = user_role == 'manager'
+    # Manager and Admin are restricted to their department; only SuperAdmin sees all
+    is_department_restricted = user_role in ['manager', 'admin']
+    is_manager_only = is_department_restricted  # Keep backward compatibility
 
-    # Get manager's department if applicable
+    # Get user's department if applicable (for manager/admin)
     manager_department_id = None
     manager_team_members = []
-    if is_manager_only:
+    if is_department_restricted:
         db = next(get_db())
         try:
             from src.services.user_service import UserService
             user_service = UserService(db)
-            manager_user = user_service.get_user_by_id(user_id)
-            if manager_user and manager_user.department_id:
-                manager_department_id = manager_user.department_id
+            current_user = user_service.get_user_by_id(user_id)
+            if current_user and current_user.department_id:
+                manager_department_id = current_user.department_id
                 # Get team members for individual reports
                 team_members = user_service.get_users_by_department(manager_department_id)
                 manager_team_members = [m for m in team_members if m.id != user_id and m.is_active]
@@ -469,13 +472,23 @@ def reports_page():
                     query = query.filter(User.department_id == filter_state['department_id'])
 
                 # Filter by specific employee (for managers)
+                selected_employee_name = None
                 if filter_state.get('employee_id'):
                     query = query.filter(User.id == filter_state['employee_id'])
+                    # Get the employee name for the title
+                    emp = db.query(User).filter(User.id == filter_state['employee_id']).first()
+                    if emp:
+                        selected_employee_name = f"{emp.first_name} {emp.last_name}"
 
                 results = query.order_by(User.last_name, User.first_name).all()
 
                 with ui.card().classes('w-full'):
-                    ui.label(f'Team Balance Summary - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
+                    # Dynamic title based on filter
+                    if selected_employee_name:
+                        title = f'{selected_employee_name} Balance Summary - {filter_state["year"]}'
+                    else:
+                        title = f'Team Balance Summary - {filter_state["year"]}'
+                    ui.label(title).classes('text-lg font-semibold mb-4')
 
                     if not results:
                         with ui.column().classes('w-full items-center py-8'):
@@ -965,7 +978,7 @@ def reports_page():
                     return report_service.generate_balance_report_html(user_id, year)
                 elif report_type == 'team_balance':
                     return report_service.generate_team_balance_report_html(
-                        year, filter_state['department_id']
+                        year, filter_state['department_id'], filter_state.get('employee_id')
                     )
                 else:
                     # For other report types, generate a simple HTML version
@@ -1124,10 +1137,17 @@ def reports_page():
                             attachment_data = html_content.encode('utf-8')
                             attachment_name = f'{base_name}.html'
                             attachment_type = 'html'
-                        else:  # PDF - send HTML for now with note
-                            attachment_data = html_content.encode('utf-8')
-                            attachment_name = f'{base_name}.html'
-                            attachment_type = 'html'
+                        else:  # PDF - generate actual PDF
+                            try:
+                                pdf_bytes = ExportService.generate_report_pdf(html_content, base_name)
+                                attachment_data = pdf_bytes
+                                attachment_name = f'{base_name}.pdf'
+                                attachment_type = 'pdf'
+                            except Exception as pdf_error:
+                                ui.notify(f'PDF generation failed: {pdf_error}. Sending as HTML.', type='warning')
+                                attachment_data = html_content.encode('utf-8')
+                                attachment_name = f'{base_name}.html'
+                                attachment_type = 'html'
 
                         success = email_service.send_report_email(
                             to_email=email_input.value,
@@ -1223,4 +1243,5 @@ def reports_page():
         # Navigation buttons at bottom
         with ui.row().classes('w-full justify-between mt-6'):
             ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
-            ui.button('View Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline')
+            if is_manager_or_admin:
+                ui.button('View Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline')

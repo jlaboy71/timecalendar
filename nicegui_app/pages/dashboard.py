@@ -201,6 +201,52 @@ def dashboard_page():
                 else:
                     ui.label(f'No balance data for {current_year}').classes('opacity-70')
 
+                # ============ OTHER LEAVE TYPES (Non-Accruing) ============
+                # Query for non-accruing leave usage this year
+                other_leave_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+                other_leave_requests = [r for r in all_requests
+                                       if r.pto_type.lower() in other_leave_types
+                                       and r.status == 'approved'
+                                       and r.start_date.year == current_year]
+
+                # Calculate days used per type
+                other_leave_usage = {}
+                for leave_type in other_leave_types:
+                    days_used = sum(float(r.total_days or 0) for r in other_leave_requests
+                                   if r.pto_type.lower() == leave_type)
+                    other_leave_usage[leave_type] = days_used
+
+                total_other_used = sum(other_leave_usage.values())
+
+                with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used)', icon='more_horiz').classes('w-full'):
+                    ui.label('Non-accruing leave used this year').classes('text-xs opacity-60 mb-3')
+
+                    # Leave type definitions with icons and colors
+                    leave_info = {
+                        'bereavement': {'label': 'Bereavement', 'icon': 'sentiment_very_dissatisfied', 'color': 'brown', 'policy': 'Immediate family: 5 days, Extended: 3 days'},
+                        'fmla': {'label': 'Family & Medical', 'icon': 'family_restroom', 'color': 'teal', 'policy': 'FMLA: Up to 12 weeks unpaid, job-protected'},
+                        'jury_duty': {'label': 'Jury Duty', 'icon': 'gavel', 'color': 'indigo', 'policy': 'Paid time for jury service'},
+                        'voting': {'label': 'Voting Time', 'icon': 'how_to_vote', 'color': 'cyan', 'policy': 'Up to 2 hours if polls not open 4+ hrs outside work'},
+                        'military': {'label': 'Military Leave', 'icon': 'military_tech', 'color': 'deep-orange', 'policy': 'Per USERRA requirements, job-protected'},
+                    }
+
+                    with ui.row().classes('w-full gap-2 items-stretch'):
+                        for leave_type, info in leave_info.items():
+                            days = other_leave_usage.get(leave_type, 0)
+                            color = info['color']
+
+                            with ui.card().classes(f'p-3 border-l-4 border-{color}-500 flex-1').style('height: 180px;'):
+                                with ui.row().classes('items-center gap-2 mb-2'):
+                                    ui.icon(info['icon']).classes(f'text-{color}-500')
+                                    ui.label(info['label']).classes('font-medium text-sm')
+
+                                if days > 0:
+                                    ui.label(f'{days:.0f} days').classes(f'text-lg font-bold text-{color}-600')
+                                else:
+                                    ui.label('—').classes('text-lg font-bold opacity-30')
+
+                                ui.label(info['policy']).classes('text-xs opacity-50 mt-2')
+
             # ============ PENDING REQUESTS (if any) - employees only ============
             if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:
                 with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
@@ -369,15 +415,15 @@ def dashboard_page():
                             if user_role != 'manager':
                                 ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit')
 
-                    ui.separator().classes('my-2')
-
-                    # Row 2: Resources
-                    with ui.column().classes('w-full gap-3'):
-                        ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
-                        with ui.row().classes('w-full gap-3 flex-wrap'):
-                            ui.button('Company Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                            ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                            ui.button('My Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                    # Row 2: Resources (employees only - managers use Manager Tools)
+                    if user_role != 'manager':
+                        ui.separator().classes('my-2')
+                        with ui.column().classes('w-full gap-3'):
+                            ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
 
                     # Row 3: Manager Tools (managers only)
                     if user_role == 'manager':
@@ -385,18 +431,10 @@ def dashboard_page():
                         with ui.column().classes('w-full gap-3'):
                             ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
-                                def go_to_team_calendar():
-                                    # Pre-set calendar to team view before navigating
-                                    app.storage.general['calendar_prefs'] = {
-                                        **app.storage.general.get('calendar_prefs', {}),
-                                        'view_mode': 'team'
-                                    }
-                                    ui.navigate.to('/calendar')
-
-                                ui.button('Team Calendar', icon='groups', on_click=go_to_team_calendar).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Carryover Approvals', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Handbook AI', icon='smart_toy', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Company Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
@@ -549,7 +587,7 @@ def dashboard_page():
 
                     ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60 mb-3')
                     with ui.row().classes('w-full gap-3 flex-wrap'):
-                        ui.button('Company Calendar', icon='calendar_month',
+                        ui.button('Calendar', icon='calendar_month',
                                   on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
                         ui.button('Manage Handbook', icon='menu_book',
                                   on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')

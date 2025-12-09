@@ -37,25 +37,31 @@ def analytics_page():
         ui.navigate.to('/dashboard')
         return
 
-    is_manager_only = user_role == 'manager'
+    # Manager and Admin are restricted to their department; only SuperAdmin sees all
+    is_department_restricted = user_role in ['manager', 'admin']
 
-    # Get manager's department if applicable
-    manager_department_id = None
-    manager_department_name = None
-    if is_manager_only:
+    # Get user's department if applicable (for manager/admin)
+    user_department_id = None
+    user_department_name = None
+    if is_department_restricted:
         db = next(get_db())
         try:
             from src.services.user_service import UserService
             from src.models.department import Department
             user_service = UserService(db)
-            manager_user = user_service.get_user_by_id(user_id)
-            if manager_user and manager_user.department_id:
-                manager_department_id = manager_user.department_id
-                dept = db.query(Department).filter(Department.id == manager_department_id).first()
+            current_user = user_service.get_user_by_id(user_id)
+            if current_user and current_user.department_id:
+                user_department_id = current_user.department_id
+                dept = db.query(Department).filter(Department.id == user_department_id).first()
                 if dept:
-                    manager_department_name = dept.name
+                    user_department_name = dept.name
         finally:
             db.close()
+
+    # Keep backward compatibility with existing variable names
+    is_manager_only = is_department_restricted
+    manager_department_id = user_department_id
+    manager_department_name = user_department_name
 
     # State
     current_year = date.today().year

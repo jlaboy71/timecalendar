@@ -349,8 +349,14 @@ class ReportService:
         </html>
         '''
 
-    def generate_team_balance_report_html(self, year: int, department_id: int = None) -> str:
-        """Generate a formatted team balance report."""
+    def generate_team_balance_report_html(self, year: int, department_id: int = None, employee_id: int = None) -> str:
+        """Generate a formatted team balance report.
+
+        Args:
+            year: Year for the report
+            department_id: Optional department filter
+            employee_id: Optional single employee filter (overrides team view)
+        """
         from src.models.user import User
         from src.models.pto_balance import PTOBalance
         from src.models.department import Department
@@ -361,15 +367,31 @@ class ReportService:
         ).filter(User.is_active == True)
 
         dept_name = "All Departments"
-        if department_id:
+        employee_name = None
+
+        # If specific employee is selected, filter to just that employee
+        if employee_id:
+            query = query.filter(User.id == employee_id)
+            emp = self.db.query(User).filter(User.id == employee_id).first()
+            if emp:
+                employee_name = f"{emp.first_name} {emp.last_name}"
+                dept_name = emp.department.name if emp.department else "No Department"
+        elif department_id:
             query = query.filter(User.department_id == department_id)
             dept = self.db.query(Department).filter(Department.id == department_id).first()
             dept_name = dept.name if dept else "Unknown Department"
 
         results = query.order_by(User.last_name, User.first_name).all()
 
+        # Dynamic title based on filter
+        if employee_name:
+            title = f"{employee_name} Balance Summary - {year}"
+        else:
+            title = f"Team Balance Summary - {year}"
+
         header = self.get_report_header_html(
-            title=f"Team Balance Summary - {year}",
+            title=title,
+            employee_name=employee_name,
             department=dept_name
         )
 

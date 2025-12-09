@@ -139,28 +139,57 @@ def manager_team():
                 ui.label('No team members found').classes('text-lg mt-2')
                 ui.label('Employees in your department will appear here').classes('text-sm opacity-60')
         else:
-            ui.label(f'{len(team_members)} team members').classes('text-sm opacity-60 mb-4')
+            # Filter controls
+            with ui.row().classes('w-full items-center gap-4 mb-4'):
+                ui.label(f'{len(team_members)} team members').classes('text-sm opacity-60')
+                ui.space()
 
-            # Team member cards
-            for member in sorted(team_members, key=lambda x: x.full_name):
-                with ui.card().classes('w-full mb-3 p-4 hover:shadow-md transition-shadow'):
-                    with ui.row().classes('w-full justify-between items-center'):
-                        # Employee info
-                        with ui.column().classes('gap-1'):
-                            ui.label(member.full_name).classes('text-lg font-semibold')
-                            with ui.row().classes('gap-3 items-center'):
-                                ui.label(f'@{member.username}').classes('text-sm opacity-60')
-                                ui.label(f'• {member.email}').classes('text-sm opacity-60')
-                            if member.hire_date:
-                                ui.label(f'Hired: {member.hire_date.strftime("%b %d, %Y")}').classes('text-xs opacity-50')
+                # Employee filter dropdown
+                filter_options = {0: 'All Employees'}
+                for m in sorted(team_members, key=lambda x: x.full_name):
+                    filter_options[m.id] = m.full_name
 
-                        # Actions
-                        with ui.row().classes('gap-2'):
-                            def create_edit_handler(user_id):
-                                def edit():
-                                    ui.navigate.to(f'/admin/employees/edit/{user_id}')
-                                return edit
-                            ui.button('Edit', icon='edit', on_click=create_edit_handler(member.id)).props('flat dense color=primary')
+                selected_filter = {'value': 0}
+
+                def on_filter_change(e):
+                    selected_filter['value'] = e.value
+                    render_team_list()
+
+                ui.select(filter_options, value=0, on_change=on_filter_change, label='Filter').props('outlined dense').classes('w-48')
+
+            # Team list container
+            team_container = ui.column().classes('w-full gap-3')
+
+            def render_team_list():
+                team_container.clear()
+                with team_container:
+                    # Filter members based on selection
+                    filtered_members = team_members
+                    if selected_filter['value'] != 0:
+                        filtered_members = [m for m in team_members if m.id == selected_filter['value']]
+
+                    for member in sorted(filtered_members, key=lambda x: x.full_name):
+                        with ui.card().classes('w-full p-4 hover:shadow-md transition-shadow'):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                # Employee info
+                                with ui.column().classes('gap-1'):
+                                    ui.label(member.full_name).classes('text-lg font-semibold')
+                                    with ui.row().classes('gap-3 items-center'):
+                                        ui.label(f'@{member.username}').classes('text-sm opacity-60')
+                                        ui.label(f'• {member.email}').classes('text-sm opacity-60')
+                                    if member.hire_date:
+                                        ui.label(f'Hired: {member.hire_date.strftime("%b %d, %Y")}').classes('text-xs opacity-50')
+
+                                # Actions
+                                with ui.row().classes('gap-2'):
+                                    def create_edit_handler(user_id):
+                                        def edit():
+                                            ui.navigate.to(f'/admin/employees/edit/{user_id}')
+                                        return edit
+                                    ui.button('Edit', icon='edit', on_click=create_edit_handler(member.id)).props('flat dense color=primary')
+
+            # Initial render
+            render_team_list()
 
         # Navigation buttons
         with ui.row().classes('w-full justify-center mt-6 gap-4'):
@@ -228,7 +257,7 @@ def requests():
             results_container = None
 
             def set_filter(filter_type):
-                """Set the filter and re-render the list (for employees pending/denied)."""
+                """Set the filter and re-render the list (for employees approved/pending/denied)."""
                 current_filter['value'] = filter_type
                 # Update button styles
                 update_button_styles()
@@ -236,7 +265,9 @@ def requests():
                 for btn in type_filter_buttons.values():
                     btn.props('flat')
                 # Filter and render
-                if filter_type == 'pending':
+                if filter_type == 'approved':
+                    render_requests_by_type(approved_requests, 'Approved')
+                elif filter_type == 'pending':
                     render_requests_by_type(pending_requests, 'Pending')
                 elif filter_type == 'denied':
                     render_requests_by_type(denied_requests, 'Denied')
@@ -388,9 +419,17 @@ def requests():
                     ).props('flat dense').classes('text-purple-600')
                     type_filter_buttons['personal'] = btn_personal
 
-            # For employees: also show pending/denied stats
+            # For employees: show approved/pending/denied status cards
             if not is_manager_or_admin:
                 with ui.row().classes('w-full gap-4 mb-4 items-stretch'):
+                    # Approved
+                    with ui.card().classes('flex-1 p-3 text-center border-l-4 border-green-500 flex flex-col'):
+                        ui.label(str(len(approved_requests))).classes('text-2xl font-bold text-green-500')
+                        ui.label('Approved').classes('text-xs opacity-60 mb-2')
+                        ui.element('div').classes('flex-grow')
+                        btn_approved = ui.button('Show Approved', on_click=lambda: set_filter('approved')).props('dense size=sm flat').classes('w-full')
+                        filter_buttons['approved'] = btn_approved
+
                     # Pending
                     with ui.card().classes('flex-1 p-3 text-center border-l-4 border-amber-500 flex flex-col'):
                         ui.label(str(len(pending_requests))).classes('text-2xl font-bold text-amber-500')
@@ -1817,10 +1856,18 @@ def admin_employees_edit(user_id: int):
             # Header using shared component
             page_header(title='EDIT EMPLOYEE', show_back=False)
 
-            # Employee name display
-            with ui.card().classes('w-full p-4 mb-4').style('border-left: 4px solid #5a6a72'):
-                ui.label(f'{user.first_name} {user.last_name}').classes('text-lg font-semibold')
-                ui.label(f'@{user.username} • {user.email}').classes('text-sm opacity-60')
+            # Employee name display with department info for managers
+            with ui.row().classes('w-full gap-4 mb-4'):
+                with ui.card().classes('flex-1 p-4').style('border-left: 4px solid #5a6a72'):
+                    ui.label(f'{user.first_name} {user.last_name}').classes('text-lg font-semibold')
+                    ui.label(f'@{user.username} • {user.email}').classes('text-sm opacity-60')
+
+                # Show department card for managers (read-only info)
+                if is_manager_editing:
+                    dept_name = dept_options.get(user.department_id, 'Unknown')
+                    with ui.card().classes('p-4').style('border-left: 4px solid #6366f1'):
+                        ui.label('Department').classes('text-xs opacity-60 uppercase')
+                        ui.label(dept_name).classes('text-lg font-semibold')
 
             # Basic Information Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -1834,11 +1881,14 @@ def admin_employees_edit(user_id: int):
                     username_input = ui.input('Username', value=user.username).props('outlined').classes('flex-1')
                     email_input = ui.input('Email', value=user.email).props('outlined').classes('flex-1')
 
-                with ui.row().classes('w-full gap-4 mt-2'):
-                    password_input = ui.input('New Password', password=True).props('outlined').classes('flex-1')
-                    with ui.column().classes('flex-1'):
-                        ui.label('').classes('h-4')  # Spacer
-                ui.label('Leave blank to keep current password').classes('text-xs opacity-60 -mt-2')
+                # Password field - only for admins, not managers
+                password_input = None
+                if not is_manager_editing:
+                    with ui.row().classes('w-full gap-4 mt-2'):
+                        password_input = ui.input('New Password', password=True).props('outlined').classes('flex-1')
+                        with ui.column().classes('flex-1'):
+                            ui.label('').classes('h-4')  # Spacer
+                    ui.label('Leave blank to keep current password').classes('text-xs opacity-60 -mt-2')
 
             # Employment Details Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -1857,52 +1907,56 @@ def admin_employees_edit(user_id: int):
                             with hire_date_input.add_slot('append'):
                                 ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
-                    with ui.column().classes('flex-1'):
-                        # Managers cannot change department
-                        dept_props = 'outlined disabled' if is_manager_editing else 'outlined'
-                        department_select = ui.select(dept_options, label='Department', value=user.department_id).props(dept_props).classes('w-full')
-                        if is_manager_editing:
-                            ui.label('Department cannot be changed').classes('text-xs opacity-50 -mt-1')
+                    # Department field - only for admins
+                    department_select = None
+                    if not is_manager_editing:
+                        with ui.column().classes('flex-1'):
+                            department_select = ui.select(dept_options, label='Department', value=user.department_id).props('outlined').classes('w-full')
 
+                # Role and Active Status row
+                role_select = None
                 with ui.row().classes('w-full gap-4 mt-2'):
-                    role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
-                    # Managers cannot change role
-                    role_props = 'outlined disabled' if is_manager_editing else 'outlined'
-                    role_select = ui.select(role_options, label='Role', value=user.role).props(role_props).classes('flex-1')
+                    # Role field - only for admins
+                    if not is_manager_editing:
+                        role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
+                        role_select = ui.select(role_options, label='Role', value=user.role).props('outlined').classes('flex-1')
 
                     # Managers CAN activate/deactivate employees
                     is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('flex-1 self-center')
 
-            # Work Location Section
-            with ui.card().classes('w-full p-6 mb-4'):
-                ui.label('Work Location').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+            # Work Location Section - only for admins
+            location_state_select = None
+            location_city_select = None
+            if not is_manager_editing:
+                with ui.card().classes('w-full p-6 mb-4'):
+                    ui.label('Work Location').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
 
-                def get_city_options_for_state(state):
-                    if state == 'IL':
-                        return {None: 'Select City', 'Chicago': 'Chicago'}
-                    elif state == 'NY':
-                        return {None: 'Select City', 'New York': 'New York'}
-                    elif state == 'CT':
-                        return {None: 'Select City', 'Rowayton': 'Rowayton'}
-                    elif state == 'FL':
-                        return {None: 'Select City', 'Boca': 'Boca'}
-                    else:
-                        return {None: 'Select City'}
+                    def get_city_options_for_state(state):
+                        if state == 'IL':
+                            return {None: 'Select City', 'Chicago': 'Chicago'}
+                        elif state == 'NY':
+                            return {None: 'Select City', 'New York': 'New York'}
+                        elif state == 'CT':
+                            return {None: 'Select City', 'Rowayton': 'Rowayton'}
+                        elif state == 'FL':
+                            return {None: 'Select City', 'Boca': 'Boca'}
+                        else:
+                            return {None: 'Select City'}
 
-                with ui.row().classes('w-full gap-4'):
-                    state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
-                    location_state_select = ui.select(state_options, label='State', value=user.location_state).props('outlined').classes('flex-1')
+                    with ui.row().classes('w-full gap-4'):
+                        state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
+                        location_state_select = ui.select(state_options, label='State', value=user.location_state).props('outlined').classes('flex-1')
 
-                    initial_city_options = get_city_options_for_state(user.location_state)
-                    location_city_select = ui.select(initial_city_options, label='City', value=user.location_city).props('outlined').classes('flex-1')
+                        initial_city_options = get_city_options_for_state(user.location_state)
+                        location_city_select = ui.select(initial_city_options, label='City', value=user.location_city).props('outlined').classes('flex-1')
 
-                    def update_city_options_edit():
-                        state = location_state_select.value
-                        location_city_select.options = get_city_options_for_state(state)
-                        location_city_select.value = None
-                        location_city_select.update()
+                        def update_city_options_edit():
+                            state = location_state_select.value
+                            location_city_select.options = get_city_options_for_state(state)
+                            location_city_select.value = None
+                            location_city_select.update()
 
-                    location_state_select.on('update:model-value', lambda e: update_city_options_edit())
+                        location_state_select.on('update:model-value', lambda e: update_city_options_edit())
 
             # Remote Work Schedule Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -1935,8 +1989,8 @@ def admin_employees_edit(user_id: int):
                         valid = False
                     elif not validate_email(email_input):
                         valid = False
-                    # Password is optional on edit - only validate if provided
-                    if password_input.value and not validate_min_length(password_input, 8, 'Password'):
+                    # Password is optional on edit - only validate if provided (and only for admins)
+                    if password_input and password_input.value and not validate_min_length(password_input, 8, 'Password'):
                         valid = False
                     if not validate_required(hire_date_input, 'Hire Date'):
                         valid = False
@@ -1976,17 +2030,17 @@ def admin_employees_edit(user_id: int):
                             'last_name': last_name_input.value,
                             'hire_date': hire_date,
                             'remote_schedule': json.dumps(new_remote_schedule),
-                            'location_state': location_state_select.value,
-                            'location_city': location_city_select.value if location_city_select.value else None,
                             'is_active': is_active_check.value  # Managers can activate/deactivate
                         }
 
-                        # Only admins can change department and role
+                        # Only admins can change department, role, and location
                         if not is_manager_editing:
                             update_data['department_id'] = department_select.value
                             update_data['role'] = role_select.value
+                            update_data['location_state'] = location_state_select.value
+                            update_data['location_city'] = location_city_select.value if location_city_select.value else None
 
-                        if password_input.value:
+                        if password_input and password_input.value:
                             update_data['password'] = password_input.value
 
                         user_update = UserUpdate(**update_data)

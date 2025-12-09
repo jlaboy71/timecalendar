@@ -6,15 +6,22 @@ from io import BytesIO, StringIO
 from datetime import date
 from typing import List, Dict, Any
 
+from pathlib import Path
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 
 
 class ExportService:
     """Service for generating export files."""
+
+    @staticmethod
+    def _get_logo_path() -> Path:
+        """Get the path to the TJM logo."""
+        return Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
 
     @staticmethod
     def generate_analytics_pdf(
@@ -145,6 +152,108 @@ class ExportService:
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')])
             ]))
             elements.append(risk_table)
+
+        # Footer
+        elements.append(Spacer(1, 30))
+        elements.append(Paragraph(
+            "TJM Time Calendar - Confidential",
+            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
+        ))
+
+        doc.build(elements)
+        return buffer.getvalue()
+
+    @staticmethod
+    def generate_report_pdf(html_content: str, title: str = "Report") -> bytes:
+        """
+        Generate PDF from report HTML content.
+
+        Args:
+            html_content: HTML report content
+            title: Report title
+
+        Returns:
+            PDF file as bytes
+        """
+        from bs4 import BeautifulSoup
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Parse HTML to extract content
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Add TJM logo at the top (preserving aspect ratio 2.28:1)
+        logo_path = ExportService._get_logo_path()
+        if logo_path.exists():
+            # Logo dimensions: 3409x1493 (aspect ratio ~2.28:1)
+            # Set width to 2 inches, height calculated to preserve aspect ratio
+            logo_width = 2 * inch
+            logo_height = logo_width / 2.28
+            logo = Image(str(logo_path), width=logo_width, height=logo_height)
+            elements.append(logo)
+            elements.append(Spacer(1, 10))
+
+        # Title style
+        title_style = ParagraphStyle(
+            'ReportTitle',
+            parent=styles['Title'],
+            fontSize=16,
+            spaceAfter=12
+        )
+
+        # Extract title from HTML if present
+        title_elem = soup.find('h1') or soup.find('h2')
+        report_title = title_elem.get_text() if title_elem else title
+        elements.append(Paragraph(report_title, title_style))
+        elements.append(Paragraph(f"Generated: {date.today().strftime('%B %d, %Y')}", styles['Normal']))
+        elements.append(Spacer(1, 20))
+
+        # Find tables in HTML and convert to PDF tables
+        tables = soup.find_all('table')
+        for table in tables:
+            rows = table.find_all('tr')
+            if not rows:
+                continue
+
+            table_data = []
+            for row in rows:
+                cells = row.find_all(['th', 'td'])
+                row_data = [cell.get_text(strip=True) for cell in cells]
+                if row_data:
+                    table_data.append(row_data)
+
+            if table_data:
+                # Calculate column widths based on number of columns
+                num_cols = len(table_data[0]) if table_data else 1
+                col_width = (7.5 * inch) / num_cols
+                col_widths = [col_width] * num_cols
+
+                pdf_table = Table(table_data, colWidths=col_widths)
+                pdf_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A5F')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')])
+                ]))
+                elements.append(pdf_table)
+                elements.append(Spacer(1, 15))
+
+        # If no tables found, try to extract text content
+        if not tables:
+            # Get all paragraph text
+            for p in soup.find_all(['p', 'div']):
+                text = p.get_text(strip=True)
+                if text:
+                    elements.append(Paragraph(text, styles['Normal']))
+                    elements.append(Spacer(1, 6))
 
         # Footer
         elements.append(Spacer(1, 30))

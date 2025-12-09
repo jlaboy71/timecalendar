@@ -28,6 +28,17 @@ def calendar_page():
     user_id = user.get('id')
     user_role = user.get('role')
 
+    # Get user's department ID (needed for admin/manager filtering)
+    user_department_id = None
+    if user_role in ['manager', 'admin']:
+        db = next(get_db())
+        try:
+            current_user = db.query(User).filter(User.id == user_id).first()
+            if current_user:
+                user_department_id = current_user.department_id
+        finally:
+            db.close()
+
     # State for current month/year view
     today = date.today()
     current_month = {'month': today.month, 'year': today.year}
@@ -37,6 +48,7 @@ def calendar_page():
 
     # State for filters with persistence
     selected_department = {'id': calendar_prefs.get('department_id', None)}
+    selected_employee = {'id': calendar_prefs.get('employee_id', None)}  # New employee filter
     view_mode = {'mode': calendar_prefs.get('view_mode', 'team' if user_role in ['manager', 'admin', 'superadmin'] else 'my')}
     show_holidays = {'value': calendar_prefs.get('show_holidays', True)}
     show_weekends = {'value': calendar_prefs.get('show_weekends', True)}
@@ -55,6 +67,7 @@ def calendar_page():
         """Save current filter preferences to session."""
         app.storage.general['calendar_prefs'] = {
             'department_id': selected_department['id'],
+            'employee_id': selected_employee['id'],
             'view_mode': view_mode['mode'],
             'show_holidays': show_holidays['value'],
             'show_weekends': show_weekends['value'],
@@ -97,10 +110,10 @@ def calendar_page():
         # ===== FILTERS ROW =====
         with ui.expansion('Filters & Options', icon='filter_list').classes('w-full mb-4'):
             with ui.column().classes('w-full gap-4 p-2'):
-                # Row 1: Department filter (admin/superadmin only) and Leave Type filters
+                # Row 1: Department filter (superadmin only) and Leave Type filters
                 with ui.row().classes('w-full gap-6 flex-wrap'):
-                    # Department filter (admin/superadmin only, team view only)
-                    if user_role in ['admin', 'superadmin']:
+                    # Department filter (superadmin only - they can see all departments)
+                    if user_role == 'superadmin':
                         with ui.column().classes('gap-1'):
                             ui.label('Department').classes('text-sm font-medium')
                             db = next(get_db())
@@ -113,6 +126,8 @@ def calendar_page():
 
                             def on_dept_change(e):
                                 selected_department['id'] = e.value
+                                # Reset employee filter when department changes
+                                selected_employee['id'] = None
                                 save_preferences()
                                 render_current_view()
 
@@ -125,6 +140,48 @@ def calendar_page():
                             # Disable when in "My Calendar" mode
                             if view_mode['mode'] == 'my':
                                 dept_select.disable()
+
+                    # Employee filter (managers, admins, superadmins - team view only)
+                    if user_role in ['manager', 'admin', 'superadmin']:
+                        with ui.column().classes('gap-1'):
+                            ui.label('Employee').classes('text-sm font-medium')
+                            db = next(get_db())
+                            try:
+                                emp_options = {None: 'All Employees'}
+                                if user_role in ['manager', 'admin']:
+                                    # Manager/Admin sees only their department's employees
+                                    if user_department_id:
+                                        employees = db.query(User).filter(
+                                            User.department_id == user_department_id,
+                                            User.is_active == True
+                                        ).order_by(User.first_name).all()
+                                        for emp in employees:
+                                            emp_options[emp.id] = f"{emp.first_name} {emp.last_name}"
+                                else:
+                                    # Superadmin sees employees based on department filter
+                                    emp_query = db.query(User).filter(User.is_active == True)
+                                    if selected_department['id']:
+                                        emp_query = emp_query.filter(User.department_id == selected_department['id'])
+                                    employees = emp_query.order_by(User.first_name).all()
+                                    for emp in employees:
+                                        emp_options[emp.id] = f"{emp.first_name} {emp.last_name}"
+                            finally:
+                                db.close()
+
+                            def on_emp_change(e):
+                                selected_employee['id'] = e.value
+                                save_preferences()
+                                render_current_view()
+
+                            emp_select = ui.select(
+                                emp_options,
+                                value=selected_employee['id'],
+                                on_change=on_emp_change
+                            ).classes('w-48')
+
+                            # Disable when in "My Calendar" mode
+                            if view_mode['mode'] == 'my':
+                                emp_select.disable()
 
                     # Leave Type Filters
                     with ui.column().classes('gap-1'):
@@ -596,24 +653,29 @@ def calendar_page():
 
                 if view_mode['mode'] == 'my':
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
-                elif user_role == 'manager' and view_mode['mode'] == 'team':
-                    user_service = UserService(db)
-                    manager = user_service.get_user_by_id(user_id)
-                    if manager and manager.department_id:
+                elif user_role in ['manager', 'admin'] and view_mode['mode'] == 'team':
+                    # Manager/Admin: restricted to their department
+                    if selected_employee['id']:
+                        pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
+                    elif user_department_id:
+                        # Show all employees in their department
                         dept_user_ids = [u.id for u in db.query(User).filter(
-                            User.department_id == manager.department_id,
+                            User.department_id == user_department_id,
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                elif user_role in ['admin', 'superadmin'] and view_mode['mode'] == 'team':
-                    # Superadmin sees ALL departments, admin can filter
-                    if selected_department['id']:
+                elif user_role == 'superadmin' and view_mode['mode'] == 'team':
+                    # Superadmin: can see all departments, with optional filters
+                    if selected_employee['id']:
+                        pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
+                    elif selected_department['id']:
+                        # Filter by selected department
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == selected_department['id'],
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                    # If no department selected, superadmin/admin sees all
+                    # If no filters selected, superadmin sees all
 
                 approved_pto = pto_query.all()
 
@@ -699,24 +761,29 @@ def calendar_page():
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
                 elif user_role == 'employee':
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
-                elif user_role == 'manager' and view_mode['mode'] == 'team':
-                    user_service = UserService(db)
-                    manager = user_service.get_user_by_id(user_id)
-                    if manager and manager.department_id:
+                elif user_role in ['manager', 'admin'] and view_mode['mode'] == 'team':
+                    # Manager/Admin: restricted to their department
+                    if selected_employee['id']:
+                        pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
+                    elif user_department_id:
+                        # Show all employees in their department
                         dept_user_ids = [u.id for u in db.query(User).filter(
-                            User.department_id == manager.department_id,
+                            User.department_id == user_department_id,
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                elif user_role in ['admin', 'superadmin'] and view_mode['mode'] == 'team':
-                    # Superadmin sees ALL departments, admin can filter
-                    if selected_department['id']:
+                elif user_role == 'superadmin' and view_mode['mode'] == 'team':
+                    # Superadmin: can see all departments, with optional filters
+                    if selected_employee['id']:
+                        pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
+                    elif selected_department['id']:
+                        # Filter by selected department
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == selected_department['id'],
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                    # If no department selected, superadmin/admin sees all
+                    # If no filters selected, superadmin sees all
 
                 approved_pto = pto_query.all()
 
