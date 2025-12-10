@@ -119,133 +119,184 @@ def dashboard_page():
             # ============ PTO BALANCES CARD (not for admin/superadmin - they don't take PTO) ============
             if user_role not in ['admin', 'superadmin']:
               with ui.card().classes('w-full mb-4'):
-                ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold mb-4')
+                # Year selector state
+                selected_year = {'value': current_year}
+                next_year = current_year + 1
 
-                if balance:
-                    with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
-                        # Vacation
-                        vacation_available = float(balance.vacation_available)
-                        vacation_total = float(balance.vacation_total) + float(balance.vacation_carryover)
-                        vacation_pending = float(balance.vacation_pending)
-                        vacation_used = float(balance.vacation_used)
-                        vacation_pct = (vacation_available / vacation_total * 100) if vacation_total > 0 else 0
+                # Header with year toggle
+                with ui.row().classes('w-full justify-between items-center mb-4'):
+                    balance_title = ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold')
 
-                        with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-blue-500'):
-                            with ui.row().classes('justify-between items-start'):
-                                ui.label('Vacation').classes('font-semibold text-blue-600')
-                                # Color indicator
-                                if vacation_pct > 50:
-                                    ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                elif vacation_pct > 25:
-                                    ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                else:
-                                    ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                    # Year toggle buttons
+                    with ui.button_group().props('outline rounded'):
+                        year_btn_current = ui.button(str(current_year), on_click=lambda: switch_year(current_year))
+                        year_btn_next = ui.button(str(next_year), on_click=lambda: switch_year(next_year))
 
-                            ui.label(f'{format_days(vacation_available)}').classes('text-3xl font-bold text-blue-600 my-2')
-                            ui.label('days available').classes('text-sm opacity-70')
+                    # Set initial button states
+                    year_btn_current.props('color=primary')
+                    year_btn_next.props('color=grey')
 
-                            with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                ui.label(f'{format_days(vacation_total)} total')
-                                if vacation_used > 0:
-                                    ui.label(f'{format_days(vacation_used)} used')
-                                if vacation_pending > 0:
-                                    ui.label(f'{format_days(vacation_pending)} pending').classes('text-amber-500')
+                # Container for balance display (will be refreshed)
+                balance_container = ui.column().classes('w-full')
 
-                        # Sick
-                        sick_available = float(balance.sick_available)
-                        sick_total = float(balance.sick_total) + float(balance.sick_carryover)
-                        sick_used = float(balance.sick_used)
-                        sick_pct = (sick_available / sick_total * 100) if sick_total > 0 else 0
+                def switch_year(year):
+                    """Switch the displayed year and refresh balances."""
+                    selected_year['value'] = year
+                    balance_title.set_text(f'PTO Balances ({year})')
 
-                        with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-green-500'):
-                            with ui.row().classes('justify-between items-start'):
-                                ui.label('Sick').classes('font-semibold text-green-600')
-                                if sick_pct > 50:
-                                    ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                elif sick_pct > 25:
-                                    ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                else:
-                                    ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                    # Update button styles
+                    if year == current_year:
+                        year_btn_current.props('color=primary')
+                        year_btn_next.props('color=grey')
+                    else:
+                        year_btn_current.props('color=grey')
+                        year_btn_next.props('color=primary')
 
-                            ui.label(f'{format_days(sick_available)}').classes('text-3xl font-bold text-green-600 my-2')
-                            ui.label('days available').classes('text-sm opacity-70')
+                    # Refresh the balance display
+                    render_balances(year)
 
-                            with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                ui.label(f'{format_days(sick_total)} total')
-                                if sick_used > 0:
-                                    ui.label(f'{format_days(sick_used)} used')
+                def render_balances(year):
+                    """Render balance cards for the given year."""
+                    balance_container.clear()
 
-                        # Personal
-                        personal_available = float(balance.personal_available)
-                        personal_total = float(balance.personal_total) + float(balance.personal_carryover)
-                        personal_used = float(balance.personal_used)
-                        personal_pct = (personal_available / personal_total * 100) if personal_total > 0 else 0
+                    # Get balance for the selected year
+                    year_balance = balance_service.get_or_create_balance(user_id, year)
 
-                        with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-purple-500'):
-                            with ui.row().classes('justify-between items-start'):
-                                ui.label('Personal').classes('font-semibold text-purple-600')
-                                if personal_pct > 50:
-                                    ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                elif personal_pct > 25:
-                                    ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                else:
-                                    ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                    # Get requests for the selected year
+                    year_requests = [r for r in all_requests if r.start_date.year == year]
 
-                            ui.label(f'{format_days(personal_available)}').classes('text-3xl font-bold text-purple-600 my-2')
-                            ui.label('days available').classes('text-sm opacity-70')
+                    with balance_container:
+                        if year_balance:
+                            # Show warning for unallocated future year
+                            bal_total = float(year_balance.vacation_total or 0) + float(year_balance.sick_total or 0) + float(year_balance.personal_total or 0)
+                            if bal_total == 0 and year != current_year:
+                                with ui.card().classes('w-full p-3 mb-4 border-l-4 border-amber-500'):
+                                    with ui.row().classes('items-center'):
+                                        ui.icon('info', color='amber').classes('mr-2')
+                                        ui.label(f'{year} PTO balances not yet allocated by admin').classes('text-amber-600')
 
-                            with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                ui.label(f'{format_days(personal_total)} total')
-                                if personal_used > 0:
-                                    ui.label(f'{format_days(personal_used)} used')
-                else:
-                    ui.label(f'No balance data for {current_year}').classes('opacity-70')
+                            with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
+                                # Vacation
+                                vacation_available = float(year_balance.vacation_available)
+                                vacation_total = float(year_balance.vacation_total) + float(year_balance.vacation_carryover)
+                                vacation_pending = float(year_balance.vacation_pending)
+                                vacation_used = float(year_balance.vacation_used)
+                                vacation_pct = (vacation_available / vacation_total * 100) if vacation_total > 0 else 0
 
-                # ============ OTHER LEAVE TYPES (Non-Accruing) ============
-                # Query for non-accruing leave usage this year
-                other_leave_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
-                other_leave_requests = [r for r in all_requests
-                                       if r.pto_type.lower() in other_leave_types
-                                       and r.status == 'approved'
-                                       and r.start_date.year == current_year]
+                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-blue-500'):
+                                    with ui.row().classes('justify-between items-start'):
+                                        ui.label('Vacation').classes('font-semibold text-blue-600')
+                                        if vacation_pct > 50:
+                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
+                                        elif vacation_pct > 25:
+                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
+                                        else:
+                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
 
-                # Calculate days used per type
-                other_leave_usage = {}
-                for leave_type in other_leave_types:
-                    days_used = sum(float(r.total_days or 0) for r in other_leave_requests
-                                   if r.pto_type.lower() == leave_type)
-                    other_leave_usage[leave_type] = days_used
+                                    ui.label(f'{format_days(vacation_available)}').classes('text-3xl font-bold text-blue-600 my-2')
+                                    ui.label('days available').classes('text-sm opacity-70')
 
-                total_other_used = sum(other_leave_usage.values())
+                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
+                                        ui.label(f'{format_days(vacation_total)} total')
+                                        if vacation_used > 0:
+                                            ui.label(f'{format_days(vacation_used)} used')
+                                        if vacation_pending > 0:
+                                            ui.label(f'{format_days(vacation_pending)} pending').classes('text-amber-500')
 
-                with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used)', icon='more_horiz').classes('w-full'):
-                    ui.label('Non-accruing leave used this year').classes('text-xs opacity-60 mb-3')
+                                # Sick
+                                sick_available = float(year_balance.sick_available)
+                                sick_total = float(year_balance.sick_total) + float(year_balance.sick_carryover)
+                                sick_used = float(year_balance.sick_used)
+                                sick_pct = (sick_available / sick_total * 100) if sick_total > 0 else 0
 
-                    # Leave type definitions with icons and colors
-                    leave_info = {
-                        'bereavement': {'label': 'Bereavement', 'icon': 'sentiment_very_dissatisfied', 'color': 'brown', 'policy': 'Immediate family: 5 days, Extended: 3 days'},
-                        'fmla': {'label': 'Family & Medical', 'icon': 'family_restroom', 'color': 'teal', 'policy': 'FMLA: Up to 12 weeks unpaid, job-protected'},
-                        'jury_duty': {'label': 'Jury Duty', 'icon': 'gavel', 'color': 'indigo', 'policy': 'Paid time for jury service'},
-                        'voting': {'label': 'Voting Time', 'icon': 'how_to_vote', 'color': 'cyan', 'policy': 'Up to 2 hours if polls not open 4+ hrs outside work'},
-                        'military': {'label': 'Military Leave', 'icon': 'military_tech', 'color': 'deep-orange', 'policy': 'Per USERRA requirements, job-protected'},
-                    }
+                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-green-500'):
+                                    with ui.row().classes('justify-between items-start'):
+                                        ui.label('Sick').classes('font-semibold text-green-600')
+                                        if sick_pct > 50:
+                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
+                                        elif sick_pct > 25:
+                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
+                                        else:
+                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
 
-                    with ui.row().classes('w-full gap-2 items-stretch'):
-                        for leave_type, info in leave_info.items():
-                            days = other_leave_usage.get(leave_type, 0)
-                            color = info['color']
+                                    ui.label(f'{format_days(sick_available)}').classes('text-3xl font-bold text-green-600 my-2')
+                                    ui.label('days available').classes('text-sm opacity-70')
 
-                            with ui.card().classes(f'p-3 border-l-4 border-{color}-500 flex-1').style('height: 180px;'):
-                                with ui.row().classes('items-center gap-2 mb-2'):
-                                    ui.icon(info['icon']).classes(f'text-{color}-500')
-                                    ui.label(info['label']).classes('font-medium text-sm')
+                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
+                                        ui.label(f'{format_days(sick_total)} total')
+                                        if sick_used > 0:
+                                            ui.label(f'{format_days(sick_used)} used')
 
-                                if days > 0:
-                                    ui.label(f'{days:.0f} days').classes(f'text-lg font-bold text-{color}-600')
-                                else:
-                                    ui.label('—').classes('text-lg font-bold opacity-30')
+                                # Personal
+                                personal_available = float(year_balance.personal_available)
+                                personal_total = float(year_balance.personal_total) + float(year_balance.personal_carryover)
+                                personal_used = float(year_balance.personal_used)
+                                personal_pct = (personal_available / personal_total * 100) if personal_total > 0 else 0
 
-                                ui.label(info['policy']).classes('text-xs opacity-50 mt-2')
+                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-purple-500'):
+                                    with ui.row().classes('justify-between items-start'):
+                                        ui.label('Personal').classes('font-semibold text-purple-600')
+                                        if personal_pct > 50:
+                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
+                                        elif personal_pct > 25:
+                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
+                                        else:
+                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+
+                                    ui.label(f'{format_days(personal_available)}').classes('text-3xl font-bold text-purple-600 my-2')
+                                    ui.label('days available').classes('text-sm opacity-70')
+
+                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
+                                        ui.label(f'{format_days(personal_total)} total')
+                                        if personal_used > 0:
+                                            ui.label(f'{format_days(personal_used)} used')
+
+                            # ============ OTHER LEAVE TYPES (Non-Accruing) ============
+                            other_leave_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+                            other_leave_requests = [r for r in year_requests
+                                                   if r.pto_type.lower() in other_leave_types
+                                                   and r.status == 'approved']
+
+                            other_leave_usage = {}
+                            for leave_type in other_leave_types:
+                                days_used = sum(float(r.total_days or 0) for r in other_leave_requests
+                                               if r.pto_type.lower() == leave_type)
+                                other_leave_usage[leave_type] = days_used
+
+                            total_other_used = sum(other_leave_usage.values())
+
+                            with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used)', icon='more_horiz').classes('w-full'):
+                                ui.label(f'Non-accruing leave used in {year}').classes('text-xs opacity-60 mb-3')
+
+                                leave_info = {
+                                    'bereavement': {'label': 'Bereavement', 'icon': 'sentiment_very_dissatisfied', 'color': 'brown', 'policy': 'Immediate family: 5 days, Extended: 3 days'},
+                                    'fmla': {'label': 'Family & Medical', 'icon': 'family_restroom', 'color': 'teal', 'policy': 'FMLA: Up to 12 weeks unpaid, job-protected'},
+                                    'jury_duty': {'label': 'Jury Duty', 'icon': 'gavel', 'color': 'indigo', 'policy': 'Paid time for jury service'},
+                                    'voting': {'label': 'Voting Time', 'icon': 'how_to_vote', 'color': 'cyan', 'policy': 'Up to 2 hours if polls not open 4+ hrs outside work'},
+                                    'military': {'label': 'Military Leave', 'icon': 'military_tech', 'color': 'deep-orange', 'policy': 'Per USERRA requirements, job-protected'},
+                                }
+
+                                with ui.row().classes('w-full gap-2 items-stretch'):
+                                    for leave_type, info in leave_info.items():
+                                        days = other_leave_usage.get(leave_type, 0)
+                                        color = info['color']
+
+                                        with ui.card().classes(f'p-3 border-l-4 border-{color}-500 flex-1').style('height: 180px;'):
+                                            with ui.row().classes('items-center gap-2 mb-2'):
+                                                ui.icon(info['icon']).classes(f'text-{color}-500')
+                                                ui.label(info['label']).classes('font-medium text-sm')
+
+                                            if days > 0:
+                                                ui.label(f'{days:.0f} days').classes(f'text-lg font-bold text-{color}-600')
+                                            else:
+                                                ui.label('—').classes('text-lg font-bold opacity-30')
+
+                                            ui.label(info['policy']).classes('text-xs opacity-50 mt-2')
+                        else:
+                            ui.label(f'No balance data for {year}').classes('opacity-70')
+
+                # Initial render
+                render_balances(current_year)
 
             # ============ PENDING REQUESTS (if any) - employees only ============
             if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:

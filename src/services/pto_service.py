@@ -61,18 +61,18 @@ class PTOService:
         # Extract year from start_date
         year = request_data.start_date.year
 
-        # Validate request is for current or next year only (not 2+ years ahead)
+        # Validate request is within reasonable future range (5 years ahead max)
+        # This allows long-term planning while preventing accidental far-future requests
         current_year = datetime.now().year
-        if year > current_year + 1:
-            raise ValueError(f"Cannot request time off more than one year in advance. Maximum year: {current_year + 1}")
+        max_future_years = 5
+        if year > current_year + max_future_years:
+            raise ValueError(f"Cannot request time off more than {max_future_years} years in advance. Maximum year: {current_year + max_future_years}")
 
         # Get/create balance
         balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
 
-        # Check vacation balance if needed
-        if request_data.pto_type == 'vacation':
-            if balance.vacation_available < request_data.total_days:
-                raise ValueError("Insufficient vacation balance")
+        # Note: Balance validation removed - employees can request more than available
+        # (manager discretion on approval). UI shows warnings for over-limit requests.
 
         # Auto-approve for managers/admins (they don't need approval)
         is_auto_approve = user.role in ['manager', 'admin', 'superadmin']

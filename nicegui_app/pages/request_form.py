@@ -38,7 +38,10 @@ def request_form_page():
         current_user = user_service.get_user_by_id(user['id'])
 
         balance_service = BalanceService(db)
-        current_balance = balance_service.get_or_create_balance(user['id'], date.today().year)
+        # We'll fetch balance dynamically based on selected dates
+        # Store service for later use
+        _balance_service = balance_service
+        _user_id = user['id']
 
         pending_requests = db.query(PTORequest).filter(
             PTORequest.user_id == user['id'],
@@ -98,32 +101,53 @@ def request_form_page():
             # Balance display for selected type
             balance_row = ui.row().classes('w-full mt-3 p-3 rounded-lg justify-around').style('border: 1px solid rgba(128,128,128,0.3)')
 
-            def get_balance_for_type(leave_type_code):
-                """Get available, used, and pending hours for a leave type."""
+            def get_balance_for_type(leave_type_code, for_year=None):
+                """Get available, used, and pending hours for a leave type.
+
+                Args:
+                    leave_type_code: Type of leave (vacation, sick, personal)
+                    for_year: Year to get balance for (defaults to selected start date year)
+
+                Returns:
+                    Tuple of (total, used, pending, available, balance_exists)
+                """
                 if not leave_type_code:
-                    return 0, 0, 0, 0
+                    return 0, 0, 0, 0, False
 
-                code = leave_type_code.upper()
-                if code == 'VACATION':
-                    total = float(current_balance.vacation_total or 0)
-                    used = float(current_balance.vacation_used or 0)
-                    pending = float(current_balance.vacation_pending or 0)
-                    carryover = float(current_balance.vacation_carryover or 0)
-                elif code == 'SICK':
-                    total = float(current_balance.sick_total or 0)
-                    used = float(current_balance.sick_used or 0)
-                    pending = 0
-                    carryover = float(current_balance.sick_carryover or 0)
-                elif code == 'PERSONAL':
-                    total = float(current_balance.personal_total or 0)
-                    used = float(current_balance.personal_used or 0)
-                    pending = 0
-                    carryover = float(current_balance.personal_carryover or 0)
-                else:
-                    return 0, 0, 0, 0
+                # Use the start date year if no year specified
+                target_year = for_year or state['start_date'].year
 
-                available = total + carryover - used - pending
-                return total + carryover, used, pending, max(0, available)
+                # Get or create balance for the target year
+                db_session = next(get_db())
+                try:
+                    bal_svc = BalanceService(db_session)
+                    balance = bal_svc.get_or_create_balance(_user_id, target_year)
+
+                    code = leave_type_code.upper()
+                    if code == 'VACATION':
+                        total = float(balance.vacation_total or 0)
+                        used = float(balance.vacation_used or 0)
+                        pending = float(balance.vacation_pending or 0)
+                        carryover = float(balance.vacation_carryover or 0)
+                    elif code == 'SICK':
+                        total = float(balance.sick_total or 0)
+                        used = float(balance.sick_used or 0)
+                        pending = 0
+                        carryover = float(balance.sick_carryover or 0)
+                    elif code == 'PERSONAL':
+                        total = float(balance.personal_total or 0)
+                        used = float(balance.personal_used or 0)
+                        pending = 0
+                        carryover = float(balance.personal_carryover or 0)
+                    else:
+                        return 0, 0, 0, 0, False
+
+                    available = total + carryover - used - pending
+                    # Check if balance has been allocated (total > 0)
+                    balance_allocated = total > 0
+                    return total + carryover, used, pending, available, balance_allocated
+                finally:
+                    db_session.close()
 
             def update_balance_display():
                 balance_row.clear()
@@ -132,13 +156,21 @@ def request_form_page():
                         ui.label('Select a leave type').classes('opacity-60')
                         return
 
-                    total, used, pending, available = get_balance_for_type(pto_type.value)
+                    total, used, pending, available, balance_allocated = get_balance_for_type(pto_type.value)
+                    target_year = state['start_date'].year
 
-                    # Available
+                    # Show year indicator if different from current year
                     with ui.column().classes('items-center'):
+                        if target_year != date.today().year:
+                            ui.label(f'{target_year}').classes('text-xs font-bold text-blue-500')
+
+                        # Available
                         color = 'text-green-500' if available >= 16 else ('text-amber-500' if available > 0 else 'text-red-500')
                         ui.label(f'{available/8:.1f}').classes(f'text-2xl font-bold {color}')
-                        ui.label('days available').classes('text-xs opacity-60')
+                        if not balance_allocated and target_year != date.today().year:
+                            ui.label('not yet allocated').classes('text-xs text-amber-500')
+                        else:
+                            ui.label('days available').classes('text-xs opacity-60')
 
                     ui.element('div').classes('w-px h-10').style('background: rgba(128,128,128,0.3)')
 
@@ -195,7 +227,9 @@ def request_form_page():
                                 state['start_date'] = d
                                 state['end_date'] = d
                                 calendar.value = d.isoformat()
+                                update_balance_display()
                                 update_summary()
+                                update_warning()
 
                             ui.button('Today', on_click=lambda: set_single_date(date.today())).props('size=sm outline')
                             ui.button('Tomorrow', on_click=lambda: set_single_date(date.today() + timedelta(days=1))).props('size=sm outline')
@@ -212,7 +246,9 @@ def request_form_page():
                                 picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
                                 state['start_date'] = picked
                                 state['end_date'] = picked
+                                update_balance_display()
                                 update_summary()
+                                update_warning()
 
                         calendar = ui.date(
                             value=state['start_date'].isoformat(),
@@ -224,6 +260,7 @@ def request_form_page():
                             def on_half_day_change(e):
                                 state['is_half_day'] = e.value
                                 update_summary()
+                                update_warning()
 
                             ui.switch('Half Day (4 hours)', value=state['is_half_day'], on_change=on_half_day_change)
 
@@ -245,7 +282,9 @@ def request_form_page():
                                         if state['end_date'] < picked:
                                             state['end_date'] = picked
                                             end_calendar.value = picked.isoformat()
+                                        update_balance_display()
                                         update_summary()
+                                        update_warning()
 
                                 start_calendar = ui.date(
                                     value=state['start_date'].isoformat(),
@@ -264,6 +303,7 @@ def request_form_page():
                                             state['end_date'] = state['start_date']
                                             end_calendar.value = state['start_date'].isoformat()
                                         update_summary()
+                                        update_warning()
 
                                 end_calendar = ui.date(
                                     value=state['end_date'].isoformat(),
@@ -277,7 +317,9 @@ def request_form_page():
                                 state['end_date'] = end
                                 start_calendar.value = start.isoformat()
                                 end_calendar.value = end.isoformat()
+                                update_balance_display()
                                 update_summary()
+                                update_warning()
 
                             # This week (remaining days)
                             today = date.today()
@@ -300,7 +342,7 @@ def request_form_page():
                         total_days = (state['end_date'] - state['start_date']).days + 1
                     hours_requested = total_days * 8
 
-                    _, _, _, available = get_balance_for_type(pto_type.value)
+                    _, _, _, available, _ = get_balance_for_type(pto_type.value)
                     remaining = available - hours_requested
 
                     # Date display
@@ -374,14 +416,27 @@ def request_form_page():
                 else:
                     total_days = (state['end_date'] - state['start_date']).days + 1
                 hours_requested = total_days * 8
-                _, _, _, available = get_balance_for_type(pto_type.value)
+                _, _, _, available, balance_allocated = get_balance_for_type(pto_type.value)
+                target_year = state['start_date'].year
 
-                if hours_requested > available:
-                    with warning_container:
+                with warning_container:
+                    # Warning for unallocated future year balance
+                    if not balance_allocated and target_year != date.today().year:
+                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
+                            with ui.row().classes('items-start'):
+                                ui.icon('info', color='amber').classes('mr-2 mt-1')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(f'{target_year} PTO balance not yet allocated').classes('text-amber-600 font-medium')
+                                    ui.label('Your request will be submitted for manager approval. Balance will be deducted once allocated.').classes('text-sm opacity-70')
+
+                    # Warning for exceeding available balance
+                    if hours_requested > available:
                         with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
-                            with ui.row().classes('items-center'):
-                                ui.icon('warning', color='red').classes('mr-2')
-                                ui.label(f'This request exceeds your available balance by {(hours_requested - available)/8:.1f} days').classes('text-red-500')
+                            with ui.row().classes('items-start'):
+                                ui.icon('warning', color='red').classes('mr-2 mt-1')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(f'Request exceeds available balance by {(hours_requested - available)/8:.1f} days').classes('text-red-500 font-medium')
+                                    ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
 
             with ui.row().classes('w-full gap-4'):
                 submit_btn = ui.button(

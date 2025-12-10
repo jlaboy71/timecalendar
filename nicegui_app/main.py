@@ -224,6 +224,7 @@ def requests():
         return
 
     from nicegui_app.components.header import page_header
+    from datetime import date
 
     apply_dark_mode()
 
@@ -234,6 +235,12 @@ def requests():
     # Current filter state - managers default to 'approved' since their requests auto-approve
     current_filter = {'value': 'approved' if is_manager_or_admin else 'pending'}
 
+    # Year filter state - default to current year, use storage to persist selection
+    current_year = date.today().year
+    next_year = current_year + 1
+    stored_year = app.storage.general.get('requests_year_filter', current_year)
+    year_filter = {'value': stored_year if stored_year in [current_year, next_year] else current_year}
+
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Different title for managers vs employees
         page_title = 'MY TIME OFF' if is_manager_or_admin else 'REQUEST HISTORY'
@@ -243,12 +250,18 @@ def requests():
         try:
             from src.services.pto_service import PTOService
             from src.services.balance_service import BalanceService
-            user_requests = PTOService.get_user_requests(db, user['id'])
+            all_user_requests = PTOService.get_user_requests(db, user['id'])
 
             # Sort by submitted_at descending (newest first)
-            user_requests_sorted = sorted(user_requests, key=lambda r: r.submitted_at, reverse=True)
+            all_user_requests_sorted = sorted(all_user_requests, key=lambda r: r.submitted_at, reverse=True)
 
-            # Summary stats
+            # Filter by year - use start_date year
+            def get_year_filtered_requests(year):
+                return [r for r in all_user_requests_sorted if r.start_date.year == year]
+
+            user_requests_sorted = get_year_filtered_requests(year_filter['value'])
+
+            # Summary stats (will be updated when year changes)
             pending_requests = [r for r in user_requests_sorted if r.status == 'pending']
             approved_requests = [r for r in user_requests_sorted if r.status == 'approved']
             denied_requests = [r for r in user_requests_sorted if r.status == 'denied']
@@ -386,12 +399,37 @@ def requests():
                 else:
                     render_requests_by_type(approved_requests, None)
 
+            # Year toggle card
+            with ui.card().classes('w-full mb-4 p-3'):
+                with ui.row().classes('w-full justify-between items-center'):
+                    ui.label(f'Viewing: {year_filter["value"]}').classes('text-sm font-medium opacity-70')
+
+                    # Year toggle buttons
+                    with ui.button_group().props('outline rounded'):
+                        year_btn_current = ui.button(str(current_year), on_click=lambda: switch_year(current_year))
+                        year_btn_next = ui.button(str(next_year), on_click=lambda: switch_year(next_year))
+
+                    # Set initial button states
+                    if year_filter['value'] == current_year:
+                        year_btn_current.props('color=primary')
+                        year_btn_next.props('color=grey')
+                    else:
+                        year_btn_current.props('color=grey')
+                        year_btn_next.props('color=primary')
+
+            def switch_year(year):
+                """Switch year and refresh page."""
+                year_filter['value'] = year
+                app.storage.general['requests_year_filter'] = year
+                # Refresh by navigating to same page
+                ui.navigate.to('/requests')
+
             # Summary card with total and type breakdown
             with ui.card().classes('w-full mb-4 p-4'):
                 with ui.row().classes('w-full justify-between items-center mb-3'):
                     with ui.row().classes('items-center gap-2'):
                         ui.icon('event_available', color='green').classes('text-xl')
-                        ui.label(f'{len(approved_requests)} Total Approved').classes('text-lg font-semibold text-green-600')
+                        ui.label(f'{len(approved_requests)} Total Approved ({year_filter["value"]})').classes('text-lg font-semibold text-green-600')
 
                 # Type breakdown with filter buttons
                 with ui.row().classes('w-full gap-3 flex-wrap'):
