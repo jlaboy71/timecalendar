@@ -232,12 +232,16 @@ class ReportService:
         """
         from src.models.user import User
         from src.models.pto_request import PTORequest
+        from sqlalchemy.orm import joinedload
 
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
             return "<p>User not found</p>"
 
-        query = self.db.query(PTORequest).filter(
+        # Load requests with approver relationship
+        query = self.db.query(PTORequest).options(
+            joinedload(PTORequest.approver)
+        ).filter(
             PTORequest.user_id == user_id,
             PTORequest.start_date >= date(year, 1, 1),
             PTORequest.end_date <= date(year, 12, 31)
@@ -251,16 +255,49 @@ class ReportService:
         dept_name = user.department.name if user.department else "No Department"
         employee_name = f"{user.first_name} {user.last_name}"
 
+        # Find department manager
+        manager_name = "N/A"
+        if user.department:
+            manager = self.db.query(User).filter(
+                User.department_id == user.department_id,
+                User.role == 'manager',
+                User.is_active == True
+            ).first()
+            if manager:
+                manager_name = f"{manager.first_name} {manager.last_name}"
+
         header = self.get_report_header_html(
             title=f"PTO Request History - {year}",
             employee_name=employee_name,
             department=dept_name
         )
 
-        # Build rows
+        # Build employee info section
+        hire_date_str = user.hire_date.strftime('%B %d, %Y') if user.hire_date else "N/A"
+        employee_info = f'''
+        <div style="padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #ddd; font-family: 'Segoe UI', sans-serif;">
+            <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+                <div>
+                    <span style="font-size: 11px; color: #666; text-transform: uppercase;">Hire Date</span>
+                    <div style="font-size: 14px; font-weight: 500;">{hire_date_str}</div>
+                </div>
+                <div>
+                    <span style="font-size: 11px; color: #666; text-transform: uppercase;">Manager</span>
+                    <div style="font-size: 14px; font-weight: 500;">{manager_name}</div>
+                </div>
+                <div>
+                    <span style="font-size: 11px; color: #666; text-transform: uppercase;">Location</span>
+                    <div style="font-size: 14px; font-weight: 500;">{user.location_city or ''}{', ' + user.location_state if user.location_state else 'Not Set'}</div>
+                </div>
+            </div>
+        </div>
+        '''
+
+        # Build rows with approval details
         rows_html = ""
         total_approved = 0
         total_pending = 0
+        total_denied = 0
 
         status_colors = {
             'approved': '#2e7d32',
@@ -275,6 +312,8 @@ class ReportService:
                 total_approved += float(req.total_days or 0)
             elif req.status == 'pending':
                 total_pending += float(req.total_days or 0)
+            elif req.status == 'denied':
+                total_denied += float(req.total_days or 0)
 
             date_range = req.start_date.strftime('%b %d')
             if req.start_date != req.end_date:
@@ -282,29 +321,45 @@ class ReportService:
             else:
                 date_range += f", {req.start_date.year}"
 
+            # Build approval/processed info
+            processed_info = ""
+            if req.status in ['approved', 'denied'] and req.approved_at:
+                approver_name = f"{req.approver.first_name} {req.approver.last_name}" if req.approver else "System"
+                processed_date = req.approved_at.strftime('%b %d, %Y')
+                processed_info = f'<div style="font-size: 10px; color: #888; margin-top: 2px;">By {approver_name} on {processed_date}</div>'
+                if req.status == 'denied' and req.denial_reason:
+                    processed_info += f'<div style="font-size: 10px; color: #c62828; margin-top: 2px;">Reason: {req.denial_reason}</div>'
+
             rows_html += f'''
             <tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 10px;">{req.pto_type.title()}</td>
                 <td style="padding: 10px;">{date_range}</td>
                 <td style="padding: 10px; text-align: center;">{float(req.total_days or 0):.1f}</td>
-                <td style="padding: 10px; text-align: center;"><span style="color: {color}; font-weight: bold;">{req.status.upper()}</span></td>
+                <td style="padding: 10px;">
+                    <span style="color: {color}; font-weight: bold;">{req.status.upper()}</span>
+                    {processed_info}
+                </td>
                 <td style="padding: 10px; font-style: italic; color: #666;">{req.notes or '-'}</td>
             </tr>
             '''
 
         content = f'''
         <div style="padding: 20px; font-family: 'Segoe UI', sans-serif;">
-            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                <div style="flex: 1; padding: 15px; background: #e8f5e9; border-left: 4px solid #2e7d32; border-radius: 4px;">
-                    <div style="font-size: 12px; color: #666;">Approved Days</div>
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 140px; padding: 15px; background: #e8f5e9; border-left: 4px solid #2e7d32; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666;">Approved Days</div>
                     <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">{total_approved:.1f}</div>
                 </div>
-                <div style="flex: 1; padding: 15px; background: #fff3e0; border-left: 4px solid #f57c00; border-radius: 4px;">
-                    <div style="font-size: 12px; color: #666;">Pending Days</div>
+                <div style="flex: 1; min-width: 140px; padding: 15px; background: #fff3e0; border-left: 4px solid #f57c00; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666;">Pending Days</div>
                     <div style="font-size: 24px; font-weight: bold; color: #f57c00;">{total_pending:.1f}</div>
                 </div>
-                <div style="flex: 1; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
-                    <div style="font-size: 12px; color: #666;">Total Requests</div>
+                <div style="flex: 1; min-width: 140px; padding: 15px; background: #ffebee; border-left: 4px solid #c62828; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666;">Denied Days</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #c62828;">{total_denied:.1f}</div>
+                </div>
+                <div style="flex: 1; min-width: 140px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666;">Total Requests</div>
                     <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{len(requests)}</div>
                 </div>
             </div>
@@ -315,7 +370,7 @@ class ReportService:
                         <th style="padding: 12px; text-align: left;">Type</th>
                         <th style="padding: 12px; text-align: left;">Dates</th>
                         <th style="padding: 12px; text-align: center;">Days</th>
-                        <th style="padding: 12px; text-align: center;">Status</th>
+                        <th style="padding: 12px; text-align: left;">Status</th>
                         <th style="padding: 12px; text-align: left;">Notes</th>
                     </tr>
                 </thead>
@@ -343,6 +398,7 @@ class ReportService:
         </head>
         <body style="margin: 0; padding: 0; background: white;">
             {header}
+            {employee_info}
             {content}
             {footer}
         </body>

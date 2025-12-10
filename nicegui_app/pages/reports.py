@@ -1029,8 +1029,183 @@ def reports_page():
                 # Encode HTML as base64 to avoid escaping issues
                 b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
 
-                dialog = ui.dialog().props('maximized')
-                with dialog, ui.card().classes('w-full h-full'):
+                preview_dialog = ui.dialog().props('maximized')
+
+                def open_email_from_preview():
+                    """Open email dialog (print preview stays open behind it)."""
+                    # Close preview first, then open email dialog
+                    preview_dialog.close()
+                    # Create and open email dialog directly here
+                    _show_email_dialog_inline()
+
+                def _show_email_dialog_inline():
+                    """Inline email dialog to avoid context issues."""
+                    report_name = filter_state["report_type"].replace("_", " ").title()
+
+                    email_dialog = ui.dialog()
+                    with email_dialog, ui.card().classes('p-6').style('min-width: 450px;'):
+                        ui.label('Email Report').classes('text-xl font-semibold mb-4')
+
+                        email_input = ui.input().classes('w-full mb-4').props('label="Recipient Email"')
+
+                        subject_input = ui.input(
+                            value=f'PTO Report - {report_name} ({filter_state["year"]})'
+                        ).classes('w-full mb-4').props('label="Subject"')
+
+                        # Format selection
+                        ui.label('Attachment Format').classes('text-sm text-gray-600 mb-1')
+                        format_select = ui.select(
+                            options=['PDF (Print Format)', 'CSV (Data Export)', 'HTML (Web Format)'],
+                            value='PDF (Print Format)'
+                        ).classes('w-full mb-4')
+
+                        message_input = ui.textarea().classes('w-full mb-4').props('label="Message (optional)"')
+
+                        # Attachment preview section
+                        with ui.card().classes('w-full p-3 bg-gray-100 dark:bg-gray-800 mb-4'):
+                            ui.label('Attachment Preview').classes('text-sm font-semibold mb-2')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('attach_file', color='primary')
+                                attachment_label = ui.label(f'{report_name.replace(" ", "_")}_{filter_state["year"]}.pdf').classes('text-sm')
+
+                        def update_attachment_name():
+                            fmt = format_select.value
+                            base_name = f'{report_name.replace(" ", "_")}_{filter_state["year"]}'
+                            if 'PDF' in fmt:
+                                attachment_label.set_text(f'{base_name}.pdf')
+                            elif 'CSV' in fmt:
+                                attachment_label.set_text(f'{base_name}.csv')
+                            else:
+                                attachment_label.set_text(f'{base_name}.html')
+
+                        format_select.on('update:model-value', lambda: update_attachment_name())
+
+                        async def send_email_inline():
+                            if not email_input.value or '@' not in email_input.value:
+                                ui.notify('Please enter a valid email address', type='negative')
+                                return
+
+                            try:
+                                from src.services.email_service import email_service
+
+                                fmt = format_select.value
+                                report_html = get_report_html()
+                                base_name = f'{report_name.replace(" ", "_")}_{filter_state["year"]}'
+
+                                attachment_data = None
+                                attach_name = None
+                                attachment_type = 'html'
+
+                                if 'CSV' in fmt:
+                                    csv_content = generate_csv_for_email()
+                                    if csv_content:
+                                        attachment_data = csv_content.encode('utf-8')
+                                        attach_name = f'{base_name}.csv'
+                                        attachment_type = 'csv'
+                                elif 'HTML' in fmt:
+                                    attachment_data = report_html.encode('utf-8')
+                                    attach_name = f'{base_name}.html'
+                                    attachment_type = 'html'
+                                else:  # PDF
+                                    try:
+                                        pdf_bytes = ExportService.generate_report_pdf(report_html, base_name)
+                                        attachment_data = pdf_bytes
+                                        attach_name = f'{base_name}.pdf'
+                                        attachment_type = 'pdf'
+                                    except Exception as pdf_error:
+                                        ui.notify(f'PDF generation failed: {pdf_error}. Sending as HTML.', type='warning')
+                                        attachment_data = report_html.encode('utf-8')
+                                        attach_name = f'{base_name}.html'
+                                        attachment_type = 'html'
+
+                                success = email_service.send_report_email(
+                                    to_email=email_input.value,
+                                    subject=subject_input.value,
+                                    html_content=report_html,
+                                    message=message_input.value,
+                                    attachment_data=attachment_data,
+                                    attachment_name=attach_name,
+                                    attachment_type=attachment_type
+                                )
+
+                                if success:
+                                    ui.notify(f'Report sent to {email_input.value}', type='positive')
+                                    email_dialog.close()
+                                else:
+                                    ui.notify('Email service not configured. Please configure SMTP settings.', type='warning')
+
+                            except Exception as e:
+                                ui.notify(f'Error sending email: {str(e)}', type='negative')
+
+                        def generate_csv_for_email() -> str:
+                            """Generate CSV content for the current report."""
+                            db = next(get_db())
+                            try:
+                                report_type = filter_state['report_type']
+                                year = filter_state['year']
+                                output = StringIO()
+                                writer = csv.writer(output)
+
+                                if report_type == 'my_balance':
+                                    curr_user = db.query(User).filter(User.id == user_id).first()
+                                    balance = db.query(PTOBalance).filter(
+                                        PTOBalance.user_id == user_id,
+                                        PTOBalance.year == year
+                                    ).first()
+
+                                    writer.writerow(['Leave Type', 'Total (Hours)', 'Used (Hours)', 'Available (Hours)'])
+                                    if balance:
+                                        writer.writerow(['Vacation', balance.vacation_total, balance.vacation_used,
+                                                       balance.vacation_total - balance.vacation_used])
+                                        writer.writerow(['Sick', balance.sick_total, balance.sick_used,
+                                                       balance.sick_total - balance.sick_used])
+                                        writer.writerow(['Personal', balance.personal_total, balance.personal_used,
+                                                       balance.personal_total - balance.personal_used])
+
+                                elif report_type == 'my_history':
+                                    requests = db.query(PTORequest).filter(
+                                        PTORequest.user_id == user_id
+                                    ).order_by(PTORequest.start_date.desc()).all()
+
+                                    writer.writerow(['Type', 'Start Date', 'End Date', 'Days', 'Status', 'Notes'])
+                                    for req in requests:
+                                        writer.writerow([req.pto_type, req.start_date, req.end_date,
+                                                       req.total_days, req.status, req.notes or ''])
+
+                                elif report_type == 'team_balance':
+                                    query = db.query(User, PTOBalance).outerjoin(
+                                        PTOBalance,
+                                        (PTOBalance.user_id == User.id) & (PTOBalance.year == year)
+                                    ).filter(User.is_active == True)
+
+                                    if filter_state.get('department_id'):
+                                        query = query.filter(User.department_id == filter_state['department_id'])
+
+                                    results = query.order_by(User.last_name).all()
+
+                                    writer.writerow(['Employee', 'Vac Total', 'Vac Used', 'Vac Avail',
+                                                   'Sick Total', 'Sick Used', 'Pers Total', 'Pers Used'])
+                                    for u, bal in results:
+                                        if bal:
+                                            writer.writerow([
+                                                f'{u.first_name} {u.last_name}',
+                                                bal.vacation_total, bal.vacation_used,
+                                                bal.vacation_total - bal.vacation_used,
+                                                bal.sick_total, bal.sick_used,
+                                                bal.personal_total, bal.personal_used
+                                            ])
+
+                                return output.getvalue()
+                            finally:
+                                db.close()
+
+                        with ui.row().classes('w-full justify-end gap-2'):
+                            ui.button('Cancel', on_click=email_dialog.close).props('flat')
+                            ui.button('Send', icon='send', on_click=send_email_inline).props('color=primary')
+
+                    email_dialog.open()
+
+                with preview_dialog, ui.card().classes('w-full h-full'):
                     with ui.row().classes('w-full justify-between items-center p-4 border-b'):
                         ui.label('Print Preview').classes('text-xl font-semibold')
                         with ui.row().classes('gap-2'):
@@ -1040,12 +1215,13 @@ def reports_page():
                                     iframe.contentWindow.print();
                                 }
                             ''')).props('color=primary')
-                            ui.button('Close', icon='close', on_click=dialog.close).props('flat')
+                            ui.button('Email', icon='email', on_click=open_email_from_preview).props('color=secondary')
+                            ui.button('Close', icon='close', on_click=preview_dialog.close).props('flat')
 
                     # Use data URI to load HTML content into iframe
                     ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 80px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
 
-                dialog.open()
+                preview_dialog.open()
             except Exception as e:
                 ui.notify(f'Error generating print preview: {str(e)}', type='negative')
 

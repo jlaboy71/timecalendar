@@ -176,6 +176,7 @@ class ExportService:
             PDF file as bytes
         """
         from bs4 import BeautifulSoup
+        import re
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
@@ -188,8 +189,6 @@ class ExportService:
         # Add TJM logo at the top (preserving aspect ratio 2.28:1)
         logo_path = ExportService._get_logo_path()
         if logo_path.exists():
-            # Logo dimensions: 3409x1493 (aspect ratio ~2.28:1)
-            # Set width to 2 inches, height calculated to preserve aspect ratio
             logo_width = 2 * inch
             logo_height = logo_width / 2.28
             logo = Image(str(logo_path), width=logo_width, height=logo_height)
@@ -201,15 +200,101 @@ class ExportService:
             'ReportTitle',
             parent=styles['Title'],
             fontSize=16,
-            spaceAfter=12
+            spaceAfter=6,
+            textColor=colors.HexColor('#5A6A72')
+        )
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=11,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=4
+        )
+        info_label_style = ParagraphStyle(
+            'InfoLabel',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666')
+        )
+        info_value_style = ParagraphStyle(
+            'InfoValue',
+            parent=styles['Normal'],
+            fontSize=10,
+            fontName='Helvetica-Bold'
         )
 
         # Extract title from HTML if present
         title_elem = soup.find('h1') or soup.find('h2')
         report_title = title_elem.get_text() if title_elem else title
         elements.append(Paragraph(report_title, title_style))
+
+        # Extract employee name and department from subtitle (in header)
+        header_div = soup.find('div', style=lambda s: s and 'border-bottom' in s and 'C5A951' in s)
+        if header_div:
+            subtitle_div = header_div.find('div', style=lambda s: s and 'font-size: 14px' in s)
+            if subtitle_div:
+                elements.append(Paragraph(subtitle_div.get_text(strip=True), subtitle_style))
+
         elements.append(Paragraph(f"Generated: {date.today().strftime('%B %d, %Y')}", styles['Normal']))
-        elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 15))
+
+        # Extract employee info section (hire date, manager, location)
+        info_section = soup.find('div', style=lambda s: s and 'background: #f8f9fa' in s)
+        if info_section:
+            info_items = info_section.find_all('div', recursive=False)
+            if info_items:
+                inner_flex = info_section.find('div', style=lambda s: s and 'display: flex' in s)
+                if inner_flex:
+                    info_data = []
+                    for item in inner_flex.find_all('div', recursive=False):
+                        label_span = item.find('span')
+                        value_div = item.find('div')
+                        if label_span and value_div:
+                            info_data.append([label_span.get_text(strip=True), value_div.get_text(strip=True)])
+
+                    if info_data:
+                        info_table = Table(info_data, colWidths=[1.2*inch, 2*inch])
+                        info_table.setStyle(TableStyle([
+                            ('FONTNAME', (0, 0), (0, -1), 'Helvetica'),
+                            ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, -1), 9),
+                            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#666666')),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                            ('TOPPADDING', (0, 0), (-1, -1), 4),
+                        ]))
+                        elements.append(info_table)
+                        elements.append(Spacer(1, 15))
+
+        # Extract summary stats (the colored boxes with Approved Days, Pending Days, etc.)
+        stat_boxes = soup.find_all('div', style=lambda s: s and 'border-left: 4px solid' in s and 'border-radius' in s)
+        if stat_boxes:
+            stat_data = []
+            stat_values = []
+            for box in stat_boxes:
+                label_div = box.find('div', style=lambda s: s and 'font-size: 1' in s and 'color: #666' in s)
+                value_div = box.find('div', style=lambda s: s and 'font-size: 24px' in s)
+                if label_div and value_div:
+                    stat_data.append(label_div.get_text(strip=True))
+                    stat_values.append(value_div.get_text(strip=True))
+
+            if stat_data:
+                # Create a summary table
+                summary_table = Table([stat_data, stat_values], colWidths=[1.8*inch] * len(stat_data))
+                summary_table.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+                    ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTSIZE', (0, 1), (-1, 1), 14),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#666666')),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f5f5f5')),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#dddddd')),
+                ]))
+                elements.append(summary_table)
+                elements.append(Spacer(1, 20))
 
         # Find tables in HTML and convert to PDF tables
         tables = soup.find_all('table')
@@ -221,7 +306,14 @@ class ExportService:
             table_data = []
             for row in rows:
                 cells = row.find_all(['th', 'td'])
-                row_data = [cell.get_text(strip=True) for cell in cells]
+                # Get text from each cell, preserving line breaks for approval info
+                row_data = []
+                for cell in cells:
+                    # Get all text including nested divs (for approval info)
+                    cell_text = ' '.join(cell.stripped_strings)
+                    # Clean up multiple spaces
+                    cell_text = re.sub(r'\s+', ' ', cell_text).strip()
+                    row_data.append(cell_text)
                 if row_data:
                     table_data.append(row_data)
 
@@ -233,22 +325,24 @@ class ExportService:
 
                 pdf_table = Table(table_data, colWidths=col_widths)
                 pdf_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A5F')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#5A6A72')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
                     ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
                     ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                    ('TOPPADDING', (0, 1), (-1, -1), 6),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')])
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ]))
                 elements.append(pdf_table)
                 elements.append(Spacer(1, 15))
 
         # If no tables found, try to extract text content
         if not tables:
-            # Get all paragraph text
             for p in soup.find_all(['p', 'div']):
                 text = p.get_text(strip=True)
                 if text:
