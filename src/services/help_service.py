@@ -11,12 +11,23 @@ logger = logging.getLogger(__name__)
 class HelpService:
     """Service for managing help documentation content."""
 
+    # Role hierarchy for access control
+    # employee < manager < admin < superadmin
+    ROLE_HIERARCHY = {
+        'employee': 0,
+        'manager': 1,
+        'admin': 2,
+        'superadmin': 3
+    }
+
     # Help content organized by chapters
+    # required_role: minimum role needed to see this chapter (None = all users)
     CHAPTERS = {
         "getting-started": {
             "title": "Getting Started",
             "icon": "play_circle",
             "order": 1,
+            "required_role": None,  # All users
             "articles": [
                 {
                     "id": "overview",
@@ -200,6 +211,7 @@ Your preference is saved automatically.
             "title": "PTO Requests",
             "icon": "event_available",
             "order": 2,
+            "required_role": None,  # All users
             "articles": [
                 {
                     "id": "submit-request",
@@ -454,6 +466,7 @@ If your balance seems incorrect:
             "title": "Team Calendar",
             "icon": "calendar_month",
             "order": 3,
+            "required_role": None,  # All users
             "articles": [
                 {
                     "id": "calendar-overview",
@@ -683,6 +696,7 @@ Administrators run **Year-End Processing** to generate the next year's holiday c
             "title": "Leave Carryover",
             "icon": "sync",
             "order": 4,
+            "required_role": None,  # All users
             "articles": [
                 {
                     "id": "carryover-overview",
@@ -849,6 +863,7 @@ You can submit multiple carryover requests:
             "title": "For Managers",
             "icon": "supervisor_account",
             "order": 5,
+            "required_role": "manager",  # Managers and above only
             "articles": [
                 {
                     "id": "approve-requests",
@@ -1128,6 +1143,7 @@ Below the AI chat, click **"View Full Handbook"** to read the complete handbook 
             "title": "Reports & Analytics",
             "icon": "analytics",
             "order": 6,
+            "required_role": "manager",  # Managers and above only
             "articles": [
                 {
                     "id": "reports-overview",
@@ -1499,6 +1515,7 @@ Full company-wide access:
             "title": "Administration",
             "icon": "admin_panel_settings",
             "order": 7,
+            "required_role": "admin",  # Admins only
             "articles": [
                 {
                     "id": "employee-management",
@@ -1994,6 +2011,7 @@ For system issues:
             "title": "Technical Reference",
             "icon": "settings",
             "order": 8,
+            "required_role": None,  # All users (troubleshooting, shortcuts)
             "articles": [
                 {
                     "id": "environment-setup",
@@ -2234,10 +2252,27 @@ The system includes:
     }
 
     @classmethod
-    def get_all_chapters(cls) -> List[Dict]:
-        """Get all chapters with metadata (without full content)."""
+    def _has_access(cls, user_role: Optional[str], required_role: Optional[str]) -> bool:
+        """Check if a user role has access to content requiring a specific role."""
+        # If no role required, everyone has access
+        if required_role is None:
+            return True
+        # If user has no role, deny access to restricted content
+        if user_role is None:
+            return False
+        # Check role hierarchy
+        user_level = cls.ROLE_HIERARCHY.get(user_role, 0)
+        required_level = cls.ROLE_HIERARCHY.get(required_role, 0)
+        return user_level >= required_level
+
+    @classmethod
+    def get_all_chapters(cls, user_role: Optional[str] = None) -> List[Dict]:
+        """Get all chapters with metadata (without full content), filtered by user role."""
         chapters = []
         for chapter_id, chapter in cls.CHAPTERS.items():
+            # Skip chapters the user doesn't have access to
+            if not cls._has_access(user_role, chapter.get("required_role")):
+                continue
             chapters.append({
                 "id": chapter_id,
                 "title": chapter["title"],
@@ -2252,10 +2287,13 @@ The system includes:
         return sorted(chapters, key=lambda x: x["order"])
 
     @classmethod
-    def get_chapter(cls, chapter_id: str) -> Optional[Dict]:
-        """Get a specific chapter with all articles."""
+    def get_chapter(cls, chapter_id: str, user_role: Optional[str] = None) -> Optional[Dict]:
+        """Get a specific chapter with all articles, checking access."""
         chapter = cls.CHAPTERS.get(chapter_id)
         if not chapter:
+            return None
+        # Check if user has access to this chapter
+        if not cls._has_access(user_role, chapter.get("required_role")):
             return None
         return {
             "id": chapter_id,
@@ -2265,10 +2303,13 @@ The system includes:
         }
 
     @classmethod
-    def get_article(cls, chapter_id: str, article_id: str) -> Optional[Dict]:
-        """Get a specific article."""
+    def get_article(cls, chapter_id: str, article_id: str, user_role: Optional[str] = None) -> Optional[Dict]:
+        """Get a specific article, checking access."""
         chapter = cls.CHAPTERS.get(chapter_id)
         if not chapter:
+            return None
+        # Check if user has access to this chapter
+        if not cls._has_access(user_role, chapter.get("required_role")):
             return None
         for article in chapter["articles"]:
             if article["id"] == article_id:
@@ -2280,12 +2321,13 @@ The system includes:
         return None
 
     @classmethod
-    def search(cls, query: str) -> List[Dict]:
+    def search(cls, query: str, user_role: Optional[str] = None) -> List[Dict]:
         """
-        Search all help content for matching articles.
+        Search all help content for matching articles, filtered by user role.
 
         Args:
             query: Search term
+            user_role: User's role for filtering results
 
         Returns:
             List of matching articles with snippets
@@ -2297,6 +2339,10 @@ The system includes:
         results = []
 
         for chapter_id, chapter in cls.CHAPTERS.items():
+            # Skip chapters the user doesn't have access to
+            if not cls._has_access(user_role, chapter.get("required_role")):
+                continue
+
             for article in chapter["articles"]:
                 # Search in title and content
                 title_match = query_lower in article["title"].lower()

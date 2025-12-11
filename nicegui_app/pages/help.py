@@ -9,6 +9,9 @@ def help_page():
     """Help page content."""
     apply_dark_mode()
 
+    # Get user role for filtering help content
+    user_role = app.storage.general.get('user', {}).get('role', 'employee')
+
     # State for current view
     current_view = {'chapter': None, 'article': None}
     search_results = {'items': []}
@@ -29,7 +32,7 @@ def help_page():
             current_view['article'] = None
             content_container.clear()
             with content_container:
-                chapters = HelpService.get_all_chapters()
+                chapters = HelpService.get_all_chapters(user_role)
                 # Use CSS grid for consistent card sizing
                 with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;'):
                     for chapter in chapters:
@@ -50,7 +53,7 @@ def help_page():
             current_view['article'] = None
             content_container.clear()
             with content_container:
-                chapter = HelpService.get_chapter(chapter_id)
+                chapter = HelpService.get_chapter(chapter_id, user_role)
                 if not chapter:
                     ui.label('Chapter not found')
                     return
@@ -76,7 +79,7 @@ def help_page():
             current_view['article'] = article_id
             content_container.clear()
             with content_container:
-                article = HelpService.get_article(chapter_id, article_id)
+                article = HelpService.get_article(chapter_id, article_id, user_role)
                 if not article:
                     ui.label('Article not found')
                     return
@@ -100,7 +103,7 @@ def help_page():
                 show_chapters()
                 return
 
-            results = HelpService.search(query)
+            results = HelpService.search(query, user_role)
             content_container.clear()
             with content_container:
                 # Breadcrumb
