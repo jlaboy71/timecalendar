@@ -137,7 +137,8 @@ def reports_page():
                 # Row 1: Filters
                 with ui.row().classes('w-full gap-4 items-end flex-wrap'):
                     # Year filter (common to all reports)
-                    years = list(range(current_year - 2, current_year + 2))
+                    # Only show current year and next year (no historical years without data)
+                    years = [current_year, current_year + 1]
                     ui.select(
                         {y: str(y) for y in years},
                         label='Year',

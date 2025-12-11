@@ -55,8 +55,8 @@ class MarketHolidayData:
 class MarketCalendarService:
     """Service for fetching and managing market holiday data."""
 
-    # US Markets we track
-    EXCHANGES = ['NYSE', 'CME', 'CBOE']
+    # US Markets we track (includes Federal for company holidays)
+    EXCHANGES = ['NYSE', 'CME', 'CBOE', 'Federal']
 
     def __init__(self, db_session=None):
         """Initialize the market calendar service."""
