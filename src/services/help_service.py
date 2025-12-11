@@ -33,7 +33,7 @@ Welcome to the TJM Time Calendar! This is your complete system for managing paid
 - **View Your Balances** - See how much leave you have available
 - **Track Request Status** - Monitor pending, approved, and denied requests
 - **Team Calendar** - See when colleagues are out (approved time off)
-- **Request Carryover** - Carry unused leave into the next year
+- **Request Carryover** - Carry unused sick time into the next year
 - **Access Employee Handbook** - View company policies
 
 ### For Managers (Additional Features)
@@ -41,7 +41,7 @@ Welcome to the TJM Time Calendar! This is your complete system for managing paid
 - **Team Calendar View** - See your entire department's schedule
 - **Reports & Analytics** - Generate team balance and usage reports
 - **AI Handbook Assistant** - Ask questions about company policies
-- **Carryover Approvals** - Process carryover requests for your team
+- **Carryover Approvals** - Process sick time carryover requests for your team
 
 ### For Administrators (Full Access)
 - **Employee Management** - Add, edit, and manage all employees
@@ -434,10 +434,10 @@ The request form shows:
 
 ## Carryover Hours
 
-If you have carryover from last year:
-- Shows as part of your total
-- Usually must be used first
-- Subject to company policy
+If you have sick time carryover from last year:
+- Shows as part of your sick time total
+- Subject to company policy (56-80 hour limit)
+- Note: Only sick time can be carried over; vacation and personal days are "use it or lose it"
 
 ## Questions About Your Balance?
 
@@ -690,37 +690,38 @@ Administrators run **Year-End Processing** to generate the next year's holiday c
                     "content": """
 # Leave Carryover Overview
 
-At the end of the year, you may be able to carry over unused leave into the next year.
+At the end of the year, you may be able to carry over unused **sick time** into the next year.
 
 ## What is Carryover?
 
-- Unused PTO from the current year
+- Unused **sick time only** from the current year
 - Transferred to next year's balance
 - Subject to company policy and approval
+- **Vacation and Personal Days cannot be carried over** (use it or lose it)
 
 ## Who Can Request Carryover?
 
-All employees can request to carry over unused leave, but:
+All employees can request to carry over unused sick time, but:
 - Some hours may auto-approve based on policy
 - Hours above the limit require manager approval
-- Company policy determines maximum carryover
+- Typical limit: 56-80 hours depending on location
 
 ## Carryover Timeline
 
 **Best Practice:**
-1. Review your unused balance in Q4
+1. Review your unused sick time balance in Q4
 2. Submit carryover requests before year-end
 3. Await manager approval
 4. Carryover applies when new year starts
 
 ## Types of Leave That Can Carry Over
 
-Typically includes:
-- Vacation time
-- Sick leave (policy dependent)
-- Personal days (policy dependent)
+**Only Sick Time can be carried over:**
+- Sick Time: Up to 56-80 hours depending on location
+- Vacation: Use it or lose it - no carryover allowed
+- Personal Days: Use it or lose it - no carryover allowed
 
-Check your company handbook for specific policies.
+This is based on company policy in the Haventech Handbook.
 
 ## Accessing Carryover Requests
 
@@ -735,20 +736,22 @@ From your Dashboard:
                     "content": """
 # Submitting a Carryover Request
 
-Here's how to request unused leave carryover:
+Here's how to request unused sick time carryover:
 
-## Step 1: Review Your Unused Balances
+**Important:** Only Sick Time can be carried over. Vacation and Personal Days are "use it or lose it."
+
+## Step 1: Review Your Unused Sick Time Balance
 
 The carryover page shows:
-- Your current year unused balances
-- Hours available for each leave type
+- Your current year unused sick time balance
+- Hours available for carryover
 - Visual progress bars
 
-## Step 2: Select Leave Type
+## Step 2: Select Sick Time
 
-Choose which leave type to carry over:
-- Only types with unused balance are available
-- Each type must be requested separately
+Choose Sick Time to carry over:
+- Only sick time with unused balance is available
+- Vacation and personal days cannot be carried over
 
 ## Step 3: Check Policy Context
 
@@ -1749,77 +1752,64 @@ When viewing individual requests:
                     "content": """
 # Year-End Processing
 
-At the end of each year, admins must initialize the system for the new year.
+Year-end processing is an **automatic system** that prepares the TJM Time Calendar for each new calendar year. It runs once per year, triggered by the first user login after January 1st.
 
 ## What Year-End Processing Does
 
-1. **Creates New Balance Records**
-   - Initializes balances for all active employees
-   - Applies annual allocations per policy
-   - Applies approved carryover amounts
+1. **Creates PTO Balances**
+   - Every active employee receives their annual PTO allocation
+   - Vacation based on years of service:
+     - 0-4 years: 10 vacation days
+     - 5-9 years: 15 vacation days
+     - 10+ years: 20 vacation days
+   - Plus: 5 sick days and 2 personal days for everyone
 
-2. **Generates Market Holidays**
-   - Creates holiday calendar for new year
-   - Based on standard market holiday rules
-   - Considers observed dates
+2. **Applies Carryover Requests (Sick Time Only)**
+   - Approved sick time carryover requests are applied
+   - Sick time can roll over up to 56-80 hours depending on location
+   - Vacation and personal days are "use it or lose it" - no carryover
 
-3. **Applies Carryover**
-   - Approved carryover requests transfer
-   - Shows in new year's balance
+3. **Generates Market Holidays**
+   - Federal and exchange holidays (NYSE, CME, CBOE) are automatically calculated
+   - Includes: New Year, MLK Day, Presidents Day, Good Friday, Memorial Day, Juneteenth, July 4th, Labor Day, Thanksgiving, Christmas
 
-## When to Run
+## When Does It Run?
 
-**Recommended timing:**
-- Early January of the new year
-- After all carryover requests are processed
-- Before employees submit new year requests
+- **Trigger**: First login by any user on or after January 1st of the new year
+- **Duration**: Usually completes in a few seconds
+- **Frequency**: Once per year (the system tracks if it has already run)
+- **No action required**: This is fully automatic - you don't need to do anything
 
-## How to Run
+## Viewing Year-End Status
 
-1. Navigate to **Admin** > **Year-End Processing**
-2. Click **"Check Status"** to see:
-   - Current year status
-   - Carryover requests pending
-   - Employees to process
-3. Review the checklist
-4. Click **"Run Year-End Processing"**
-5. Confirm the action
-6. Wait for completion
+Navigate to **Admin** > **Year-End Status** to see:
+- Whether current year processing is complete
+- Processing results (balances created, carryovers applied, holidays generated)
+- Countdown to next year's processing
+- Any pending carryover requests that need attention
 
-## Pre-Processing Checklist
+## Pre-Year-End Checklist
 
-Before running:
-- All carryover requests approved/denied
-- Database backed up
-- Holiday dates verified
-- Policy allocations confirmed
-
-## After Processing
-
-Verify:
-- New balances show for all employees
-- Carryover amounts applied correctly
-- Holiday calendar populated
-- No error messages
+Before the new year:
+- Review and approve/deny all pending carryover requests
+- Remind employees to use vacation before it expires
+- Verify employee records are up to date
 
 ## Troubleshooting
 
-**Processing Fails:**
-- Check error log for details
-- Verify database connectivity
-- Contact system administrator
+**Processing Not Showing Complete:**
+- Wait for first login of the new year
+- Check the Year-End Status page for details
 
 **Missing Balances:**
-- May indicate inactive employees
-- Manually create if needed
-- Check employee status
+- New employees added after year-end processing automatically get their PTO balance created
+- Check if the employee is marked as active
 
 ## Best Practices
 
-- Always backup before processing
-- Run during low-usage period
-- Verify results thoroughly
-- Communicate to employees when complete
+- Process carryover requests before year-end
+- Review Year-End Status page after January 1st to confirm processing
+- Market holidays can be synced manually in System Administration if needed
 """
                 },
                 {
