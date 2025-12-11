@@ -2008,92 +2008,11 @@ For system issues:
             ]
         },
         "technical": {
-            "title": "Technical Reference",
-            "icon": "settings",
+            "title": "Troubleshooting & Tips",
+            "icon": "help_outline",
             "order": 8,
             "required_role": None,  # All users (troubleshooting, shortcuts)
             "articles": [
-                {
-                    "id": "environment-setup",
-                    "title": "Environment Configuration",
-                    "content": """
-# Environment Configuration
-
-The TJM Time Calendar uses environment variables for configuration.
-
-## The .env File
-
-Create a `.env` file in the application root with these settings:
-
-## Required Settings
-
-```
-# Security - Generate a unique secret key
-SECRET_KEY=your-unique-secret-key-here
-
-# Debug Mode - Set to false in production
-DEBUG=false
-
-# Database - SQLite is default
-DATABASE_URL=sqlite:///tjm_calendar.db
-```
-
-## Email Settings (Optional)
-
-For notifications and password reset:
-
-```
-# SMTP Configuration
-SMTP_HOST=smtp.your-provider.com
-SMTP_PORT=587
-SMTP_USER=email@company.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=noreply@company.com
-```
-
-### Provider Examples
-
-**Gmail:**
-```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-```
-Note: Use App Passwords, not your regular password.
-
-**Microsoft 365:**
-```
-SMTP_HOST=smtp.office365.com
-SMTP_PORT=587
-```
-
-## AI Features (Optional)
-
-For Handbook AI Assistant:
-
-```
-# Anthropic API Key
-ANTHROPIC_API_KEY=your-api-key-here
-```
-
-## Session Settings
-
-```
-# Session timeout in minutes (default: 30)
-SESSION_TIMEOUT_MINUTES=30
-```
-
-## Production Checklist
-
-- Set DEBUG=false
-- Generate strong SECRET_KEY
-- Configure HTTPS (via reverse proxy)
-- Configure SMTP for notifications
-- Schedule database backup
-- Configure log rotation
-"""
-                },
                 {
                     "id": "troubleshooting",
                     "title": "Troubleshooting Guide",
