@@ -103,5 +103,5 @@ def manager_team_page():
             render_team_list()
 
         # Navigation buttons
-        with ui.row().classes('w-full justify-center mt-6 gap-4'):
+        with ui.row().classes('w-full justify-start mt-6'):
             ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')

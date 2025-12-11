@@ -85,6 +85,7 @@ class PTOService:
             end_date=request_data.end_date,
             total_days=request_data.total_days,
             notes=request_data.notes,
+            is_private=request_data.is_private,
             status='approved' if is_auto_approve else 'pending',
             submitted_at=datetime.now(),
             approved_by=user.id if is_auto_approve else None,

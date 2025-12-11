@@ -14,6 +14,7 @@ class PTORequestBase(BaseModel):
     end_date: date = Field(..., description="End date of PTO")
     total_days: Decimal = Field(..., ge=0, description="Total days requested")
     notes: Optional[str] = Field(None, description="Optional notes for the request")
+    is_private: bool = Field(False, description="If True, hidden from department calendar views")
     
     @field_validator('end_date')
     @classmethod

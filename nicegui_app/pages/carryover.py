@@ -1,4 +1,4 @@
-"""Carryover request page for requesting leave balance carryover to next year."""
+"""Carryover request page for requesting sick leave balance carryover to next year."""
 from nicegui import ui, app
 from src.services.balance_service import BalanceService
 from src.services.accrual_service import AccrualService
@@ -12,18 +12,11 @@ from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
 
 
-def format_hours_days(hours):
-    """Format hours with days equivalent (8 hours = 1 day)."""
-    days = hours / 8
-    return f'{hours:.1f} hrs ({days:.1f} days)'
-
-
 def carryover_page():
-    """Page for requesting leave balance carryover to next year."""
+    """Page for requesting sick leave balance carryover to next year."""
 
     apply_dark_mode()
 
-    # Check if user is logged in
     user = app.storage.general.get('user')
     if not user:
         ui.navigate.to('/')
@@ -42,57 +35,26 @@ def carryover_page():
         current_user = user_service.get_user_by_id(user['id'])
         balance = balance_service.get_or_create_balance(user['id'], current_year)
 
-        # Get leave types that can have carryover
-        leave_types = db.query(LeaveType).filter(
-            LeaveType.is_active == True,
-            LeaveType.deducts_from_balance == True  # Only types with balances
-        ).order_by(LeaveType.sort_order).all()
+        # Get Sick leave type (only type that can be carried over)
+        sick_leave_type = db.query(LeaveType).filter(
+            LeaveType.code == 'SICK',
+            LeaveType.is_active == True
+        ).first()
 
-        # Calculate unused balances with full details
-        unused_balances = {}
-        balance_details = {}
+        # Calculate unused sick balance
+        sick_unused = 0
         if balance:
-            # Vacation
-            vacation_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
-            vacation_used = float(balance.vacation_used or 0)
-            vacation_pending = float(getattr(balance, 'vacation_pending', 0) or 0)
-            vacation_unused = vacation_total - vacation_used - vacation_pending
-            if vacation_unused > 0:
-                unused_balances['VACATION'] = vacation_unused
-                balance_details['VACATION'] = {
-                    'total': vacation_total,
-                    'used': vacation_used,
-                    'pending': vacation_pending,
-                    'unused': vacation_unused
-                }
-
-            # Sick
             sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
             sick_used = float(balance.sick_used or 0)
             sick_pending = float(getattr(balance, 'sick_pending', 0) or 0)
-            sick_unused = sick_total - sick_used - sick_pending
-            if sick_unused > 0:
-                unused_balances['SICK'] = sick_unused
-                balance_details['SICK'] = {
-                    'total': sick_total,
-                    'used': sick_used,
-                    'pending': sick_pending,
-                    'unused': sick_unused
-                }
+            sick_unused = max(0, sick_total - sick_used - sick_pending)
 
-            # Personal
-            personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
-            personal_used = float(balance.personal_used or 0)
-            personal_pending = float(getattr(balance, 'personal_pending', 0) or 0)
-            personal_unused = personal_total - personal_used - personal_pending
-            if personal_unused > 0:
-                unused_balances['PERSONAL'] = personal_unused
-                balance_details['PERSONAL'] = {
-                    'total': personal_total,
-                    'used': personal_used,
-                    'pending': personal_pending,
-                    'unused': personal_unused
-                }
+        # Get carryover policy limit (absolute cap)
+        max_carryover = 0
+        if current_user and sick_leave_type:
+            policy = accrual_service.get_policy_for_employee(current_user, 'SICK')
+            if policy and policy.max_carryover_hours:
+                max_carryover = float(policy.max_carryover_hours)
 
         # Get existing carryover requests
         existing_requests = db.query(CarryoverRequest).filter(
@@ -100,351 +62,139 @@ def carryover_page():
             CarryoverRequest.from_year == current_year
         ).order_by(CarryoverRequest.created_at.desc()).all()
 
-        # Build leave type lookup
-        leave_type_map = {lt.code: lt for lt in leave_types}
+        # Calculate already-approved carryover for this transition (to enforce cap)
+        already_approved = 0
+        for req in existing_requests:
+            if req.status == 'approved':
+                already_approved += float(req.hours_approved or req.hours_requested)
+
+        # Calculate remaining allowance under the cap
+        remaining_cap = max(0, max_carryover - already_approved) if max_carryover > 0 else sick_unused
 
     finally:
         db.close()
 
-    # State for request summary
-    selected_type = {'code': None}
-    selected_hours = {'value': 0}
-
     with ui.column().classes('w-full max-w-2xl mx-auto mt-8 p-6'):
-        # Header with greeting
-        page_header(title='REQUEST LEAVE CARRYOVER', show_back=False)
-        ui.label(f'Carry unused {current_year} leave balance into {next_year}').classes('opacity-70 mb-6')
+        page_header(title='SICK TIME CARRYOVER', show_back=False)
+        ui.label(f'Carry unused {current_year} sick time into {next_year}').classes('opacity-70 mb-6')
 
-        # ============ UNUSED BALANCES CARD ============
-        with ui.card().classes('w-full mb-6 p-4 border-l-4 border-blue-500'):
-            ui.label(f'Your {current_year} Unused Balances').classes('text-lg font-semibold mb-4')
+        # Calculate max requestable (minimum of unused balance and remaining cap)
+        max_requestable = min(sick_unused, remaining_cap) if max_carryover > 0 else sick_unused
 
-            if unused_balances:
-                with ui.row().classes('w-full justify-around flex-wrap gap-4'):
-                    for code, hours in unused_balances.items():
-                        leave_type = leave_type_map.get(code)
-                        if leave_type:
-                            details = balance_details.get(code, {})
-                            with ui.card().classes('items-center p-4 rounded-lg min-w-32'):
-                                ui.label(leave_type.name).classes('font-semibold mb-2')
-                                ui.label(f'{hours:.1f} hrs').classes('text-2xl font-bold text-blue-600')
-                                ui.label(f'({hours/8:.1f} days)').classes('text-sm opacity-60')
-                                ui.label('unused').classes('text-xs opacity-50 mt-1')
+        # ============ MAIN FORM ============
+        if sick_unused > 0 and sick_leave_type and max_requestable > 0:
+            # Show available balance
+            with ui.card().classes('w-full mb-4 p-4'):
+                with ui.row().classes('w-full justify-between items-center'):
+                    ui.label('Available Sick Time').classes('font-medium')
+                    ui.label(f'{sick_unused:.0f} hrs ({sick_unused/8:.1f} days)').classes('text-xl font-bold text-green-600')
 
-                                # Progress bar showing used vs available
-                                total = details.get('total', hours)
-                                used_pct = (details.get('used', 0) / total * 100) if total > 0 else 0
-                                with ui.row().classes('w-full h-2 rounded-full overflow-hidden bg-gray-200 mt-2'):
-                                    if used_pct > 0:
-                                        ui.element('div').classes('h-full bg-gray-400').style(f'width: {min(used_pct, 100)}%')
-            else:
-                with ui.row().classes('w-full items-center justify-center p-4'):
-                    ui.icon('info', color='gray').classes('mr-2')
-                    ui.label('No unused leave balances available for carryover').classes('opacity-70')
+                if max_carryover > 0:
+                    ui.label(f'Policy cap: {max_carryover:.0f} hrs maximum carryover').classes('text-xs opacity-60 mt-2')
+                    if already_approved > 0:
+                        ui.label(f'Already approved: {already_approved:.0f} hrs | Remaining: {remaining_cap:.0f} hrs').classes('text-xs text-amber-600 mt-1')
 
-        # ============ REQUEST SUMMARY CARD ============
-        summary_card = ui.card().classes('w-full mb-6 p-4').style('border: 1px solid rgba(128,128,128,0.3)')
+            # Hours input - default to max (why would you carry over less?)
+            with ui.card().classes('w-full mb-4 p-4'):
+                with ui.row().classes('w-full justify-between items-center mb-4'):
+                    ui.label('Hours to Carry Over').classes('font-medium')
+                    ui.label(f'{max_requestable:.0f} hrs ({max_requestable/8:.1f} days)').classes('text-lg font-bold')
 
-        def update_summary():
-            """Update the request summary based on selections."""
-            summary_card.clear()
-            with summary_card:
-                ui.label('Carryover Request Summary').classes('text-lg font-semibold mb-3')
+                hours_input = ui.number(
+                    value=max_requestable,
+                    min=8,
+                    max=max_requestable,
+                    step=8
+                ).classes('w-full')
 
-                hours = selected_hours['value'] or 0
-                code = selected_type['code']
-
-                if not code or hours <= 0:
-                    ui.label('Select a leave type and enter hours to see summary').classes('opacity-60 text-sm')
+            # Submit
+            def submit_carryover():
+                if not hours_input.value or hours_input.value < 8:
+                    ui.notify('Enter at least 8 hours (1 day)', type='warning')
                     return
 
-                max_hours = unused_balances.get(code, 0)
-                remaining_unused = max_hours - hours
+                if hours_input.value % 8 != 0:
+                    ui.notify('Must be in full-day (8-hour) increments', type='warning')
+                    return
 
-                with ui.row().classes('w-full justify-around'):
-                    with ui.column().classes('items-center'):
-                        ui.label('Currently Unused').classes('text-xs opacity-60 mb-1')
-                        ui.label(f'{max_hours:.1f} hrs').classes('text-lg font-medium')
-                        ui.label(f'({max_hours/8:.1f} days)').classes('text-xs opacity-60')
+                db = next(get_db())
+                try:
+                    user_service = UserService(db)
+                    current_employee = user_service.get_user_by_id(user['id'])
+                    user_role = current_employee.role if current_employee else 'employee'
 
-                    with ui.column().classes('items-center'):
-                        ui.label('Requesting Carryover').classes('text-xs opacity-60 mb-1')
-                        ui.label(f'{hours:.1f} hrs').classes('text-xl font-bold text-blue-600')
-                        ui.label(f'({hours/8:.1f} days)').classes('text-xs opacity-60')
+                    # Auto-approve for managers or if within policy limit
+                    auto_approve = user_role in ['manager', 'admin', 'superadmin']
+                    if not auto_approve and max_carryover > 0 and hours_input.value <= max_carryover:
+                        auto_approve = True
 
-                    with ui.column().classes('items-center'):
-                        ui.label('Will Expire').classes('text-xs opacity-60 mb-1')
-                        if remaining_unused > 0:
-                            ui.label(f'{remaining_unused:.1f} hrs').classes('text-lg font-medium text-amber-500')
-                            ui.label(f'({remaining_unused/8:.1f} days)').classes('text-xs opacity-60')
-                        else:
-                            ui.label('0.0 hrs').classes('text-lg font-medium text-green-600')
-                            ui.label('(0.0 days)').classes('text-xs opacity-60')
+                    request = CarryoverRequest(
+                        employee_id=user['id'],
+                        leave_type_id=sick_leave_type.id,
+                        from_year=current_year,
+                        to_year=next_year,
+                        hours_requested=Decimal(str(hours_input.value)),
+                        status='approved' if auto_approve else 'pending',
+                        employee_notes='Unused sick time carryover'
+                    )
 
-                # Warning if not carrying over all
-                if remaining_unused > 0:
-                    with ui.card().classes('w-full mt-3 p-2 border-l-4 border-amber-500'):
-                        with ui.row().classes('items-center'):
-                            ui.icon('info', color='orange').classes('mr-2')
-                            ui.label(f'{remaining_unused:.1f} hours ({remaining_unused/8:.1f} days) will expire if not carried over').classes('text-amber-500 text-sm')
+                    if auto_approve:
+                        request.approved_by = user['id']
+                        request.approved_at = datetime.now()
+                        request.hours_approved = Decimal(str(hours_input.value))
+                        request.manager_notes = 'Auto-approved per policy'
 
-        # ============ CARRYOVER REQUEST FORM ============
-        if unused_balances:
-            with ui.card().classes('w-full mb-6 p-4'):
-                ui.label('New Carryover Request').classes('text-lg font-semibold mb-4')
+                    db.add(request)
+                    db.commit()
 
-                # Leave type dropdown (only types with unused balance)
-                leave_type_options = {}
-                for code, hours in unused_balances.items():
-                    lt = leave_type_map.get(code)
-                    if lt:
-                        leave_type_options[lt.id] = f'{lt.name} - {format_hours_days(hours)} available'
+                    msg = 'Carryover approved!' if auto_approve else 'Request submitted for approval'
+                    ui.notify(msg, type='positive')
+                    ui.navigate.to('/carryover')
 
-                leave_type_select = ui.select(
-                    leave_type_options,
-                    label='Leave Type',
-                    value=list(leave_type_options.keys())[0] if leave_type_options else None
-                ).classes('w-full mb-4')
+                except Exception as e:
+                    ui.notify(f'Error: {str(e)}', type='negative')
+                finally:
+                    db.close()
 
-                # Policy context display
-                policy_card = ui.card().classes('w-full mb-4 p-3').style('border: 1px solid rgba(128,128,128,0.3)')
+            with ui.row().classes('w-full gap-4'):
+                ui.button('Submit', on_click=submit_carryover, color='primary').classes('flex-1')
+                ui.button('Cancel', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('flex-1')
 
-                def update_policy_info():
-                    """Update policy info based on selected leave type."""
-                    policy_card.clear()
-                    with policy_card:
-                        if not leave_type_select.value or not current_user:
-                            ui.label('Select a leave type to see carryover policy').classes('text-sm opacity-60')
-                            return
+        elif sick_unused > 0 and max_requestable <= 0:
+            # Hit the carryover cap
+            with ui.card().classes('w-full mb-4 p-4 border-l-4 border-amber-500'):
+                with ui.row().classes('items-center'):
+                    ui.icon('warning', color='amber').classes('mr-3')
+                    with ui.column().classes('gap-1'):
+                        ui.label('Carryover Cap Reached').classes('font-medium')
+                        ui.label(f'You have already approved {already_approved:.0f} hrs of carryover.').classes('text-sm opacity-70')
+                        ui.label(f'Policy maximum is {max_carryover:.0f} hrs - no additional carryover allowed.').classes('text-sm opacity-70')
+        else:
+            # No sick time available
+            with ui.card().classes('w-full mb-4 p-4'):
+                with ui.row().classes('items-center'):
+                    ui.icon('info', color='gray').classes('mr-3')
+                    ui.label('No sick time available to carry over').classes('opacity-70')
 
-                        db = next(get_db())
-                        try:
-                            # Find leave type code from ID
-                            lt = db.query(LeaveType).filter(LeaveType.id == leave_type_select.value).first()
-                            if lt:
-                                selected_type['code'] = lt.code
-                                accrual_svc = AccrualService(db)
-                                policy = accrual_svc.get_policy_for_employee(current_user, lt.code)
-                                if policy and policy.max_carryover_hours:
-                                    max_auto = float(policy.max_carryover_hours)
-                                    if max_auto > 0:
-                                        with ui.row().classes('items-center'):
-                                            ui.icon('check_circle', color='green').classes('mr-2')
-                                            with ui.column():
-                                                ui.label(f'Auto-approved up to {format_hours_days(max_auto)}').classes('text-sm font-medium text-green-600')
-                                                ui.label('Hours above this limit require manager approval').classes('text-xs opacity-70')
-                                    else:
-                                        with ui.row().classes('items-center'):
-                                            ui.icon('approval', color='orange').classes('mr-2')
-                                            ui.label('All carryover requests require manager approval').classes('text-sm text-amber-500')
-                                else:
-                                    with ui.row().classes('items-center'):
-                                        ui.icon('approval', color='orange').classes('mr-2')
-                                        ui.label('Manager approval required for carryover').classes('text-sm text-amber-500')
-                        finally:
-                            db.close()
+        # ============ EXISTING REQUESTS ============
+        if existing_requests:
+            ui.separator().classes('my-6')
+            ui.label('Your Requests').classes('text-lg font-semibold mb-4')
 
-                    update_summary()
+            for req in existing_requests:
+                hrs = float(req.hours_requested)
+                status_icon = {'approved': 'check_circle', 'denied': 'cancel', 'pending': 'schedule'}.get(req.status, 'help')
+                status_color = {'approved': 'green', 'denied': 'red', 'pending': 'orange'}.get(req.status, 'gray')
 
-                leave_type_select.on('update:model-value', lambda e: update_policy_info())
+                with ui.card().classes('w-full mb-2 p-3'):
+                    with ui.row().classes('w-full justify-between items-center'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon(status_icon, color=status_color)
+                            ui.label(f'{hrs:.0f} hrs ({hrs/8:.1f} days)')
+                        ui.label(req.created_at.strftime('%m/%d/%Y')).classes('text-sm opacity-60')
 
-                # Hours to carry over with slider
-                def get_max_hours():
-                    """Get max hours for selected leave type."""
-                    if not leave_type_select.value:
-                        return 0
-                    for code, hours in unused_balances.items():
-                        lt = leave_type_map.get(code)
-                        if lt and lt.id == leave_type_select.value:
-                            return hours
-                    return 0
-
-                ui.label('Hours to Carry Over').classes('text-sm font-medium mb-1')
-
-                with ui.row().classes('w-full items-center gap-4 mb-2'):
-                    hours_input = ui.number(
-                        value=0,
-                        min=0,
-                        max=get_max_hours(),
-                        step=8,  # Full day increments only
-                        format='%.1f'
-                    ).classes('w-32')
-
-                    hours_display = ui.label('0.0 days').classes('opacity-70')
-
-                def update_hours_display():
-                    hrs = hours_input.value or 0
-                    selected_hours['value'] = hrs
-                    hours_display.text = f'= {hrs/8:.1f} days'
-                    update_summary()
-
-                hours_input.on('update:model-value', lambda e: update_hours_display())
-
-                # Quick select buttons (minimum 1 full day per policy)
-                with ui.row().classes('gap-2 mb-4'):
-                    def set_hours(hrs):
-                        max_hrs = get_max_hours()
-                        hours_input.value = min(hrs, max_hrs)
-                        update_hours_display()
-
-                    ui.button('1 Day (8h)', on_click=lambda: set_hours(8)).props('size=sm dense outline')
-                    ui.button('2 Days (16h)', on_click=lambda: set_hours(16)).props('size=sm dense outline')
-                    ui.button('3 Days (24h)', on_click=lambda: set_hours(24)).props('size=sm dense outline')
-                    ui.button('All Unused', on_click=lambda: set_hours(get_max_hours())).props('size=sm dense outline color=primary')
-
-                # Update max when leave type changes
-                def update_hours_max():
-                    hours_input.max = get_max_hours()
-                    if hours_input.value and hours_input.value > hours_input.max:
-                        hours_input.value = hours_input.max
-                    update_hours_display()
-
-                leave_type_select.on('update:model-value', lambda e: update_hours_max())
-
-                # Reason/justification
-                reason_input = ui.textarea(
-                    label='Reason/Justification (required)',
-                    placeholder='Explain why you need to carry over these hours (e.g., planned vacation, project deadlines, etc.)'
-                ).classes('w-full mb-6')
-
-                # Submit button
-                def submit_carryover():
-                    """Submit the carryover request."""
-                    if not leave_type_select.value:
-                        ui.notify('Please select a leave type', type='negative')
-                        return
-
-                    if not hours_input.value or hours_input.value <= 0:
-                        ui.notify('Please enter hours to carry over', type='negative')
-                        return
-
-                    # Enforce full-day (8-hour) increments for carryover
-                    if hours_input.value % 8 != 0:
-                        ui.notify('Carryover must be in full-day (8-hour) increments', type='negative')
-                        return
-
-                    if hours_input.value > get_max_hours():
-                        ui.notify(f'Cannot carry over more than {format_hours_days(get_max_hours())}', type='negative')
-                        return
-
-                    if not reason_input.value or not reason_input.value.strip():
-                        ui.notify('Please provide a reason for the carryover request', type='negative')
-                        return
-
-                    db = next(get_db())
-                    try:
-                        # Get user's role and policy to check for auto-approval
-                        user_service = UserService(db)
-                        current_employee = user_service.get_user_by_id(user['id'])
-                        user_role = current_employee.role if current_employee else 'employee'
-
-                        # Check policy-based auto-approval for carryover
-                        auto_approve = user_role in ['manager', 'admin', 'superadmin']
-                        auto_approve_reason = 'management role'
-
-                        if not auto_approve and current_employee:
-                            # Check if under policy max_carryover_hours
-                            accrual_svc = AccrualService(db)
-                            lt = db.query(LeaveType).filter(LeaveType.id == leave_type_select.value).first()
-                            if lt:
-                                policy = accrual_svc.get_policy_for_employee(current_employee, lt.code)
-                                if policy and policy.max_carryover_hours:
-                                    max_auto = float(policy.max_carryover_hours)
-                                    if hours_input.value <= max_auto:
-                                        auto_approve = True
-                                        auto_approve_reason = f'within policy limit ({max_auto:.0f} hrs)'
-
-                        # Create carryover request
-                        request = CarryoverRequest(
-                            employee_id=user['id'],
-                            leave_type_id=leave_type_select.value,
-                            from_year=current_year,
-                            to_year=next_year,
-                            hours_requested=Decimal(str(hours_input.value)),
-                            status='approved' if auto_approve else 'pending',
-                            employee_notes=reason_input.value.strip()
-                        )
-
-                        # If auto-approving, set approval fields
-                        if auto_approve:
-                            request.approved_by = user['id']
-                            request.approved_at = datetime.now()
-                            request.hours_approved = Decimal(str(hours_input.value))
-                            request.manager_notes = f'Auto-approved: {auto_approve_reason}'
-
-                        db.add(request)
-                        db.commit()
-
-                        if auto_approve:
-                            ui.notify(f'Carryover request auto-approved ({auto_approve_reason})!', type='positive')
-                        else:
-                            ui.notify('Carryover request submitted for manager approval!', type='positive')
-                        ui.navigate.to('/carryover')  # Refresh page
-
-                    except Exception as e:
-                        ui.notify(f'Error submitting request: {str(e)}', type='negative')
-                    finally:
-                        db.close()
-
-                with ui.row().classes('w-full gap-4'):
-                    ui.button('Submit Request', on_click=submit_carryover, color='primary').classes('flex-1')
-                    ui.button('Cancel', on_click=lambda: ui.navigate.to('/dashboard'), color='secondary').classes('flex-1')
-
-                # Initialize displays
-                update_policy_info()
-
-        # ============ EXISTING REQUESTS TABLE ============
-        with ui.card().classes('w-full mb-6 p-4'):
-            ui.label('Your Carryover Requests').classes('text-lg font-semibold mb-4')
-
-            if existing_requests:
-                columns = [
-                    {'name': 'leave_type', 'label': 'Leave Type', 'field': 'leave_type', 'align': 'left'},
-                    {'name': 'hours', 'label': 'Requested', 'field': 'hours', 'align': 'center'},
-                    {'name': 'approved', 'label': 'Approved', 'field': 'approved', 'align': 'center'},
-                    {'name': 'status', 'label': 'Status', 'field': 'status', 'align': 'center'},
-                    {'name': 'date', 'label': 'Submitted', 'field': 'date', 'align': 'left'},
-                ]
-
-                rows = []
-                for req in existing_requests:
-                    lt = leave_type_map.get(next((lt.code for lt in leave_types if lt.id == req.leave_type_id), None))
-                    lt_name = lt.name if lt else 'Unknown'
-
-                    status_display = req.status.title()
-                    if req.status == 'approved':
-                        status_display = '✅ Approved'
-                    elif req.status == 'denied':
-                        status_display = '❌ Denied'
-                    elif req.status == 'pending':
-                        status_display = '⏳ Pending'
-
-                    hrs_req = float(req.hours_requested)
-                    hrs_app = float(req.hours_approved) if req.hours_approved else None
-
-                    rows.append({
-                        'leave_type': lt_name,
-                        'hours': f'{hrs_req:.1f} hrs ({hrs_req/8:.1f} days)',
-                        'approved': f'{hrs_app:.1f} hrs ({hrs_app/8:.1f} days)' if hrs_app else '-',
-                        'status': status_display,
-                        'date': req.created_at.strftime('%m/%d/%Y')
-                    })
-
-                ui.table(columns=columns, rows=rows).classes('w-full')
-
-                # Show manager notes for denied requests
-                for req in existing_requests:
                     if req.status == 'denied' and req.manager_notes:
-                        with ui.card().classes('w-full mt-2 p-3 border-l-4 border-red-500'):
-                            with ui.row().classes('items-start'):
-                                ui.icon('error', color='red').classes('mr-2 mt-1')
-                                with ui.column():
-                                    ui.label('Request Denied').classes('text-sm font-medium text-red-500')
-                                    ui.label(f'Manager notes: {req.manager_notes}').classes('text-sm text-red-500')
-            else:
-                with ui.row().classes('w-full items-center justify-center p-4'):
-                    ui.icon('inbox', color='gray').classes('mr-2')
-                    ui.label('No carryover requests submitted yet').classes('opacity-70')
+                        ui.label(f'Denied: {req.manager_notes}').classes('text-sm text-red-500 mt-2')
 
         # Back button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('flat').classes('mt-6')

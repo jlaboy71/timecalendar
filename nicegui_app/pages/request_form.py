@@ -65,12 +65,16 @@ def request_form_page():
         except (ValueError, TypeError):
             prefill_date = None
 
+    # Get user role for private toggle visibility
+    user_role = user.get('role', 'employee')
+
     # State management
     state = {
         'start_date': prefill_date or date.today(),
         'end_date': prefill_date or date.today(),
         'is_single_day': True,
         'is_half_day': False,
+        'is_private': False,  # Only managers/admins can use this
     }
 
     # ============ MAIN PAGE LAYOUT ============
@@ -388,6 +392,15 @@ def request_form_page():
                 placeholder='e.g., Family vacation, doctor appointment...'
             ).classes('w-full').props('dense')
 
+            # Private toggle - only for managers/admins/superadmins
+            if user_role in ['manager', 'admin', 'superadmin']:
+                with ui.row().classes('w-full mt-3 items-center gap-2'):
+                    def on_private_change(e):
+                        state['is_private'] = e.value
+
+                    ui.switch('Keep Private', value=state['is_private'], on_change=on_private_change)
+                    ui.label('(Hidden from department calendar)').classes('text-xs opacity-60')
+
             # Update header if documentation required
             def update_notes_label():
                 if pto_type.value in requires_doc_types:
@@ -449,7 +462,8 @@ def request_form_page():
                         state['end_date'],
                         state['is_half_day'],
                         description.value,
-                        submit_btn
+                        submit_btn,
+                        state['is_private']
                     )
                 ).classes('flex-1').props('color=primary size=lg')
 
@@ -476,7 +490,7 @@ def request_form_page():
         update_warning()
 
 
-def submit_request(user_id, pto_type, start_date, end_date, half_day, description, submit_btn=None):
+def submit_request(user_id, pto_type, start_date, end_date, half_day, description, submit_btn=None, is_private=False):
     """Submit PTO request with validation and database operations."""
     from datetime import datetime
 
@@ -560,8 +574,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             start_date=start_date,
             end_date=end_date,
             total_days=total_days,
-            half_day=half_day,
-            description=description if description.strip() else None
+            notes=description if description.strip() else None,
+            is_private=is_private
         )
 
         pto_request = pto_service.create_request(request_data)

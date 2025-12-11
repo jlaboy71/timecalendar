@@ -28,16 +28,15 @@ def calendar_page():
     user_id = user.get('id')
     user_role = user.get('role')
 
-    # Get user's department ID (needed for admin/manager filtering)
+    # Get user's department ID (needed for all users - employees can now see department view)
     user_department_id = None
-    if user_role in ['manager', 'admin']:
-        db = next(get_db())
-        try:
-            current_user = db.query(User).filter(User.id == user_id).first()
-            if current_user:
-                user_department_id = current_user.department_id
-        finally:
-            db.close()
+    db = next(get_db())
+    try:
+        current_user = db.query(User).filter(User.id == user_id).first()
+        if current_user:
+            user_department_id = current_user.department_id
+    finally:
+        db.close()
 
     # State for current month/year view
     today = date.today()
@@ -49,7 +48,7 @@ def calendar_page():
     # State for filters with persistence
     selected_department = {'id': calendar_prefs.get('department_id', None)}
     selected_employee = {'id': calendar_prefs.get('employee_id', None)}  # New employee filter
-    view_mode = {'mode': calendar_prefs.get('view_mode', 'team' if user_role in ['manager', 'admin', 'superadmin'] else 'my')}
+    view_mode = {'mode': calendar_prefs.get('view_mode', 'my')}
     show_holidays = {'value': calendar_prefs.get('show_holidays', True)}
     show_weekends = {'value': calendar_prefs.get('show_weekends', True)}
     leave_type_filters = {
@@ -83,29 +82,39 @@ def calendar_page():
         # Header with greeting
         page_header(title='TEAM CALENDAR', show_back=False)
 
-        # ===== VIEW TOGGLE (managers/admins/superadmins only) =====
-        if user_role in ['manager', 'admin', 'superadmin']:
-            with ui.row().classes('w-full mb-4 gap-2'):
-                ui.label('View:').classes('font-medium self-center')
+        # ===== VIEW TOGGLE (all users can now see personal/department views) =====
+        with ui.row().classes('w-full mb-4 gap-2'):
+            ui.label('View:').classes('font-medium self-center')
 
-                def set_view_mode(mode):
-                    view_mode['mode'] = mode
-                    save_preferences()
-                    render_current_view()
+            # Create buttons first, then define handlers that reference them
+            my_btn = ui.button('My Calendar')
+            team_label = 'Department Calendar' if user_role == 'employee' else 'Team Calendar'
+            team_btn = ui.button(team_label)
 
-                my_btn = ui.button(
-                    'My Calendar',
-                    on_click=lambda: set_view_mode('my')
-                ).props('flat' if view_mode['mode'] != 'my' else '')
+            def update_view_button_styles():
+                """Update button styles based on current view mode."""
                 if view_mode['mode'] == 'my':
-                    my_btn.props('color=primary')
+                    my_btn.props(remove='outline')
+                    my_btn.props('color=primary unelevated')
+                    team_btn.props(remove='color=primary unelevated')
+                    team_btn.props('outline')
+                else:
+                    my_btn.props(remove='color=primary unelevated')
+                    my_btn.props('outline')
+                    team_btn.props(remove='outline')
+                    team_btn.props('color=primary unelevated')
 
-                team_btn = ui.button(
-                    'Team Calendar',
-                    on_click=lambda: set_view_mode('team')
-                ).props('flat' if view_mode['mode'] != 'team' else '')
-                if view_mode['mode'] == 'team':
-                    team_btn.props('color=primary')
+            def set_view_mode(mode):
+                view_mode['mode'] = mode
+                update_view_button_styles()
+                save_preferences()
+                render_current_view()
+
+            my_btn.on('click', lambda: set_view_mode('my'))
+            team_btn.on('click', lambda: set_view_mode('team'))
+
+            # Set initial styles
+            update_view_button_styles()
 
         # ===== FILTERS ROW =====
         with ui.expansion('Filters & Options', icon='filter_list').classes('w-full mb-4'):
@@ -280,27 +289,39 @@ def calendar_page():
 
             # View toggle (Month / Year)
             with ui.row().classes('gap-2'):
+                month_view_btn = ui.button('Month')
+                year_view_btn = ui.button('Year')
+
+                def update_period_button_styles():
+                    """Update button styles based on current period view."""
+                    if current_view['view'] == 'month':
+                        month_view_btn.props(remove='outline')
+                        month_view_btn.props('color=primary unelevated')
+                        year_view_btn.props(remove='color=primary unelevated')
+                        year_view_btn.props('outline')
+                    else:
+                        month_view_btn.props(remove='color=primary unelevated')
+                        month_view_btn.props('outline')
+                        year_view_btn.props(remove='outline')
+                        year_view_btn.props('color=primary unelevated')
+
                 def set_month_view():
                     current_view['view'] = 'month'
+                    update_period_button_styles()
                     save_preferences()
                     render_current_view()
 
                 def set_year_view():
                     current_view['view'] = 'year'
+                    update_period_button_styles()
                     save_preferences()
                     render_current_view()
 
-                month_view_btn = ui.button('Month', on_click=set_month_view)
-                if current_view['view'] == 'month':
-                    month_view_btn.props('color=primary')
-                else:
-                    month_view_btn.props('flat')
+                month_view_btn.on('click', set_month_view)
+                year_view_btn.on('click', set_year_view)
 
-                year_view_btn = ui.button('Year', on_click=set_year_view)
-                if current_view['view'] == 'year':
-                    year_view_btn.props('color=primary')
-                else:
-                    year_view_btn.props('flat')
+                # Set initial styles
+                update_period_button_styles()
 
         # Calendar container
         calendar_container = ui.column().classes('w-full')
@@ -653,6 +674,20 @@ def calendar_page():
 
                 if view_mode['mode'] == 'my':
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
+                elif user_role == 'employee' and view_mode['mode'] == 'team':
+                    # Employee department view: see their department's non-private PTO
+                    if user_department_id:
+                        dept_user_ids = [u.id for u in db.query(User).filter(
+                            User.department_id == user_department_id,
+                            User.is_active == True
+                        ).all()]
+                        pto_query = pto_query.filter(
+                            PTORequest.user_id.in_(dept_user_ids),
+                            PTORequest.is_private == False  # Exclude private PTO
+                        )
+                    else:
+                        # No department, fallback to my calendar
+                        pto_query = pto_query.filter(PTORequest.user_id == user_id)
                 elif user_role in ['manager', 'admin'] and view_mode['mode'] == 'team':
                     # Manager/Admin: restricted to their department
                     if selected_employee['id']:
@@ -759,8 +794,20 @@ def calendar_page():
                 # Apply view mode filtering
                 if view_mode['mode'] == 'my':
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
-                elif user_role == 'employee':
-                    pto_query = pto_query.filter(PTORequest.user_id == user_id)
+                elif user_role == 'employee' and view_mode['mode'] == 'team':
+                    # Employee department view: see their department's non-private PTO
+                    if user_department_id:
+                        dept_user_ids = [u.id for u in db.query(User).filter(
+                            User.department_id == user_department_id,
+                            User.is_active == True
+                        ).all()]
+                        pto_query = pto_query.filter(
+                            PTORequest.user_id.in_(dept_user_ids),
+                            PTORequest.is_private == False  # Exclude private PTO
+                        )
+                    else:
+                        # No department, fallback to my calendar
+                        pto_query = pto_query.filter(PTORequest.user_id == user_id)
                 elif user_role in ['manager', 'admin'] and view_mode['mode'] == 'team':
                     # Manager/Admin: restricted to their department
                     if selected_employee['id']:

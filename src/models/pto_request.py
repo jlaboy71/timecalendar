@@ -48,13 +48,16 @@ class PTORequest(Base):
     
     # Status and approval
     status: Mapped[str] = mapped_column(
-        String(20), 
-        default="pending", 
+        String(20),
+        default="pending",
         nullable=False,
         index=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Privacy - when True, request is hidden from department/team calendar views
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Timestamps
     submitted_at: Mapped[datetime] = mapped_column(

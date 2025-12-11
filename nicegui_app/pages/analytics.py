@@ -39,15 +39,20 @@ def analytics_page():
 
     # Manager and Admin are restricted to their department; only SuperAdmin sees all
     is_department_restricted = user_role in ['manager', 'admin']
+    is_superadmin = user_role == 'superadmin'
 
     # Get user's department if applicable (for manager/admin)
+    # Also load all departments for superadmin dropdown
     user_department_id = None
     user_department_name = None
-    if is_department_restricted:
-        db = next(get_db())
-        try:
-            from src.services.user_service import UserService
-            from src.models.department import Department
+    all_departments = []
+
+    db = next(get_db())
+    try:
+        from src.services.user_service import UserService
+        from src.models.department import Department
+
+        if is_department_restricted:
             user_service = UserService(db)
             current_user = user_service.get_user_by_id(user_id)
             if current_user and current_user.department_id:
@@ -55,17 +60,33 @@ def analytics_page():
                 dept = db.query(Department).filter(Department.id == user_department_id).first()
                 if dept:
                     user_department_name = dept.name
-        finally:
-            db.close()
+
+        # Load all departments for superadmin filter
+        if is_superadmin:
+            all_departments = db.query(Department).order_by(Department.name).all()
+    finally:
+        db.close()
 
     # Keep backward compatibility with existing variable names
     is_manager_only = is_department_restricted
     manager_department_id = user_department_id
     manager_department_name = user_department_name
 
+    # Superadmin department filter state
+    selected_department = {'value': None}  # None = All Departments
+
     # State
     current_year = date.today().year
     selected_year = {'value': current_year}
+
+    def get_dept_filter():
+        """Get current department filter based on user role."""
+        if is_manager_only:
+            return manager_department_id
+        elif is_superadmin:
+            return selected_department['value']  # None = all departments
+        return None
+
     active_tab = {'value': 'overview'}
 
     with ui.column().classes('w-full max-w-7xl mx-auto mt-8 p-6'):
@@ -79,16 +100,62 @@ def analytics_page():
         with ui.row().classes('w-full items-center justify-between mb-6'):
             # Tab buttons for different views
             with ui.row().classes('gap-2'):
+                overview_btn = ui.button('Overview', icon='dashboard')
+                trends_btn = ui.button('Trends', icon='trending_up')
+                insights_btn = ui.button('Insights', icon='lightbulb')
+
+                def update_tab_button_styles():
+                    """Update tab button styles based on active tab."""
+                    tab = active_tab['value']
+                    # Overview button
+                    if tab == 'overview':
+                        overview_btn.props(remove='flat outline')
+                        overview_btn.props('color=primary unelevated')
+                    else:
+                        overview_btn.props(remove='color=primary unelevated')
+                        overview_btn.props('flat')
+                    # Trends button
+                    if tab == 'trends':
+                        trends_btn.props(remove='flat outline')
+                        trends_btn.props('color=primary unelevated')
+                    else:
+                        trends_btn.props(remove='color=primary unelevated')
+                        trends_btn.props('flat')
+                    # Insights button
+                    if tab == 'insights':
+                        insights_btn.props(remove='flat outline')
+                        insights_btn.props('color=primary unelevated')
+                    else:
+                        insights_btn.props(remove='color=primary unelevated')
+                        insights_btn.props('flat')
+
                 def set_tab(tab):
                     active_tab['value'] = tab
+                    update_tab_button_styles()
                     refresh_dashboard()
 
-                ui.button('Overview', icon='dashboard', on_click=lambda: set_tab('overview')).props('flat')
-                ui.button('Trends', icon='trending_up', on_click=lambda: set_tab('trends')).props('flat')
-                ui.button('Insights', icon='lightbulb', on_click=lambda: set_tab('insights')).props('flat')
+                overview_btn.on('click', lambda: set_tab('overview'))
+                trends_btn.on('click', lambda: set_tab('trends'))
+                insights_btn.on('click', lambda: set_tab('insights'))
 
-            # Year selector, export, and refresh
+                # Set initial styles
+                update_tab_button_styles()
+
+            # Year selector, department filter (superadmin only), export, and refresh
             with ui.row().classes('items-center gap-4'):
+                # Department filter for superadmins
+                if is_superadmin and all_departments:
+                    ui.label('Department:').classes('font-medium')
+                    dept_options = {None: 'All Departments'}
+                    for dept in all_departments:
+                        dept_options[dept.id] = dept.name
+
+                    def on_dept_change(e):
+                        selected_department['value'] = e.value
+                        refresh_dashboard()
+
+                    ui.select(dept_options, value=selected_department['value'], on_change=on_dept_change).classes('w-48')
+
                 ui.label('Year:').classes('font-medium')
                 year_options = {y: str(y) for y in range(current_year - 2, current_year + 2)}
 
@@ -104,7 +171,7 @@ def analytics_page():
                     try:
                         analytics = AnalyticsService(db)
                         year = selected_year['value']
-                        dept_filter = manager_department_id if is_manager_only else None
+                        dept_filter = get_dept_filter()
 
                         overview = analytics.get_company_overview(year, department_id=dept_filter)
                         recommendations = analytics.generate_recommendations(year, department_id=dept_filter)
@@ -132,7 +199,7 @@ def analytics_page():
                     try:
                         analytics = AnalyticsService(db)
                         year = selected_year['value']
-                        dept_filter = manager_department_id if is_manager_only else None
+                        dept_filter = get_dept_filter()
 
                         days_until_year_end = (date(year, 12, 31) - date.today()).days
                         carryover_risk = analytics.get_carryover_risk_employees(year, days_until_year_end, 50.0, department_id=dept_filter)
@@ -164,8 +231,8 @@ def analytics_page():
                 analytics = AnalyticsService(db)
 
                 with dashboard_container:
-                    # Department filter for managers (None for admins = all departments)
-                    dept_filter = manager_department_id if is_manager_only else None
+                    # Get department filter using the helper function
+                    dept_filter = get_dept_filter()
 
                     if tab == 'overview':
                         render_overview_tab(analytics, year, dept_filter, db, is_manager_only, manager_department_id)
@@ -179,47 +246,70 @@ def analytics_page():
 
         def render_overview_tab(analytics, year, dept_filter, db, is_manager_only, manager_department_id):
             """Render the overview tab with key metrics."""
-            # ===== ROW 1: Overview Cards =====
+            # ===== ROW 1: Overview Cards (First Row) =====
             overview = analytics.get_company_overview(year, department_id=dept_filter)
 
-            with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4'):
+            with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-4 gap-4'):
                 # Total Requests Card
-                with ui.card().classes('flex-1 min-w-48 p-4'):
+                with ui.card().classes('p-4'):
                     with ui.column().classes('items-center'):
                         ui.icon('description', size='lg', color='blue')
                         ui.label(str(overview['total_requests'])).classes('text-3xl font-bold')
                         ui.label('Total Requests').classes('text-sm opacity-70')
 
                 # Approved Card
-                with ui.card().classes('flex-1 min-w-48 p-4'):
+                with ui.card().classes('p-4'):
                     with ui.column().classes('items-center'):
                         ui.icon('check_circle', size='lg', color='green')
                         ui.label(str(overview['approved'])).classes('text-3xl font-bold text-green-600')
                         ui.label('Approved').classes('text-sm opacity-70')
 
                 # Pending Card
-                with ui.card().classes('flex-1 min-w-48 p-4'):
+                with ui.card().classes('p-4'):
                     with ui.column().classes('items-center'):
                         ui.icon('pending', size='lg', color='amber')
                         ui.label(str(overview['pending'])).classes('text-3xl font-bold text-amber-600')
                         ui.label('Pending').classes('text-sm opacity-70')
 
+                # Denied Card
+                with ui.card().classes('p-4'):
+                    with ui.column().classes('items-center'):
+                        ui.icon('cancel', size='lg', color='red')
+                        ui.label(str(overview['denied'])).classes('text-3xl font-bold text-red-600')
+                        ui.label('Denied').classes('text-sm opacity-70')
+
+            # ===== ROW 2: Overview Cards (Second Row) =====
+            with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-4 gap-4 mt-4'):
                 # Days Taken Card
-                with ui.card().classes('flex-1 min-w-48 p-4'):
+                with ui.card().classes('p-4'):
                     with ui.column().classes('items-center'):
                         ui.icon('event_available', size='lg', color='purple')
                         ui.label(str(overview['total_days_taken'])).classes('text-3xl font-bold text-purple-600')
                         ui.label('Days Taken').classes('text-sm opacity-70')
 
                 # Avg Per Employee Card
-                with ui.card().classes('flex-1 min-w-48 p-4'):
+                with ui.card().classes('p-4'):
                     with ui.column().classes('items-center'):
                         ui.icon('person', size='lg', color='cyan')
                         ui.label(str(overview['avg_days_per_employee'])).classes('text-3xl font-bold')
                         ui.label('Avg Days/Employee').classes('text-sm opacity-70')
 
-            # ===== ROW 2: Attendance Heatmap & Leave Type Breakdown =====
-            with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4'):
+                # Active Employees Card
+                with ui.card().classes('p-4'):
+                    with ui.column().classes('items-center'):
+                        ui.icon('groups', size='lg', color='indigo')
+                        ui.label(str(overview['active_employees'])).classes('text-3xl font-bold text-indigo-600')
+                        ui.label('Active Employees').classes('text-sm opacity-70')
+
+                # Approval Rate Card
+                with ui.card().classes('p-4'):
+                    with ui.column().classes('items-center'):
+                        ui.icon('verified', size='lg', color='teal')
+                        ui.label(f"{overview['approval_rate']}%").classes('text-3xl font-bold text-teal-600')
+                        ui.label('Approval Rate').classes('text-sm opacity-70')
+
+            # ===== ROW 3: Attendance Heatmap & Leave Type Breakdown =====
+            with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4'):
                 # Attendance Heatmap
                 with ui.card().classes('lg:col-span-2 p-4'):
                     with ui.row().classes('items-center gap-2 mb-2'):
@@ -255,8 +345,8 @@ def analytics_page():
                     else:
                         ui.label('No data available').classes('opacity-50')
 
-            # ===== ROW 3: Optimal Meeting Dates & Utilization =====
-            with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-2 gap-4'):
+            # ===== ROW 4: Optimal Meeting Dates & Utilization =====
+            with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4'):
                 # Optimal Meeting Dates
                 with ui.card().classes('p-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
@@ -300,8 +390,8 @@ def analytics_page():
                             ui.label(f"Used: {utilization['total_used_days']} days")
                             ui.label(f"Allocated: {utilization['total_allocated_days']} days")
 
-            # ===== ROW 4: Coverage Gaps =====
-            with ui.card().classes('w-full p-4'):
+            # ===== ROW 5: Coverage Gaps =====
+            with ui.card().classes('w-full p-4 mt-4'):
                 with ui.row().classes('items-center gap-2 mb-4'):
                     ui.icon('warning', color='red')
                     ui.label('Coverage Gap Analysis').classes('text-lg font-semibold')

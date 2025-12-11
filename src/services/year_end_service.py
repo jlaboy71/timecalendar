@@ -17,7 +17,9 @@ from src.models.pto_balance import PTOBalance
 from src.models.carryover_request import CarryoverRequest
 from src.models.market_holiday import MarketHoliday
 from src.models.year_end_status import YearEndStatus
+from src.models.leave_type import LeaveType
 from src.services.balance_service import BalanceService
+from src.services.accrual_service import AccrualService
 
 logger = logging.getLogger(__name__)
 
@@ -217,13 +219,15 @@ class YearEndService:
         """
         Apply approved carryover requests to new year balances.
 
+        Enforces the policy cap - total sick_carryover cannot exceed max_carryover_hours.
+
         Args:
             new_year: The year to apply carryover to
 
         Returns:
             Dictionary with application results
         """
-        result = {'applied': 0, 'errors': []}
+        result = {'applied': 0, 'capped': 0, 'errors': []}
         previous_year = new_year - 1
 
         # Find all approved carryover requests for this transition
@@ -250,6 +254,9 @@ class YearEndService:
             ).all()
         }
 
+        # Get accrual service for policy lookups
+        accrual_service = AccrualService(self.db)
+
         for carryover in approved_carryovers:
             try:
                 # Get or create the new year balance from pre-fetched data
@@ -265,25 +272,48 @@ class YearEndService:
                             year=new_year,
                             vacation_total=Decimal(str(vacation_days)),
                             sick_total=Decimal(str(self.DEFAULT_SICK_DAYS)),
-                            personal_total=Decimal(str(self.DEFAULT_PERSONAL_DAYS))
+                            personal_total=Decimal(str(self.DEFAULT_PERSONAL_DAYS)),
+                            sick_carryover=Decimal('0.00')
                         )
                         self.db.add(balance)
                         self.db.flush()
                         existing_balances[carryover.employee_id] = balance
 
                 if balance:
-                    # Apply carryover hours (convert to days: hours / 8)
                     hours_approved = carryover.hours_approved or carryover.hours_requested
-                    days_to_carryover = hours_approved / Decimal('8')
 
-                    # Add to vacation_carryover field
-                    balance.vacation_carryover += days_to_carryover
-                    result['applied'] += 1
+                    # Get policy cap for this user
+                    user = users_map.get(carryover.employee_id)
+                    max_carryover_hours = Decimal('0')
+                    if user:
+                        policy = accrual_service.get_policy_for_employee(user, 'SICK')
+                        if policy and policy.max_carryover_hours:
+                            max_carryover_hours = policy.max_carryover_hours
 
-                    logger.info(
-                        f"Applied {hours_approved}hrs carryover for user {carryover.employee_id} "
-                        f"({previous_year} -> {new_year})"
-                    )
+                    # Calculate current carryover in hours (sick_carryover is stored in days)
+                    current_carryover_hours = (balance.sick_carryover or Decimal('0')) * Decimal('8')
+
+                    # Enforce cap: total carryover cannot exceed policy maximum
+                    if max_carryover_hours > 0:
+                        available_cap = max_carryover_hours - current_carryover_hours
+                        if hours_approved > available_cap:
+                            logger.warning(
+                                f"Capping carryover for user {carryover.employee_id}: "
+                                f"requested {hours_approved}hrs but only {available_cap}hrs allowed under cap"
+                            )
+                            hours_approved = max(Decimal('0'), available_cap)
+                            result['capped'] += 1
+
+                    if hours_approved > 0:
+                        # Convert hours to days and add to sick_carryover (NOT vacation_carryover)
+                        days_to_carryover = hours_approved / Decimal('8')
+                        balance.sick_carryover = (balance.sick_carryover or Decimal('0')) + days_to_carryover
+                        result['applied'] += 1
+
+                        logger.info(
+                            f"Applied {hours_approved}hrs sick carryover for user {carryover.employee_id} "
+                            f"({previous_year} -> {new_year})"
+                        )
 
             except Exception as e:
                 error_msg = f"Failed to apply carryover {carryover.id}: {str(e)}"

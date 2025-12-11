@@ -1068,22 +1068,19 @@ def reports_page():
                 ui.notify(f'Error generating print preview: {str(e)}', type='negative')
 
         def download_pdf():
-            """Download report as PDF (using browser print-to-PDF)."""
-            import base64
-            html_content = get_report_html()
-            # Encode HTML as base64 to avoid escaping issues
-            b64_content = base64.b64encode(html_content.encode('utf-8')).decode('ascii')
+            """Download report as PDF using reportlab."""
+            try:
+                html_content = get_report_html()
+                report_type = filter_state['report_type']
+                year = filter_state['year']
+                filename = f'{report_type}_{year}.pdf'
 
-            # Open new window with data URI and trigger print dialog
-            ui.run_javascript(f'''
-                const printWindow = window.open('data:text/html;base64,{b64_content}', '_blank');
-                if (printWindow) {{
-                    printWindow.onload = function() {{
-                        printWindow.print();
-                    }};
-                }}
-            ''')
-            ui.notify("PDF: Use your browser's 'Save as PDF' option in the print dialog", type='info')
+                # Generate actual PDF using ExportService
+                pdf_bytes = ExportService.generate_report_pdf(html_content, filename)
+                ui.download(pdf_bytes, filename)
+                ui.notify(f'Downloaded {filename}', type='positive')
+            except Exception as e:
+                ui.notify(f'Error generating PDF: {str(e)}', type='negative')
 
         def show_email_dialog():
             """Show dialog to email the report with format selection."""
