@@ -52,24 +52,83 @@ def apply_dark_mode():
     Call this at the start of each page to ensure consistent dark mode behavior.
     Returns the dark_mode object in case the page needs to toggle it.
     """
+    # TJM Brand Colors
+    TJM_GOLD = '#c9a227'
+    TJM_GRAY = '#5a6a72'
+
+    # Set Quasar primary color to TJM Gold
+    ui.colors(primary=TJM_GOLD)
+
     # Add custom background colors for light and dark modes
     # NiceGUI/Quasar uses body--light and body--dark classes
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
         /* Light mode - Medium Cream (softer than pure white) */
-        body.body--light {
+        body.body--light {{
             background-color: #F5F3EE !important;
-        }
-        body.body--light .q-page {
+        }}
+        body.body--light .q-page {{
             background-color: #F5F3EE !important;
-        }
+        }}
         /* Dark mode - Dark Slate Gray */
-        body.body--dark {
+        body.body--dark {{
             background-color: #1E2328 !important;
-        }
-        body.body--dark .q-page {
+        }}
+        body.body--dark .q-page {{
             background-color: #1E2328 !important;
-        }
+        }}
+
+        /* TJM Brand Color Accents */
+        /* Header/Navigation bar */
+        .q-header, .q-toolbar {{
+            background-color: {TJM_GRAY} !important;
+        }}
+
+        /* Card headers and titles - gold accent */
+        .text-xl.font-bold, .text-2xl.font-bold {{
+            color: {TJM_GOLD} !important;
+        }}
+
+        /* Primary buttons use TJM Gold (handled by ui.colors) */
+
+        /* Links and interactive elements */
+        a:not(.q-btn) {{
+            color: {TJM_GOLD};
+        }}
+        a:not(.q-btn):hover {{
+            color: #b8922a;
+        }}
+
+        /* Subtle shadows for light mode - improved depth perception */
+        body.body--light .q-card {{
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+        }}
+        body.body--light .q-card:hover {{
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+        }}
+
+        /* Subtle shadow for inputs and selects in light mode */
+        body.body--light .q-field--outlined .q-field__control {{
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }}
+        body.body--light .q-field--outlined .q-field__control:hover {{
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }}
+
+        /* Buttons get subtle depth */
+        body.body--light .q-btn {{
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }}
+        body.body--light .q-btn:hover {{
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }}
+
+        /* Tables get subtle container shadow */
+        body.body--light .q-table__container {{
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            border-radius: 4px;
+        }}
     </style>
     ''')
 

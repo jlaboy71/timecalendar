@@ -69,7 +69,9 @@ def dashboard_page():
         pending_requests = [r for r in all_requests if r.status == 'pending']
         # Only show approved requests in Recent Requests section (denied/cancelled visible in View All)
         approved_requests = [r for r in all_requests if r.status == 'approved']
-        recent_requests = approved_requests[:5]
+        # Sort by approved_at descending (most recently approved first)
+        approved_requests.sort(key=lambda x: x.approved_at or x.submitted_at, reverse=True)
+        recent_requests = approved_requests  # Show all approved requests (scrollable)
 
         # Get team pending requests for managers/admins
         team_pending_requests = []
@@ -660,30 +662,43 @@ def dashboard_page():
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
               with ui.card().classes('w-full mb-4'):
-                ui.label('Recent Approved Time Off').classes('text-lg font-semibold mb-3')
+                with ui.row().classes('w-full justify-between items-center mb-3'):
+                    ui.label('Recent Approved Time Off').classes('text-lg font-semibold')
+                    if recent_requests:
+                        ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
 
                 if recent_requests:
-                    for req in recent_requests:
-                        with ui.row().classes('w-full p-3 border-b last:border-0 justify-between items-center'):
-                            with ui.row().classes('gap-4 items-center'):
-                                # Type icon
-                                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
-                                ui.icon(type_icons.get(req.pto_type.lower(), 'event')).classes('opacity-50')
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
 
-                                with ui.column().classes('gap-0'):
-                                    ui.label(req.pto_type.title()).classes('font-medium')
-                                    if req.start_date == req.end_date:
-                                        ui.label(req.start_date.strftime('%b %d, %Y')).classes('text-xs opacity-60')
-                                    else:
-                                        ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-xs opacity-60')
+                    # Scrollable container with max height
+                    with ui.scroll_area().classes('w-full').style('max-height: 300px'):
+                      for req in recent_requests:
+                        pto_type_lower = req.pto_type.lower()
+                        border_color = type_colors.get(pto_type_lower, 'gray')
 
-                            with ui.row().classes('gap-3 items-center'):
-                                days_display = float(req.total_days)
-                                ui.label(f'{format_days(days_display * 8)} days').classes('text-sm')
+                        def create_detail_handler(request):
+                            def show_detail():
+                                show_pto_detail_dialog(request)
+                            return show_detail
 
-                                # Status badge
-                                status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
-                                ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey'))
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', create_detail_handler(req)):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                with ui.row().classes('gap-4 items-center'):
+                                    # Type icon
+                                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(req.pto_type.title()).classes('font-medium')
+                                        if req.start_date == req.end_date:
+                                            ui.label(req.start_date.strftime('%b %d, %Y')).classes('text-xs opacity-60')
+                                        else:
+                                            ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-xs opacity-60')
+
+                                with ui.row().classes('gap-3 items-center'):
+                                    days_display = float(req.total_days)
+                                    ui.label(f'{format_days(days_display * 8)} days').classes('text-sm')
+                                    ui.icon('chevron_right').classes('text-gray-400')
                 else:
                     with ui.row().classes('w-full justify-center py-6'):
                         ui.label('No approved time off yet').classes('opacity-60')
@@ -1066,10 +1081,14 @@ def show_pto_detail_dialog(request):
                     ui.label('Denial Reason').classes('text-xs font-semibold uppercase text-red-500 mb-2')
                     ui.label(request.denial_reason).classes('text-sm')
 
+            # Manager Approval info (if approved)
+            if request.status == 'approved' and request.approved_at:
+                with ui.card().classes('w-full p-3 border-l-4 border-green-500'):
+                    ui.label('Manager Approved').classes('text-xs font-semibold uppercase text-green-600 mb-2')
+                    ui.label(request.approved_at.strftime('%A, %B %d, %Y')).classes('font-medium')
+
             # Submission info
-            with ui.row().classes('w-full justify-between text-xs opacity-50'):
+            with ui.row().classes('w-full justify-center text-xs opacity-50'):
                 ui.label(f'Submitted: {request.created_at.strftime("%b %d, %Y")}')
-                if request.approved_at:
-                    ui.label(f'Processed: {request.approved_at.strftime("%b %d, %Y")}')
 
     detail_dialog.open()

@@ -63,6 +63,7 @@ def reports_page():
         # Admins don't have personal PTO, so default to team reports
         'report_type': 'team_balance' if is_admin_only else 'my_history',
         'status_filter': 'all',  # 'all', 'approved', 'pending', 'denied'
+        'pto_type_filter': 'all',  # 'all', 'vacation', 'sick', 'personal', etc.
         # Audit log filters
         'audit_action': 'all',  # filter by action type
         'audit_date_from': None,  # date range start
@@ -154,6 +155,15 @@ def reports_page():
                             label='Status',
                             value=filter_state['status_filter'],
                             on_change=lambda e: update_filter('status_filter', e.value)
+                        ).classes('w-36')
+
+                    # PTO type filter for history/usage/calendar reports
+                    if filter_state['report_type'] in ['my_history', 'my_calendar', 'team_usage']:
+                        ui.select(
+                            {'all': 'All Types', 'vacation': 'Vacation', 'sick': 'Sick', 'personal': 'Personal'},
+                            label='PTO Type',
+                            value=filter_state['pto_type_filter'],
+                            on_change=lambda e: update_filter('pto_type_filter', e.value)
                         ).classes('w-36')
 
                     # Department filter (team reports only)
@@ -256,6 +266,9 @@ def reports_page():
                 if filter_state['status_filter'] != 'all':
                     query = query.filter(PTORequest.status == filter_state['status_filter'])
 
+                if filter_state['pto_type_filter'] != 'all':
+                    query = query.filter(PTORequest.pto_type == filter_state['pto_type_filter'])
+
                 requests = query.order_by(PTORequest.start_date.desc()).all()
 
                 with ui.card().classes('w-full'):
@@ -284,11 +297,11 @@ def reports_page():
 
                     # Detailed list with descriptions
                     for req in requests:
-                        status_colors = {
-                            'approved': 'border-green-500',
-                            'pending': 'border-amber-500',
-                            'denied': 'border-red-500',
-                            'cancelled': 'border-gray-400'
+                        # Use PTO type colors for the left border
+                        type_colors = {
+                            'vacation': 'border-blue-500',
+                            'sick': 'border-green-500',
+                            'personal': 'border-purple-500'
                         }
                         status_icons = {
                             'approved': 'check_circle',
@@ -296,7 +309,7 @@ def reports_page():
                             'denied': 'cancel',
                             'cancelled': 'block'
                         }
-                        border_color = status_colors.get(req.status, 'border-gray-300')
+                        border_color = type_colors.get(req.pto_type.lower(), 'border-gray-300')
 
                         with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {border_color}'):
                             with ui.row().classes('w-full justify-between items-start'):
@@ -408,12 +421,17 @@ def reports_page():
             """Render a year-at-a-glance view of personal PTO."""
             db = next(get_db())
             try:
-                requests = db.query(PTORequest).filter(
+                query = db.query(PTORequest).filter(
                     PTORequest.user_id == user_id,
                     PTORequest.status == 'approved',
                     PTORequest.start_date >= date(filter_state['year'], 1, 1),
                     PTORequest.end_date <= date(filter_state['year'], 12, 31)
-                ).order_by(PTORequest.start_date).all()
+                )
+
+                if filter_state['pto_type_filter'] != 'all':
+                    query = query.filter(PTORequest.pto_type == filter_state['pto_type_filter'])
+
+                requests = query.order_by(PTORequest.start_date).all()
 
                 with ui.card().classes('w-full'):
                     ui.label(f'My Year at a Glance - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
@@ -565,6 +583,9 @@ def reports_page():
                     query = query.filter(PTORequest.status == filter_state['status_filter'])
                 else:
                     query = query.filter(PTORequest.status == 'approved')
+
+                if filter_state['pto_type_filter'] != 'all':
+                    query = query.filter(PTORequest.pto_type == filter_state['pto_type_filter'])
 
                 if filter_state['department_id']:
                     query = query.filter(User.department_id == filter_state['department_id'])
