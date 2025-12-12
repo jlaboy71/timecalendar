@@ -12,7 +12,9 @@ from calendar import monthcalendar, month_name
 from collections import defaultdict
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
-from nicegui_app.components.formatting import fmt_days
+from nicegui_app.components.formatting import fmt_days, format_days_hours
+from src.services.balance_service import BalanceService
+from datetime import datetime as dt
 
 
 def calendar_page():
@@ -51,7 +53,7 @@ def calendar_page():
     selected_employee = {'id': calendar_prefs.get('employee_id', None)}  # New employee filter
     view_mode = {'mode': calendar_prefs.get('view_mode', 'my')}
     show_holidays = {'value': calendar_prefs.get('show_holidays', True)}
-    show_weekends = {'value': calendar_prefs.get('show_weekends', True)}
+    show_weekends = {'value': calendar_prefs.get('show_weekends', False)}  # Default to weekdays only
     leave_type_filters = {
         'vacation': calendar_prefs.get('filter_vacation', True),
         'sick': calendar_prefs.get('filter_sick', True),
@@ -85,39 +87,50 @@ def calendar_page():
         # Header with greeting
         page_header(title='TEAM CALENDAR', show_back=False)
 
-        # ===== VIEW TOGGLE (all users can now see personal/department views) =====
-        with ui.row().classes('w-full mb-4 gap-2'):
-            ui.label('View:').classes('font-medium self-center')
+        # ===== VIEW TOGGLE + ACTION BUTTONS =====
+        with ui.row().classes('w-full mb-4 gap-2 justify-between items-center'):
+            # Left side: View toggle
+            with ui.row().classes('gap-2 items-center'):
+                ui.label('View:').classes('font-medium self-center')
 
-            # Create buttons first, then define handlers that reference them
-            my_btn = ui.button('My Calendar')
-            team_label = 'Department Calendar' if user_role == 'employee' else 'Team Calendar'
-            team_btn = ui.button(team_label)
+                # Create buttons first, then define handlers that reference them
+                my_btn = ui.button('My Calendar')
+                team_label = 'Department Calendar' if user_role == 'employee' else 'Team Calendar'
+                team_btn = ui.button(team_label)
 
-            def update_view_button_styles():
-                """Update button styles based on current view mode."""
-                if view_mode['mode'] == 'my':
-                    my_btn.props(remove='outline')
-                    my_btn.props('color=primary unelevated')
-                    team_btn.props(remove='color=primary unelevated')
-                    team_btn.props('outline')
-                else:
-                    my_btn.props(remove='color=primary unelevated')
-                    my_btn.props('outline')
-                    team_btn.props(remove='outline')
-                    team_btn.props('color=primary unelevated')
+                def update_view_button_styles():
+                    """Update button styles based on current view mode."""
+                    if view_mode['mode'] == 'my':
+                        my_btn.props(remove='outline')
+                        my_btn.props('color=primary unelevated')
+                        team_btn.props(remove='color=primary unelevated')
+                        team_btn.props('outline')
+                    else:
+                        my_btn.props(remove='color=primary unelevated')
+                        my_btn.props('outline')
+                        team_btn.props(remove='outline')
+                        team_btn.props('color=primary unelevated')
 
-            def set_view_mode(mode):
-                view_mode['mode'] = mode
+                def set_view_mode(mode):
+                    view_mode['mode'] = mode
+                    update_view_button_styles()
+                    save_preferences()
+                    render_current_view()
+
+                my_btn.on('click', lambda: set_view_mode('my'))
+                team_btn.on('click', lambda: set_view_mode('team'))
+
+                # Set initial styles
                 update_view_button_styles()
-                save_preferences()
-                render_current_view()
 
-            my_btn.on('click', lambda: set_view_mode('my'))
-            team_btn.on('click', lambda: set_view_mode('team'))
+            # Right side: Action buttons
+            with ui.row().classes('gap-2 items-center'):
+                ui.button('New PTO Request', icon='add', on_click=lambda: ui.navigate.to('/submit-request')).props('color=primary')
 
-            # Set initial styles
-            update_view_button_styles()
+                def print_calendar():
+                    ui.run_javascript('window.print()')
+
+                ui.button('Print', icon='print', on_click=print_calendar).props('outline')
 
         # ===== FILTERS ROW =====
         with ui.expansion('Filters & Options', icon='filter_list').classes('w-full mb-4'):
@@ -199,74 +212,88 @@ def calendar_page():
                             if view_mode['mode'] == 'my':
                                 emp_select.disable()
 
-                    # Leave Type Filters
-                    with ui.column().classes('gap-1'):
-                        ui.label('Leave Types').classes('text-sm font-medium')
-                        with ui.row().classes('gap-4'):
-                            def create_leave_filter_handler(leave_type):
-                                def handler(e):
-                                    leave_type_filters[leave_type] = e.value
-                                    save_preferences()
-                                    render_current_view()
-                                return handler
-
-                            ui.checkbox(
-                                'Vacation',
-                                value=leave_type_filters['vacation'],
-                                on_change=create_leave_filter_handler('vacation')
-                            ).classes('text-blue-600')
-                            ui.checkbox(
-                                'Sick',
-                                value=leave_type_filters['sick'],
-                                on_change=create_leave_filter_handler('sick')
-                            ).classes('text-green-600')
-                            ui.checkbox(
-                                'Personal',
-                                value=leave_type_filters['personal'],
-                                on_change=create_leave_filter_handler('personal')
-                            ).classes('text-purple-600')
-                            ui.checkbox(
-                                'Other',
-                                value=leave_type_filters['other'],
-                                on_change=create_leave_filter_handler('other')
-                            )
-
-                # Row 2: Show/Hide options
-                with ui.row().classes('w-full gap-6'):
+                    # Display Options
                     with ui.column().classes('gap-1'):
                         ui.label('Display Options').classes('text-sm font-medium')
                         with ui.row().classes('gap-4'):
-                            def on_holidays_change(e):
-                                show_holidays['value'] = e.value
-                                save_preferences()
-                                render_current_view()
-
                             def on_weekends_change(e):
                                 show_weekends['value'] = e.value
                                 save_preferences()
                                 render_current_view()
 
                             ui.checkbox(
-                                'Show Market Holidays',
-                                value=show_holidays['value'],
-                                on_change=on_holidays_change
-                            )
-                            ui.checkbox(
                                 'Show Weekends',
                                 value=show_weekends['value'],
                                 on_change=on_weekends_change
                             )
 
-                            def on_half_days_change(e):
-                                highlight_half_days['value'] = e.value
-                                save_preferences()
-                                render_current_view()
+        # ===== MY BALANCE SUMMARY =====
+        balance_container = ui.column().classes('w-full mb-4')
 
-                            ui.checkbox(
-                                'Highlight ½ Days',
-                                value=highlight_half_days['value'],
-                                on_change=on_half_days_change
-                            ).tooltip('Highlight half-day PTO events')
+        def render_balance_summary():
+            """Render the user's PTO balance summary."""
+            balance_container.clear()
+            with balance_container:
+                db = next(get_db())
+                try:
+                    balance_service = BalanceService(db)
+                    year = current_month['year']
+                    balance = balance_service.get_or_create_balance(user_id, year)
+
+                    # Calculate available days for each type
+                    vac_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
+                    vac_used = float(balance.vacation_used or 0)
+                    vac_pending = float(balance.vacation_pending or 0)
+                    vac_avail = (vac_total - vac_used - vac_pending) / 8
+
+                    sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                    sick_used = float(balance.sick_used or 0)
+                    sick_avail = (sick_total - sick_used) / 8
+
+                    personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                    personal_used = float(balance.personal_used or 0)
+                    personal_avail = (personal_total - personal_used) / 8
+
+                    with ui.card().classes('w-full p-4'):
+                        with ui.row().classes('w-full items-center gap-4 flex-wrap'):
+                            ui.label(f'My {year} Balance').classes('font-bold text-lg')
+                            ui.element('div').classes('flex-grow')
+
+                            # Vacation
+                            with ui.row().classes('gap-2 items-center'):
+                                ui.element('div').classes('w-4 h-4 bg-blue-500 rounded-full')
+                                vac_hours = vac_total - vac_used - vac_pending
+                                vac_color = 'text-green-600' if vac_avail >= 2 else ('text-amber-500' if vac_avail > 0 else 'text-red-500')
+                                vac_display, vac_tooltip = format_days_hours(vac_hours)
+                                ui.label(f'Vacation: {vac_display}').classes(f'font-medium {vac_color}').tooltip(vac_tooltip)
+                                if vac_pending > 0:
+                                    pending_display, _ = format_days_hours(vac_pending)
+                                    ui.label(f'({pending_display} pending)').classes('text-xs text-amber-500')
+
+                            ui.element('div').classes('w-px h-6').style('background: rgba(128,128,128,0.3)')
+
+                            # Sick
+                            with ui.row().classes('gap-2 items-center'):
+                                ui.element('div').classes('w-4 h-4 bg-green-500 rounded-full')
+                                sick_hours = sick_total - sick_used
+                                sick_color = 'text-green-600' if sick_avail >= 2 else ('text-amber-500' if sick_avail > 0 else 'text-red-500')
+                                sick_display, sick_tooltip = format_days_hours(sick_hours)
+                                ui.label(f'Sick: {sick_display}').classes(f'font-medium {sick_color}').tooltip(sick_tooltip)
+
+                            ui.element('div').classes('w-px h-6').style('background: rgba(128,128,128,0.3)')
+
+                            # Personal
+                            with ui.row().classes('gap-2 items-center'):
+                                ui.element('div').classes('w-4 h-4 bg-purple-500 rounded-full')
+                                personal_hours = personal_total - personal_used
+                                personal_color = 'text-green-600' if personal_avail >= 1 else ('text-amber-500' if personal_avail > 0 else 'text-red-500')
+                                personal_display, personal_tooltip = format_days_hours(personal_hours)
+                                ui.label(f'Personal: {personal_display}').classes(f'font-medium {personal_color}').tooltip(personal_tooltip)
+                finally:
+                    db.close()
+
+        # Initial balance render
+        render_balance_summary()
 
         # ===== NAVIGATION ROW =====
         with ui.row().classes('w-full justify-between items-center mb-4'):
@@ -344,30 +371,72 @@ def calendar_page():
         # Calendar container
         calendar_container = ui.column().classes('w-full')
 
-        # Legend - Always visible with card styling
+        # Legend - Interactive filtering with checkboxes (no color boxes)
         with ui.card().classes('w-full p-4 mt-2'):
-            with ui.row().classes('w-full gap-8 flex-wrap items-center'):
+            with ui.row().classes('w-full gap-4 flex-wrap items-center'):
                 ui.label('Calendar Legend').classes('font-bold text-lg')
                 ui.element('div').classes('flex-grow')
-                with ui.row().classes('gap-6 flex-wrap'):
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 bg-red-500/20 border-2 border-red-500 rounded')
-                        ui.label('Market Holiday').classes('text-sm font-medium')
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 bg-blue-500/20 border-2 border-blue-500 rounded')
-                        ui.label('Vacation').classes('text-sm font-medium text-blue-600')
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 bg-green-500/20 border-2 border-green-500 rounded')
-                        ui.label('Sick').classes('text-sm font-medium text-green-600')
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 bg-purple-500/20 border-2 border-purple-500 rounded')
-                        ui.label('Personal').classes('text-sm font-medium text-purple-600')
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 bg-gray-500/20 border-2 border-gray-500 rounded')
-                        ui.label('Other').classes('text-sm font-medium')
-                    with ui.row().classes('gap-2 items-center'):
-                        ui.element('div').classes('w-5 h-5 rounded').style('border: 2px dashed orange; background: rgba(255,165,0,0.15);')
-                        ui.label('½ Day').classes('text-sm font-medium text-orange-600')
+
+                # Create filter handlers for legend checkboxes
+                def create_legend_filter_handler(filter_key):
+                    def handler(e):
+                        leave_type_filters[filter_key] = e.value
+                        save_preferences()
+                        render_current_view()
+                    return handler
+
+                def on_legend_holidays_change(e):
+                    show_holidays['value'] = e.value
+                    save_preferences()
+                    render_current_view()
+
+                def on_legend_half_days_change(e):
+                    highlight_half_days['value'] = e.value
+                    save_preferences()
+                    render_current_view()
+
+                with ui.row().classes('gap-4 flex-wrap'):
+                    # Market Holiday - filterable
+                    ui.checkbox(
+                        'Market Holiday',
+                        value=show_holidays['value'],
+                        on_change=on_legend_holidays_change
+                    ).props('dense').classes('text-sm font-medium text-red-500')
+
+                    # Vacation - filterable
+                    ui.checkbox(
+                        'Vacation',
+                        value=leave_type_filters['vacation'],
+                        on_change=create_legend_filter_handler('vacation')
+                    ).props('dense').classes('text-sm font-medium text-blue-600')
+
+                    # Sick - filterable
+                    ui.checkbox(
+                        'Sick',
+                        value=leave_type_filters['sick'],
+                        on_change=create_legend_filter_handler('sick')
+                    ).props('dense').classes('text-sm font-medium text-green-600')
+
+                    # Personal - filterable
+                    ui.checkbox(
+                        'Personal',
+                        value=leave_type_filters['personal'],
+                        on_change=create_legend_filter_handler('personal')
+                    ).props('dense').classes('text-sm font-medium text-purple-600')
+
+                    # Other - filterable
+                    ui.checkbox(
+                        'Other',
+                        value=leave_type_filters['other'],
+                        on_change=create_legend_filter_handler('other')
+                    ).props('dense').classes('text-sm font-medium')
+
+                    # Half Day - filterable (controls highlight)
+                    ui.checkbox(
+                        '½ Day',
+                        value=highlight_half_days['value'],
+                        on_change=on_legend_half_days_change
+                    ).props('dense').classes('text-sm font-medium text-orange-600')
 
         # Back button
         ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
@@ -437,10 +506,10 @@ def calendar_page():
                         with ui.element('div').classes('grid grid-cols-2 gap-4'):
                             with ui.column().classes('gap-1'):
                                 ui.label('Start Date').classes('text-xs opacity-60 uppercase tracking-wide')
-                                ui.label(pto_request.start_date.strftime("%B %d, %Y")).classes('font-medium')
+                                ui.label(pto_request.start_date.strftime("%A, %B %d, %Y")).classes('font-medium')
                             with ui.column().classes('gap-1'):
                                 ui.label('End Date').classes('text-xs opacity-60 uppercase tracking-wide')
-                                ui.label(pto_request.end_date.strftime("%B %d, %Y")).classes('font-medium')
+                                ui.label(pto_request.end_date.strftime("%A, %B %d, %Y")).classes('font-medium')
                             with ui.column().classes('gap-1'):
                                 ui.label('Total Days').classes('text-xs opacity-60 uppercase tracking-wide')
                                 ui.label(str(pto_request.total_days)).classes('font-medium text-xl')
@@ -511,13 +580,135 @@ def calendar_page():
                         ui.separator()
 
                         # Action buttons
-                        with ui.row().classes('w-full justify-end gap-2'):
-                            if user_role in ['manager', 'admin', 'superadmin'] and pto_request.user_id != user_id:
-                                ui.button(
-                                    'View Full Request',
-                                    on_click=lambda: (dialog.close(), ui.navigate.to(f'/manager/request/{request_id}'))
-                                ).props('color=primary')
-                            ui.button('Close', on_click=dialog.close).props('flat')
+                        with ui.row().classes('w-full justify-between gap-2'):
+                            # DELETE/CANCEL button logic based on role and status
+                            is_own_request = (pto_request.user_id == user_id)
+                            can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request)
+
+                            # Store request info for handlers
+                            req_id = request_id
+                            req_type = pto_request.pto_type
+                            req_total_days = float(pto_request.total_days)
+                            req_year = pto_request.start_date.year
+                            req_user_id = pto_request.user_id
+                            req_status = pto_request.status
+
+                            def delete_request_direct():
+                                """Direct delete for admin/superadmin/manager's own requests."""
+                                del_db = next(get_db())
+                                try:
+                                    req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                                    if not req:
+                                        ui.notify('Request not found', type='negative')
+                                        return
+
+                                    req.status = 'cancelled'
+
+                                    # Restore balance based on previous status
+                                    pto_type_lower = req_type.lower()
+                                    if pto_type_lower in ['vacation', 'sick', 'personal']:
+                                        balance_service = BalanceService(del_db)
+                                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                                        hours_to_restore = req_total_days * 8
+
+                                        if req_status == 'pending':
+                                            # Pending uses vacation_pending
+                                            if pto_type_lower == 'vacation':
+                                                balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+                                        else:
+                                            # Approved uses *_used fields
+                                            if pto_type_lower == 'vacation':
+                                                balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
+                                            elif pto_type_lower == 'sick':
+                                                balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
+                                            elif pto_type_lower == 'personal':
+                                                balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
+
+                                    del_db.commit()
+                                    ui.notify('Request deleted and balance restored', type='positive')
+                                    dialog.close()
+                                    render_current_view()
+                                finally:
+                                    del_db.close()
+
+                            def cancel_pending_request():
+                                """Cancel pending request for employee."""
+                                cancel_db = next(get_db())
+                                try:
+                                    req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                                    if not req:
+                                        ui.notify('Request not found', type='negative')
+                                        return
+
+                                    req.status = 'cancelled'
+
+                                    # Restore pending balance
+                                    if req_type.lower() == 'vacation':
+                                        balance_service = BalanceService(cancel_db)
+                                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                                        hours_to_restore = req_total_days * 8
+                                        balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+
+                                    cancel_db.commit()
+                                    ui.notify('Request cancelled successfully', type='positive')
+                                    dialog.close()
+                                    render_current_view()
+                                finally:
+                                    cancel_db.close()
+
+                            def show_cancellation_dialog():
+                                """Show dialog for employee to request cancellation of approved PTO."""
+                                dialog.close()
+                                with ui.dialog() as cancel_dialog, ui.card().classes('min-w-[350px] p-4'):
+                                    ui.label('Request Cancellation').classes('text-xl font-bold mb-4')
+                                    ui.label('Your manager will need to approve this cancellation request.').classes('text-sm opacity-70 mb-4')
+
+                                    reason_input = ui.textarea(
+                                        label='Reason (optional)',
+                                        placeholder='Why do you need to cancel this time off?'
+                                    ).props('outlined autogrow').classes('w-full mb-4')
+
+                                    def submit_cancellation():
+                                        req_db = next(get_db())
+                                        try:
+                                            req = req_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                                            if not req:
+                                                ui.notify('Request not found', type='negative')
+                                                return
+
+                                            req.cancellation_requested = True
+                                            req.cancellation_reason = reason_input.value.strip() if reason_input.value else None
+                                            req.cancellation_requested_at = dt.now()
+
+                                            req_db.commit()
+                                            ui.notify('Cancellation request submitted to your manager', type='positive')
+                                            cancel_dialog.close()
+                                            render_current_view()
+                                        finally:
+                                            req_db.close()
+
+                                    with ui.row().classes('w-full justify-end gap-2'):
+                                        ui.button('Cancel', on_click=cancel_dialog.close).props('flat')
+                                        ui.button('Submit Request', on_click=submit_cancellation).props('color=amber')
+
+                                cancel_dialog.open()
+
+                            # Show appropriate delete/cancel button
+                            with ui.row().classes('gap-2'):
+                                if can_direct_delete and req_status in ['pending', 'approved']:
+                                    ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
+                                elif is_own_request and req_status == 'pending':
+                                    ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
+                                elif is_own_request and req_status == 'approved':
+                                    ui.button('Request Cancellation', icon='cancel_schedule_send', on_click=show_cancellation_dialog).props('color=amber')
+
+                            with ui.row().classes('gap-2'):
+                                if user_role in ['manager', 'admin', 'superadmin'] and pto_request.user_id != user_id:
+                                    ui.button(
+                                        'View Full Request',
+                                        on_click=lambda: (dialog.close(), ui.navigate.to(f'/manager/request/{request_id}'))
+                                    ).props('color=primary')
+                                ui.button('Close', on_click=dialog.close).props('flat')
 
                 dialog.open()
             finally:
@@ -560,7 +751,7 @@ def calendar_page():
         def show_all_pto_modal(click_date: date, pto_entries: list):
             """Show modal listing all PTO entries for a day."""
             with ui.dialog() as dialog, ui.card().classes('min-w-96'):
-                ui.label(f'PTO on {click_date.strftime("%B %d, %Y")}').classes('text-xl font-bold mb-4')
+                ui.label(f'PTO on {click_date.strftime("%A, %B %d, %Y")}').classes('text-xl font-bold mb-4')
 
                 with ui.column().classes('gap-2 max-h-96 overflow-y-auto'):
                     for entry in pto_entries:
@@ -659,6 +850,7 @@ def calendar_page():
 
         def render_current_view():
             """Render either month or year view based on current selection."""
+            render_balance_summary()  # Update balance for current year
             if current_view['view'] == 'year':
                 render_year_view()
             else:
@@ -891,12 +1083,13 @@ def calendar_page():
             weeks = monthcalendar(year, month)
 
             # Determine which days to show
+            # Python's monthcalendar returns weeks starting Monday (0=Mon, 6=Sun)
             if show_weekends['value']:
-                day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
                 day_indices = list(range(7))
             else:
                 day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-                day_indices = [1, 2, 3, 4, 5]  # Monday=0 in Python, but our week starts Sun
+                day_indices = [0, 1, 2, 3, 4]  # Monday=0 through Friday=4
 
             with calendar_container:
                 with ui.element('div').classes('w-full rounded-lg overflow-hidden').style('border: 1px solid rgba(128,128,128,0.3)'):
@@ -912,8 +1105,8 @@ def calendar_page():
                         if show_weekends['value']:
                             display_days = week
                         else:
-                            # week is [Sun, Mon, Tue, Wed, Thu, Fri, Sat] - we want Mon-Fri (indices 1-5)
-                            display_days = week[1:6]
+                            # week is [Mon, Tue, Wed, Thu, Fri, Sat, Sun] - we want Mon-Fri (indices 0-4)
+                            display_days = week[0:5]
 
                         # Skip weeks that are all zeros after filtering
                         if all(d == 0 for d in display_days):
@@ -1006,8 +1199,8 @@ def calendar_page():
                                                     highlight_style += ' border: 2px dashed orange; background: rgba(255,165,0,0.15);'
 
                                                 # Use a button styled as a div for reliable click handling
-                                                pto_btn = ui.button(display_text, on_click=create_pto_handler(pto_entry['request_id'])).props('flat dense no-caps').classes(
-                                                    f'text-xs {color_class} px-1 py-0 rounded mt-1 w-full justify-start'
+                                                pto_btn = ui.button(display_text, on_click=create_pto_handler(pto_entry['request_id'])).props('flat dense no-caps align=left').classes(
+                                                    f'text-xs {color_class} px-1 py-0 rounded mt-1 w-full text-left'
                                                 ).tooltip(tooltip_text).style(highlight_style)
 
                                             if len(pto_entries) > 3:

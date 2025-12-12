@@ -231,7 +231,39 @@ class PTOService:
         ).order_by(PTORequest.submitted_at.desc()).all()
 
         return [dict(row._mapping) for row in results]
-    
+
+    @staticmethod
+    def get_cancellation_requests_with_employee_info(db: Session, department_id: int = None):
+        """Get approved PTO requests with cancellation requested, with employee information."""
+        from ..models.pto_request import PTORequest
+        from ..models.user import User
+        from ..models.department import Department
+
+        query = db.query(
+            PTORequest.id.label('request_id'),
+            PTORequest.user_id,
+            (User.first_name + ' ' + User.last_name).label('employee_name'),
+            User.department_id.label('employee_department_id'),
+            Department.name.label('department_name'),
+            PTORequest.pto_type,
+            PTORequest.start_date,
+            PTORequest.end_date,
+            PTORequest.total_days,
+            PTORequest.cancellation_reason,
+            PTORequest.cancellation_requested_at
+        ).join(User, PTORequest.user_id == User.id
+        ).outerjoin(Department, User.department_id == Department.id
+        ).filter(
+            PTORequest.status == 'approved',
+            PTORequest.cancellation_requested == True
+        )
+
+        if department_id:
+            query = query.filter(User.department_id == department_id)
+
+        results = query.order_by(PTORequest.cancellation_requested_at.desc()).all()
+        return [dict(row._mapping) for row in results]
+
     @staticmethod
     def get_user_requests(db: Session, user_id: int):
         """Get all PTO requests for a specific user"""

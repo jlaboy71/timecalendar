@@ -11,6 +11,7 @@ import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
 from nicegui_app.components.theme import apply_dark_mode, skeleton_card
+from nicegui_app.components.formatting import format_days_hours
 
 
 def format_days(hours: float) -> str:
@@ -75,8 +76,16 @@ def dashboard_page():
 
         # Get team pending requests for managers/admins
         team_pending_requests = []
+        cancellation_requests = []
         if user_role in ['manager', 'admin', 'superadmin']:
             team_pending_requests = PTOService.get_pending_requests_with_employee_info(db)
+            # For managers, only get cancellation requests from their department
+            if user_role == 'manager':
+                manager_user = user_service.get_user_by_id(user_id)
+                if manager_user and manager_user.department_id:
+                    cancellation_requests = PTOService.get_cancellation_requests_with_employee_info(db, manager_user.department_id)
+            else:
+                cancellation_requests = PTOService.get_cancellation_requests_with_employee_info(db)
 
         # ============ MAIN LAYOUT ============
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
@@ -186,24 +195,27 @@ def dashboard_page():
                                 vacation_pct = (vacation_available / vacation_total * 100) if vacation_total > 0 else 0
 
                                 with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-blue-500'):
-                                    with ui.row().classes('justify-between items-start'):
-                                        ui.label('Vacation').classes('font-semibold text-blue-600')
-                                        if vacation_pct > 50:
-                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                        elif vacation_pct > 25:
-                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                        else:
-                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                                    ui.label('VACATION').classes('text-lg font-bold text-blue-600')
 
-                                    ui.label(f'{format_days(vacation_available)}').classes('text-3xl font-bold text-blue-600 my-2')
-                                    ui.label('days available').classes('text-sm opacity-70')
+                                    # Show negative balance in red with warning
+                                    if vacation_available < 0:
+                                        display_text, tooltip_text = format_days_hours(vacation_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-red-500 my-2').tooltip(tooltip_text)
+                                        ui.label('OVERDRAWN').classes('text-sm text-red-500 font-medium')
+                                    else:
+                                        display_text, tooltip_text = format_days_hours(vacation_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-blue-600 my-2').tooltip(tooltip_text)
+                                        ui.label('AVAILABLE').classes('text-sm opacity-70')
 
-                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                        ui.label(f'{format_days(vacation_total)} total')
-                                        if vacation_used > 0:
-                                            ui.label(f'{format_days(vacation_used)} used')
+                                    # Progress bar showing used/total
+                                    used_ratio = min(vacation_used / vacation_total, 1.0) if vacation_total > 0 else 0
+                                    with ui.column().classes('w-full mt-3 gap-1'):
+                                        with ui.row().classes('w-full justify-between text-xs'):
+                                            ui.label(f'{format_days(vacation_used)} used').classes('text-blue-600')
+                                            ui.label(f'{format_days(vacation_total)} total').classes('opacity-60')
+                                        ui.linear_progress(value=used_ratio, show_value=False).props('color=blue-5 track-color=grey-3').classes('w-full')
                                         if vacation_pending > 0:
-                                            ui.label(f'{format_days(vacation_pending)} pending').classes('text-amber-500')
+                                            ui.label(f'{format_days(vacation_pending)} pending').classes('text-xs text-amber-500')
 
                                 # Sick
                                 sick_available = float(year_balance.sick_available)
@@ -212,22 +224,25 @@ def dashboard_page():
                                 sick_pct = (sick_available / sick_total * 100) if sick_total > 0 else 0
 
                                 with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-green-500'):
-                                    with ui.row().classes('justify-between items-start'):
-                                        ui.label('Sick').classes('font-semibold text-green-600')
-                                        if sick_pct > 50:
-                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                        elif sick_pct > 25:
-                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                        else:
-                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                                    ui.label('SICK').classes('text-lg font-bold text-green-600')
 
-                                    ui.label(f'{format_days(sick_available)}').classes('text-3xl font-bold text-green-600 my-2')
-                                    ui.label('days available').classes('text-sm opacity-70')
+                                    # Show negative balance in red with warning
+                                    if sick_available < 0:
+                                        display_text, tooltip_text = format_days_hours(sick_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-red-500 my-2').tooltip(tooltip_text)
+                                        ui.label('OVERDRAWN').classes('text-sm text-red-500 font-medium')
+                                    else:
+                                        display_text, tooltip_text = format_days_hours(sick_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-green-600 my-2').tooltip(tooltip_text)
+                                        ui.label('AVAILABLE').classes('text-sm opacity-70')
 
-                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                        ui.label(f'{format_days(sick_total)} total')
-                                        if sick_used > 0:
-                                            ui.label(f'{format_days(sick_used)} used')
+                                    # Progress bar showing used/total
+                                    used_ratio = min(sick_used / sick_total, 1.0) if sick_total > 0 else 0
+                                    with ui.column().classes('w-full mt-3 gap-1'):
+                                        with ui.row().classes('w-full justify-between text-xs'):
+                                            ui.label(f'{format_days(sick_used)} used').classes('text-green-600')
+                                            ui.label(f'{format_days(sick_total)} total').classes('opacity-60')
+                                        ui.linear_progress(value=used_ratio, show_value=False).props('color=green-5 track-color=grey-3').classes('w-full')
 
                                 # Personal
                                 personal_available = float(year_balance.personal_available)
@@ -236,22 +251,25 @@ def dashboard_page():
                                 personal_pct = (personal_available / personal_total * 100) if personal_total > 0 else 0
 
                                 with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-purple-500'):
-                                    with ui.row().classes('justify-between items-start'):
-                                        ui.label('Personal').classes('font-semibold text-purple-600')
-                                        if personal_pct > 50:
-                                            ui.badge('', color='green').classes('w-3 h-3 rounded-full')
-                                        elif personal_pct > 25:
-                                            ui.badge('', color='orange').classes('w-3 h-3 rounded-full')
-                                        else:
-                                            ui.badge('', color='red').classes('w-3 h-3 rounded-full')
+                                    ui.label('PERSONAL').classes('text-lg font-bold text-purple-600')
 
-                                    ui.label(f'{format_days(personal_available)}').classes('text-3xl font-bold text-purple-600 my-2')
-                                    ui.label('days available').classes('text-sm opacity-70')
+                                    # Show negative balance in red with warning
+                                    if personal_available < 0:
+                                        display_text, tooltip_text = format_days_hours(personal_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-red-500 my-2').tooltip(tooltip_text)
+                                        ui.label('OVERDRAWN').classes('text-sm text-red-500 font-medium')
+                                    else:
+                                        display_text, tooltip_text = format_days_hours(personal_available)
+                                        ui.label(display_text).classes('text-2xl font-bold text-purple-600 my-2').tooltip(tooltip_text)
+                                        ui.label('AVAILABLE').classes('text-sm opacity-70')
 
-                                    with ui.row().classes('mt-2 gap-3 text-xs opacity-60'):
-                                        ui.label(f'{format_days(personal_total)} total')
-                                        if personal_used > 0:
-                                            ui.label(f'{format_days(personal_used)} used')
+                                    # Progress bar showing used/total
+                                    used_ratio = min(personal_used / personal_total, 1.0) if personal_total > 0 else 0
+                                    with ui.column().classes('w-full mt-3 gap-1'):
+                                        with ui.row().classes('w-full justify-between text-xs'):
+                                            ui.label(f'{format_days(personal_used)} used').classes('text-purple-600')
+                                            ui.label(f'{format_days(personal_total)} total').classes('opacity-60')
+                                        ui.linear_progress(value=used_ratio, show_value=False).props('color=purple-5 track-color=grey-3').classes('w-full')
 
                             # ============ OTHER LEAVE TYPES (Non-Accruing) ============
                             other_leave_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
@@ -411,6 +429,53 @@ def dashboard_page():
                         with ui.row().classes('w-full justify-center mt-2'):
                             ui.label(f'+ {len(team_pending_requests) - 5} more pending requests').classes('text-sm opacity-60')
 
+            # ============ CANCELLATION REQUESTS (Managers/Admins) ============
+            if cancellation_requests:
+                type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+
+                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-3'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('cancel_schedule_send', color='amber').classes('text-xl')
+                            ui.label('Cancellation Requests').classes('text-lg font-semibold')
+                        ui.badge(f'{len(cancellation_requests)} pending', color='amber').props('outline')
+
+                    for req in cancellation_requests[:5]:
+                        pto_type_lower = req['pto_type'].lower()
+                        border_color = type_colors.get(pto_type_lower, 'gray')
+
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                with ui.row().classes('gap-3 items-center'):
+                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(req['employee_name']).classes('font-medium')
+                                        with ui.row().classes('gap-2 items-center'):
+                                            ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                            ui.label('•').classes('text-xs opacity-50')
+                                            if req['start_date'] == req['end_date']:
+                                                ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                            else:
+                                                ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                        if req.get('cancellation_reason'):
+                                            ui.label(f"Reason: {req['cancellation_reason']}").classes('text-xs opacity-60 italic')
+
+                                with ui.row().classes('items-center gap-3'):
+                                    days = float(req['total_days'])
+                                    ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+
+                                    def create_review_handler(request_id):
+                                        def review():
+                                            ui.navigate.to(f'/manager/request/{request_id}')
+                                        return review
+
+                                    ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=amber size=sm')
+
+                    if len(cancellation_requests) > 5:
+                        with ui.row().classes('w-full justify-center mt-2'):
+                            ui.label(f'+ {len(cancellation_requests) - 5} more cancellation requests').classes('text-sm opacity-60')
+
             # ============ MY TEAM (Managers only) ============
             if user_role == 'manager':
                 # Get team members from manager's department
@@ -484,12 +549,13 @@ def dashboard_page():
                         with ui.column().classes('w-full gap-3'):
                             ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
-                                ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Carryover Approvals', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Company Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                            with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
@@ -1022,7 +1088,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
 
 def show_pto_detail_dialog(request):
-    """Show detailed information about a PTO request."""
+    """Show detailed information about a PTO request with action buttons."""
     type_colors = {
         'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
         'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
@@ -1030,8 +1096,23 @@ def show_pto_detail_dialog(request):
     }
     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
+    # Get current user info for action button permissions
+    current_user = app.storage.general.get('user', {})
+    user_id = current_user.get('id')
+    user_role = current_user.get('role', 'employee')
+
     pto_type_lower = request.pto_type.lower()
     header_color = type_colors.get(pto_type_lower, 'grey')
+
+    # Store request info for action handlers
+    req_id = request.id
+    req_type = request.pto_type
+    req_total_days = float(request.total_days)
+    req_year = request.start_date.year
+    req_user_id = request.user_id
+    req_status = request.status
+    is_own_request = (req_user_id == user_id)
+    can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request)
 
     with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
         # Header
@@ -1090,5 +1171,119 @@ def show_pto_detail_dialog(request):
             # Submission info
             with ui.row().classes('w-full justify-center text-xs opacity-50'):
                 ui.label(f'Submitted: {request.created_at.strftime("%b %d, %Y")}')
+
+            # Action buttons section
+            def delete_request_direct():
+                """Direct delete for admin/superadmin/manager's own requests."""
+                del_db = next(get_db())
+                try:
+                    from src.models.pto_request import PTORequest
+                    req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                    if not req:
+                        ui.notify('Request not found', type='negative')
+                        return
+
+                    req.status = 'cancelled'
+
+                    # Restore balance based on previous status
+                    if pto_type_lower in ['vacation', 'sick', 'personal']:
+                        balance_service = BalanceService(del_db)
+                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                        hours_to_restore = req_total_days * 8
+
+                        if req_status == 'pending':
+                            if pto_type_lower == 'vacation':
+                                balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+                        else:
+                            if pto_type_lower == 'vacation':
+                                balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
+                            elif pto_type_lower == 'sick':
+                                balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
+                            elif pto_type_lower == 'personal':
+                                balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
+
+                    del_db.commit()
+                    ui.notify('Request deleted and balance restored', type='positive')
+                    detail_dialog.close()
+                    ui.navigate.to('/dashboard')
+                finally:
+                    del_db.close()
+
+            def cancel_pending_request():
+                """Cancel pending request for employee."""
+                cancel_db = next(get_db())
+                try:
+                    from src.models.pto_request import PTORequest
+                    req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                    if not req:
+                        ui.notify('Request not found', type='negative')
+                        return
+
+                    req.status = 'cancelled'
+
+                    if req_type.lower() == 'vacation':
+                        balance_service = BalanceService(cancel_db)
+                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                        hours_to_restore = req_total_days * 8
+                        balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+
+                    cancel_db.commit()
+                    ui.notify('Request cancelled successfully', type='positive')
+                    detail_dialog.close()
+                    ui.navigate.to('/dashboard')
+                finally:
+                    cancel_db.close()
+
+            def show_cancellation_dialog():
+                """Show dialog for employee to request cancellation of approved PTO."""
+                detail_dialog.close()
+                with ui.dialog() as cancel_dialog, ui.card().classes('min-w-[350px] p-4'):
+                    ui.label('Request Cancellation').classes('text-xl font-bold mb-4')
+                    ui.label('Your manager will need to approve this cancellation request.').classes('text-sm opacity-70 mb-4')
+
+                    reason_input = ui.textarea(
+                        label='Reason (optional)',
+                        placeholder='Why do you need to cancel this time off?'
+                    ).props('outlined autogrow').classes('w-full mb-4')
+
+                    def submit_cancellation():
+                        req_db = next(get_db())
+                        try:
+                            from src.models.pto_request import PTORequest
+                            req = req_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                            if not req:
+                                ui.notify('Request not found', type='negative')
+                                return
+
+                            req.cancellation_requested = True
+                            req.cancellation_reason = reason_input.value.strip() if reason_input.value else None
+                            req.cancellation_requested_at = datetime.now()
+
+                            req_db.commit()
+                            ui.notify('Cancellation request submitted to your manager', type='positive')
+                            cancel_dialog.close()
+                            ui.navigate.to('/dashboard')
+                        finally:
+                            req_db.close()
+
+                    with ui.row().classes('w-full justify-end gap-2'):
+                        ui.button('Cancel', on_click=cancel_dialog.close).props('flat')
+                        ui.button('Submit Request', on_click=submit_cancellation).props('color=amber')
+
+                cancel_dialog.open()
+
+            # Show action buttons based on role and status
+            with ui.row().classes('w-full justify-end gap-2 mt-2'):
+                if can_direct_delete and req_status in ['pending', 'approved']:
+                    ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
+                elif is_own_request and req_status == 'pending':
+                    ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
+                elif is_own_request and req_status == 'approved':
+                    # Check if cancellation already requested
+                    has_cancellation = hasattr(request, 'cancellation_requested') and request.cancellation_requested
+                    if not has_cancellation:
+                        ui.button('Request Cancellation', icon='cancel_schedule_send', on_click=show_cancellation_dialog).props('color=amber')
+                    else:
+                        ui.label('Cancellation Pending').classes('text-amber-600 text-sm italic')
 
     detail_dialog.open()

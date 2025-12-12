@@ -3,8 +3,9 @@ from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
-from nicegui_app.components.formatting import fmt_days
+from nicegui_app.components.formatting import fmt_days, format_days_hours
 from src.services.pto_service import PTOService
+from src.services.balance_service import BalanceService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
 
@@ -79,16 +80,23 @@ def manager_request_detail_page(request_id: int):
                     with ui.column().classes('gap-2'):
                         with ui.row().classes('items-center gap-2'):
                             ui.element('div').classes('w-3 h-3 rounded-full bg-blue-500')
-                            vac_label = f"Vacation: {fmt_days(vac_avail)} days available"
+                            vac_hours = vac_total - vac_used - vac_pending
+                            vac_display, vac_tooltip = format_days_hours(vac_hours)
+                            vac_label = f"Vacation: {vac_display}"
                             if vac_pending > 0:
-                                vac_label += f" ({fmt_days(vac_pending/8)} pending)"
-                            ui.label(vac_label)
+                                pending_display, _ = format_days_hours(vac_pending)
+                                vac_label += f" ({pending_display} pending)"
+                            ui.label(vac_label).tooltip(vac_tooltip)
                         with ui.row().classes('items-center gap-2'):
                             ui.element('div').classes('w-3 h-3 rounded-full bg-green-500')
-                            ui.label(f"Sick: {fmt_days(sick_avail)} days available")
+                            sick_hours = sick_total - float(balance.sick_used or 0)
+                            sick_display, sick_tooltip = format_days_hours(sick_hours)
+                            ui.label(f"Sick: {sick_display}").tooltip(sick_tooltip)
                         with ui.row().classes('items-center gap-2'):
                             ui.element('div').classes('w-3 h-3 rounded-full bg-purple-500')
-                            ui.label(f"Personal: {fmt_days(personal_avail)} days available")
+                            personal_hours = personal_total - float(balance.personal_used or 0)
+                            personal_display, personal_tooltip = format_days_hours(personal_hours)
+                            ui.label(f"Personal: {personal_display}").tooltip(personal_tooltip)
 
             # Request Details Card
             with ui.card().classes('w-full p-4 mb-4'):
@@ -144,6 +152,69 @@ def manager_request_detail_page(request_id: int):
                     ui.label(
                         'Note: Concurrent leave is allowed, but please consider staffing needs before approving.'
                     ).classes('text-xs opacity-60 mt-3 italic')
+
+            # Cancellation Request Section (for approved requests with cancellation requested)
+            if request.status == 'approved' and hasattr(request, 'cancellation_requested') and request.cancellation_requested:
+                with ui.card().classes('w-full p-4 mb-4 border-l-4 border-amber-500'):
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('cancel_schedule_send', color='amber').classes('text-2xl')
+                        ui.label('Cancellation Requested').classes('text-xl font-bold text-amber-600')
+
+                    if hasattr(request, 'cancellation_reason') and request.cancellation_reason:
+                        ui.label(f"Reason: {request.cancellation_reason}").classes('text-sm mb-3')
+
+                    if hasattr(request, 'cancellation_requested_at') and request.cancellation_requested_at:
+                        ui.label(f"Requested: {request.cancellation_requested_at.strftime('%Y-%m-%d %H:%M')}").classes('text-xs opacity-60 mb-3')
+
+                    ui.label('The employee is requesting to cancel this approved time off.').classes('text-sm opacity-70 mb-4')
+
+                    def approve_cancellation():
+                        db_cancel = next(get_db())
+                        try:
+                            from src.models.pto_request import PTORequest
+                            req = db_cancel.query(PTORequest).filter(PTORequest.id == request_id).first()
+                            if req:
+                                # Cancel the request
+                                req.status = 'cancelled'
+                                req.cancellation_requested = False
+
+                                # Restore balance
+                                pto_type_lower = req.pto_type.lower()
+                                total_days = float(req.total_days)
+                                if pto_type_lower in ['vacation', 'sick', 'personal']:
+                                    balance_service = BalanceService(db_cancel)
+                                    balance = balance_service.get_or_create_balance(req.user_id, req.start_date.year)
+                                    if pto_type_lower == 'vacation':
+                                        balance.vacation_used = max(0, float(balance.vacation_used or 0) - (total_days * 8))
+                                    elif pto_type_lower == 'sick':
+                                        balance.sick_used = max(0, float(balance.sick_used or 0) - (total_days * 8))
+                                    elif pto_type_lower == 'personal':
+                                        balance.personal_used = max(0, float(balance.personal_used or 0) - (total_days * 8))
+
+                                db_cancel.commit()
+                                ui.notify('Cancellation approved - time off cancelled and balance restored', type='positive')
+                                ui.navigate.to('/dashboard')
+                        finally:
+                            db_cancel.close()
+
+                    def deny_cancellation():
+                        db_deny = next(get_db())
+                        try:
+                            from src.models.pto_request import PTORequest
+                            req = db_deny.query(PTORequest).filter(PTORequest.id == request_id).first()
+                            if req:
+                                req.cancellation_requested = False
+                                req.cancellation_reason = None
+                                req.cancellation_requested_at = None
+                                db_deny.commit()
+                                ui.notify('Cancellation denied - time off remains scheduled', type='warning')
+                                ui.navigate.to('/dashboard')
+                        finally:
+                            db_deny.close()
+
+                    with ui.row().classes('w-full justify-end gap-4'):
+                        ui.button('Deny Cancellation', on_click=deny_cancellation).props('flat color=grey')
+                        ui.button('Approve Cancellation', on_click=approve_cancellation).props('color=amber')
 
             # Approval Actions
             if request.status == 'pending':

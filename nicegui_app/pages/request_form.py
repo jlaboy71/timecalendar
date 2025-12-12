@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
-from nicegui_app.components.formatting import fmt_days
+from nicegui_app.components.formatting import fmt_days, format_days_hours
 
 
 def request_form_page():
@@ -49,6 +49,16 @@ def request_form_page():
             PTORequest.user_id == user['id'],
             PTORequest.status == 'pending'
         ).all()
+
+        # Query market holidays for date validation (current year and next)
+        current_year = date.today().year
+        holidays = db.query(MarketHoliday).filter(
+            MarketHoliday.holiday_date >= date(current_year, 1, 1),
+            MarketHoliday.holiday_date <= date(current_year + 1, 12, 31)
+        ).all()
+        # Get unique dates as ISO strings for JavaScript validation
+        holiday_dates_set = set(h.holiday_date.isoformat() for h in holidays)
+        holiday_dates_js = str(list(holiday_dates_set)).replace("'", '"')
 
         # Get manager info from department
         manager_name = None
@@ -93,16 +103,144 @@ def request_form_page():
                     ui.label(f'Pre-selected: {prefill_date.strftime("%A, %B %d, %Y")}').classes('text-blue-500')
 
         # ============ STEP 1: LEAVE TYPE ============
+        # Define color mappings for PTO types
+        type_colors = {
+            'vacation': {'color': 'blue', 'bg': 'bg-blue-500', 'text': 'text-blue-600', 'border': 'border-blue-500'},
+            'sick': {'color': 'green', 'bg': 'bg-green-500', 'text': 'text-green-600', 'border': 'border-green-500'},
+            'personal': {'color': 'purple', 'bg': 'bg-purple-500', 'text': 'text-purple-600', 'border': 'border-purple-500'},
+            'other': {'color': 'grey', 'bg': 'bg-grey-500', 'text': 'text-grey-600', 'border': 'border-grey-500'},
+        }
+
+        # Primary types (balance-tracked) vs Other types
+        primary_types = ['vacation', 'sick', 'personal']
+        other_types = {k: v for k, v in leave_type_options.items() if k not in primary_types}
+
+        # State for selected type
+        selected_type = {'value': 'vacation' if 'vacation' in leave_type_options else list(leave_type_options.keys())[0] if leave_type_options else None}
+
+        # Calendar widget references for dynamic color updates
+        calendar_widgets = {}
+
         with ui.card().classes('w-full mb-4'):
             with ui.row().classes('items-center mb-3'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">1</span>', sanitize=False)
                 ui.label('Select Leave Type').classes('text-lg font-semibold')
 
-            pto_type = ui.select(
-                leave_type_options,
-                label='Leave Type',
-                value='vacation' if 'vacation' in leave_type_options else list(leave_type_options.keys())[0] if leave_type_options else None
-            ).classes('w-full')
+            # Primary type buttons
+            with ui.row().classes('w-full gap-2 mb-2'):
+                # Create button references
+                type_buttons = {}
+
+                def create_type_handler(type_code):
+                    def handler():
+                        selected_type['value'] = type_code
+                        update_type_button_styles()
+                        update_balance_display()
+                        update_summary_color()
+                        update_calendar_colors()
+                    return handler
+
+                # Vacation button
+                if 'vacation' in leave_type_options:
+                    type_buttons['vacation'] = ui.button(
+                        'Vacation',
+                        icon='beach_access',
+                        on_click=create_type_handler('vacation')
+                    ).classes('flex-1')
+
+                # Sick button
+                if 'sick' in leave_type_options:
+                    type_buttons['sick'] = ui.button(
+                        'Sick',
+                        icon='local_hospital',
+                        on_click=create_type_handler('sick')
+                    ).classes('flex-1')
+
+                # Personal button
+                if 'personal' in leave_type_options:
+                    type_buttons['personal'] = ui.button(
+                        'Personal',
+                        icon='person',
+                        on_click=create_type_handler('personal')
+                    ).classes('flex-1')
+
+            # Other types dropdown (if any exist)
+            other_select = None
+            if other_types:
+                with ui.row().classes('w-full gap-2 items-center'):
+                    type_buttons['other'] = ui.button(
+                        'Other',
+                        icon='more_horiz',
+                        on_click=lambda: select_other_type()
+                    ).classes('shrink-0')
+
+                    other_select = ui.select(
+                        other_types,
+                        label='Other Leave Type',
+                        value=None
+                    ).classes('flex-1')
+
+                    def on_other_select_change(e):
+                        if e.value:
+                            selected_type['value'] = e.value
+                            update_type_button_styles()
+                            update_balance_display()
+                            update_summary_color()
+                            update_calendar_colors()
+
+                    other_select.on('update:model-value', on_other_select_change)
+
+                    def select_other_type():
+                        if other_select and other_select.value:
+                            selected_type['value'] = other_select.value
+                        elif other_types:
+                            # Select first other type
+                            first_other = list(other_types.keys())[0]
+                            other_select.value = first_other
+                            selected_type['value'] = first_other
+                        update_type_button_styles()
+                        update_balance_display()
+                        update_summary_color()
+                        update_calendar_colors()
+
+            def update_type_button_styles():
+                """Update button styles based on current selection."""
+                current = selected_type['value']
+                is_other = current not in primary_types
+
+                for type_code, btn in type_buttons.items():
+                    if type_code == 'other':
+                        # Other button selected when current type is not primary
+                        if is_other:
+                            btn.props(remove='outline')
+                            btn.props('color=grey')
+                        else:
+                            btn.props(remove='color=grey color=blue color=green color=purple')
+                            btn.props('outline')
+                    elif type_code == current:
+                        # Selected primary button
+                        color = type_colors.get(type_code, {}).get('color', 'primary')
+                        btn.props(remove='outline')
+                        btn.props(f'color={color}')
+                    else:
+                        # Unselected primary button
+                        btn.props(remove='color=blue color=green color=purple color=grey')
+                        btn.props('outline')
+
+                # Clear other select if primary type selected
+                if not is_other and other_select:
+                    other_select.value = None
+
+            # Initialize button styles
+            update_type_button_styles()
+
+            # Create a mock pto_type object for compatibility with existing code
+            class PTOTypeProxy:
+                @property
+                def value(self):
+                    return selected_type['value']
+
+            pto_type = PTOTypeProxy()
 
             # Balance display for selected type
             balance_row = ui.row().classes('w-full mt-3 p-3 rounded-lg justify-around').style('border: 1px solid rgba(128,128,128,0.3)')
@@ -172,24 +310,27 @@ def request_form_page():
 
                         # Available
                         color = 'text-green-500' if available >= 16 else ('text-amber-500' if available > 0 else 'text-red-500')
-                        ui.label(fmt_days(available/8)).classes(f'text-2xl font-bold {color}')
+                        avail_display, avail_tooltip = format_days_hours(available)
+                        ui.label(avail_display).classes(f'text-xl font-bold {color}').tooltip(avail_tooltip)
                         if not balance_allocated and target_year != date.today().year:
                             ui.label('not yet allocated').classes('text-xs text-amber-500')
                         else:
-                            ui.label('days available').classes('text-xs opacity-60')
+                            ui.label('AVAILABLE').classes('text-xs opacity-60')
 
                     ui.element('div').classes('w-px h-10').style('background: rgba(128,128,128,0.3)')
 
                     # Used
                     with ui.column().classes('items-center'):
-                        ui.label(fmt_days(used/8)).classes('text-xl font-medium opacity-70')
-                        ui.label('days used').classes('text-xs opacity-60')
+                        used_display, used_tooltip = format_days_hours(used)
+                        ui.label(used_display).classes('text-lg font-medium opacity-70').tooltip(used_tooltip)
+                        ui.label('USED').classes('text-xs opacity-60')
 
                     if pending > 0:
                         ui.element('div').classes('w-px h-10').style('background: rgba(128,128,128,0.3)')
                         with ui.column().classes('items-center'):
-                            ui.label(fmt_days(pending/8)).classes('text-xl font-medium text-amber-500')
-                            ui.label('pending').classes('text-xs opacity-60')
+                            pending_display, pending_tooltip = format_days_hours(pending)
+                            ui.label(pending_display).classes('text-lg font-medium text-amber-500').tooltip(pending_tooltip)
+                            ui.label('PENDING').classes('text-xs opacity-60')
 
         # ============ STEP 2: DATE SELECTION ============
         with ui.card().classes('w-full mb-4'):
@@ -208,6 +349,31 @@ def request_form_page():
             # Summary display (updates in real-time)
             summary_container = ui.row().classes('w-full mt-4 p-3 rounded-lg justify-around items-center border-l-4 border-blue-500')
 
+            def update_summary_color():
+                """Update summary container border color based on selected PTO type."""
+                current = selected_type['value']
+                color_map = {
+                    'vacation': 'border-blue-500',
+                    'sick': 'border-green-500',
+                    'personal': 'border-purple-500',
+                }
+                new_border = color_map.get(current, 'border-grey-500')
+                summary_container.classes(remove='border-blue-500 border-green-500 border-purple-500 border-grey-500')
+                summary_container.classes(add=new_border)
+
+            def update_calendar_colors():
+                """Update calendar accent colors based on selected PTO type."""
+                current = selected_type['value']
+                # Use grey for any non-primary type (other types like bereavement, fmla, etc.)
+                if current in primary_types:
+                    cal_color = type_colors.get(current, {}).get('color', 'blue')
+                else:
+                    cal_color = 'grey'
+                for key, cal in calendar_widgets.items():
+                    if cal:
+                        cal.props(remove='color=blue color=green color=purple color=grey')
+                        cal.props(f'color={cal_color}')
+
             def set_date_mode(is_single):
                 state['is_single_day'] = is_single
                 if is_single:
@@ -224,29 +390,7 @@ def request_form_page():
                 date_selection_container.clear()
                 with date_selection_container:
                     if state['is_single_day']:
-                        # SINGLE DAY MODE - Simple and clear
-                        ui.label('Pick your day off:').classes('text-sm opacity-70 mb-2')
-
-                        # Quick select buttons
-                        with ui.row().classes('w-full gap-2 mb-3 flex-wrap'):
-                            def set_single_date(d):
-                                state['start_date'] = d
-                                state['end_date'] = d
-                                calendar.value = d.isoformat()
-                                update_balance_display()
-                                update_summary()
-                                update_warning()
-
-                            ui.button('Today', on_click=lambda: set_single_date(date.today())).props('size=sm outline')
-                            ui.button('Tomorrow', on_click=lambda: set_single_date(date.today() + timedelta(days=1))).props('size=sm outline')
-
-                            # Next Monday
-                            days_until_monday = (7 - date.today().weekday()) % 7
-                            if days_until_monday == 0:
-                                days_until_monday = 7
-                            next_monday = date.today() + timedelta(days=days_until_monday)
-                            ui.button('Next Monday', on_click=lambda: set_single_date(next_monday)).props('size=sm outline')
-
+                        # SINGLE DAY MODE
                         def on_single_date_change(e):
                             if e.value:
                                 picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
@@ -256,11 +400,14 @@ def request_form_page():
                                 update_summary()
                                 update_warning()
 
-                        # Set minimum date to today to prevent past date selection
+                        # Set minimum date to today, exclude weekends and market holidays
+                        # Get initial color based on selected type (grey for non-primary types)
+                        cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                         calendar = ui.date(
                             value=state['start_date'].isoformat(),
                             on_change=on_single_date_change
-                        ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
+                        ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                        calendar_widgets['single'] = calendar
 
                         # Half-day option (only for single day)
                         with ui.row().classes('w-full mt-3 items-center'):
@@ -293,11 +440,13 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
-                                # Set minimum date to today to prevent past date selection
+                                # Set minimum date to today, exclude weekends and market holidays
+                                cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                                 start_calendar = ui.date(
                                     value=state['start_date'].isoformat(),
                                     on_change=on_start_change
-                                ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
+                                ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                                calendar_widgets['start'] = start_calendar
 
                             with ui.column().classes('flex-1'):
                                 ui.label('End Date').classes('text-sm font-medium mb-1')
@@ -313,11 +462,13 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
-                                # Set minimum date to today to prevent past date selection
+                                # Set minimum date to today, exclude weekends and market holidays
+                                cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                                 end_calendar = ui.date(
                                     value=state['end_date'].isoformat(),
                                     on_change=on_end_change
-                                ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
+                                ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                                calendar_widgets['end'] = end_calendar
 
                         # Quick range buttons
                         with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
@@ -508,20 +659,12 @@ def request_form_page():
                     on_click=lambda: ui.navigate.to('/dashboard')
                 ).classes('flex-1').props('outline size=lg')
 
-        # Wire up all the update handlers
-        def on_type_change():
-            update_balance_display()
-            update_notes_label()
-            update_summary()
-            update_warning()
-
-        pto_type.on('update:model-value', lambda e: on_type_change())
-
         # Build initial state
         build_date_selector()
         update_balance_display()
         update_notes_label()
         update_summary()
+        update_summary_color()
         update_warning()
 
 

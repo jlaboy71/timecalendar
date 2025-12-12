@@ -58,7 +58,12 @@ class PTORequest(Base):
 
     # Privacy - when True, request is hidden from department/team calendar views
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    
+
+    # Cancellation request tracking (for employee-requested cancellations)
+    cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancellation_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Timestamps
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime, 
