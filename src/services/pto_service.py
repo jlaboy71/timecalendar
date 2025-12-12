@@ -68,6 +68,20 @@ class PTOService:
         if year > current_year + max_future_years:
             raise ValueError(f"Cannot request time off more than {max_future_years} years in advance. Maximum year: {current_year + max_future_years}")
 
+        # Check for overlapping requests (same user, same dates)
+        overlapping = self.get_overlapping_requests(
+            request_data.user_id,
+            request_data.start_date,
+            request_data.end_date
+        )
+        if overlapping:
+            overlap_info = overlapping[0]
+            raise ValueError(
+                f"You already have a {overlap_info.status} {overlap_info.pto_type} request "
+                f"for {overlap_info.start_date.strftime('%b %d')} - {overlap_info.end_date.strftime('%b %d, %Y')}. "
+                f"Please cancel or modify that request first."
+            )
+
         # Get/create balance
         balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
 

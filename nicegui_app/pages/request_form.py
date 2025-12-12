@@ -8,6 +8,7 @@ from src.services.email_service import email_service
 from src.database import get_db
 from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
+from src.models.market_holiday import MarketHoliday
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
@@ -255,10 +256,11 @@ def request_form_page():
                                 update_summary()
                                 update_warning()
 
+                        # Set minimum date to today to prevent past date selection
                         calendar = ui.date(
                             value=state['start_date'].isoformat(),
                             on_change=on_single_date_change
-                        ).classes('w-full')
+                        ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
 
                         # Half-day option (only for single day)
                         with ui.row().classes('w-full mt-3 items-center'):
@@ -291,10 +293,11 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
+                                # Set minimum date to today to prevent past date selection
                                 start_calendar = ui.date(
                                     value=state['start_date'].isoformat(),
                                     on_change=on_start_change
-                                ).classes('w-full')
+                                ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
 
                             with ui.column().classes('flex-1'):
                                 ui.label('End Date').classes('text-sm font-medium mb-1')
@@ -310,10 +313,11 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
+                                # Set minimum date to today to prevent past date selection
                                 end_calendar = ui.date(
                                     value=state['end_date'].isoformat(),
                                     on_change=on_end_change
-                                ).classes('w-full')
+                                ).props(f'options=":date => date >= \'{date.today().isoformat()}\'"').classes('w-full')
 
                         # Quick range buttons
                         with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
@@ -443,14 +447,44 @@ def request_form_page():
                                     ui.label(f'{target_year} PTO balance not yet allocated').classes('text-amber-600 font-medium')
                                     ui.label('Your request will be submitted for manager approval. Balance will be deducted once allocated.').classes('text-sm opacity-70')
 
+                    # Warning for cross-year requests
+                    if state['start_date'].year != state['end_date'].year:
+                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-purple-500'):
+                            with ui.row().classes('items-start'):
+                                ui.icon('calendar_month', color='purple').classes('mr-2 mt-1')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(f'Request spans {state["start_date"].year} and {state["end_date"].year}').classes('text-purple-600 font-medium')
+                                    ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
+
                     # Warning for exceeding available balance
                     if hours_requested > available:
-                        with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
+                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
                             with ui.row().classes('items-start'):
                                 ui.icon('warning', color='red').classes('mr-2 mt-1')
                                 with ui.column().classes('gap-0'):
                                     ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)} days').classes('text-red-500 font-medium')
                                     ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
+
+                    # Check for holidays in the selected date range
+                    try:
+                        db_check = next(get_db())
+                        holidays_in_range = db_check.query(MarketHoliday).filter(
+                            MarketHoliday.holiday_date >= state['start_date'],
+                            MarketHoliday.holiday_date <= state['end_date'],
+                            MarketHoliday.market == 'Federal'
+                        ).all()
+                        db_check.close()
+
+                        if holidays_in_range:
+                            with ui.card().classes('w-full p-3 border-l-4 border-blue-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('celebration', color='blue').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        holiday_names = ', '.join([h.name for h in holidays_in_range])
+                                        ui.label(f'Holiday overlap: {holiday_names}').classes('text-blue-600 font-medium')
+                                        ui.label('Your selected dates include a company holiday. You may not need to use PTO for this day.').classes('text-sm opacity-70')
+                    except Exception:
+                        pass  # Don't block form if holiday check fails
 
             with ui.row().classes('w-full gap-4'):
                 submit_btn = ui.button(
@@ -587,26 +621,14 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             {'pto_type': pto_type, 'start_date': str(start_date), 'end_date': str(end_date), 'total_days': float(total_days)}
         )
 
-        # Auto-approve for managers, admins, and superadmins
-        if employee.role in ['manager', 'admin', 'superadmin']:
-            pto_request.status = 'approved'
-            pto_request.approved_by = user_id
-            pto_request.approved_at = datetime.now()
-            db.commit()
-
+        # create_request() handles auto-approval for managers/admins including balance adjustments
+        # Here we just handle emails and notifications
+        if pto_request.status == 'approved':
             # Log the auto-approval
             AuditService.log_pto_approve(
                 db, user_id, f"{employee.first_name} {employee.last_name}",
                 pto_request.id, f"{employee.first_name} {employee.last_name} (self)"
             )
-
-            # Move from pending to used for vacation type
-            if pto_type.lower() == 'vacation':
-                from src.services.balance_service import BalanceService
-                balance_service = BalanceService(db)
-                balance = balance_service.get_or_create_balance(user_id, start_date.year)
-                balance_service.adjust_vacation_used(balance.id, -total_days, is_pending=True)
-                balance_service.adjust_vacation_used(balance.id, total_days, is_pending=False)
 
             # Send auto-approval email to employee
             email_service.send_pto_approved(

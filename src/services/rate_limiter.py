@@ -1,8 +1,11 @@
 """
 Simple rate limiter for login attempts.
 """
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class LoginRateLimiter:
@@ -72,6 +75,15 @@ class LoginRateLimiter:
         if failed_count >= cls.MAX_ATTEMPTS:
             lockout_until = now + timedelta(minutes=cls.LOCKOUT_MINUTES)
             cls._attempts[username_lower] = (failed_count, now, lockout_until)
+
+            # Send security alert for lockout
+            logger.warning(f"Account locked due to failed attempts: {username}")
+            try:
+                from src.services.alert_service import alert_service
+                alert_service.alert_auth_breach_attempt(username)
+            except Exception:
+                pass  # Don't fail login flow if alerting fails
+
             return 0, True
 
         cls._attempts[username_lower] = (failed_count, now, None)

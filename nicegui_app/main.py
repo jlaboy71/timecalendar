@@ -49,6 +49,12 @@ app.title = "TJM Time Calendar"
 STATIC_DIR = Path(__file__).parent / 'static'
 app.add_static_files('/static', STATIC_DIR)
 
+# HTTPS redirect middleware for production
+if config.is_production and config.ssl_enabled:
+    from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+    app.add_middleware(HTTPSRedirectMiddleware)
+    logger.info("HTTPS redirect middleware enabled for production")
+
 @ui.page('/')
 def home(timeout: str = None):
     """Home page with login interface."""

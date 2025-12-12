@@ -64,13 +64,25 @@ def manager_request_detail_page(request_id: int):
                 with ui.card().classes('flex-1 p-4'):
                     ui.label('Current PTO Balance').classes('text-xl font-bold mb-3')
                     # Convert hours to days (8 hours = 1 day)
-                    vac_avail = (balance.vacation_total - balance.vacation_used) / 8
-                    sick_avail = (balance.sick_total - balance.sick_used) / 8
-                    personal_avail = (balance.personal_total - balance.personal_used) / 8
+                    # Include carryover and subtract pending for accurate available balance
+                    vac_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
+                    vac_used = float(balance.vacation_used or 0)
+                    vac_pending = float(balance.vacation_pending or 0)
+                    vac_avail = (vac_total - vac_used - vac_pending) / 8
+
+                    sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                    sick_avail = (sick_total - float(balance.sick_used or 0)) / 8
+
+                    personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                    personal_avail = (personal_total - float(balance.personal_used or 0)) / 8
+
                     with ui.column().classes('gap-2'):
                         with ui.row().classes('items-center gap-2'):
                             ui.element('div').classes('w-3 h-3 rounded-full bg-blue-500')
-                            ui.label(f"Vacation: {fmt_days(vac_avail)} days available")
+                            vac_label = f"Vacation: {fmt_days(vac_avail)} days available"
+                            if vac_pending > 0:
+                                vac_label += f" ({fmt_days(vac_pending/8)} pending)"
+                            ui.label(vac_label)
                         with ui.row().classes('items-center gap-2'):
                             ui.element('div').classes('w-3 h-3 rounded-full bg-green-500')
                             ui.label(f"Sick: {fmt_days(sick_avail)} days available")

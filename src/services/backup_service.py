@@ -2,6 +2,7 @@
 Backup and restore service for TJM Time Calendar.
 
 Provides programmatic access to database backup and restore operations.
+Supports local backups and optional sync to off-site storage.
 """
 import os
 import shutil
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Off-site backup path from environment (network share, OneDrive, etc.)
+OFFSITE_BACKUP_PATH = os.getenv('OFFSITE_BACKUP_PATH', '')
 
 
 class BackupService:
@@ -228,6 +232,86 @@ class BackupService:
             if meta_path.exists():
                 meta_path.unlink()
             logger.info(f"Deleted old backup: {old_backup.name}")
+
+    def sync_to_offsite(self, backup_filename: Optional[str] = None) -> Dict:
+        """
+        Sync backup(s) to off-site storage location.
+
+        Args:
+            backup_filename: Specific backup to sync, or None for latest
+
+        Returns:
+            Dict with sync results
+        """
+        if not OFFSITE_BACKUP_PATH:
+            return {
+                'success': False,
+                'error': 'OFFSITE_BACKUP_PATH not configured in environment'
+            }
+
+        offsite_dir = Path(OFFSITE_BACKUP_PATH)
+
+        # Create off-site directory if it doesn't exist
+        try:
+            offsite_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Cannot access off-site backup path: {e}")
+            return {
+                'success': False,
+                'error': f'Cannot access off-site path: {str(e)}'
+            }
+
+        # Determine which backup to sync
+        if backup_filename:
+            backup_path = self.backup_dir / backup_filename
+            if not backup_path.exists():
+                return {'success': False, 'error': f'Backup not found: {backup_filename}'}
+            backups_to_sync = [backup_path]
+        else:
+            # Sync the latest backup
+            backups = sorted(
+                self.backup_dir.glob("tjm_calendar_backup_*.db"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            if not backups:
+                return {'success': False, 'error': 'No backups found to sync'}
+            backups_to_sync = [backups[0]]
+
+        synced = []
+        errors = []
+
+        for backup_path in backups_to_sync:
+            try:
+                dest_path = offsite_dir / backup_path.name
+                shutil.copy2(backup_path, dest_path)
+
+                # Also copy metadata file if exists
+                meta_path = backup_path.with_suffix('.meta')
+                if meta_path.exists():
+                    shutil.copy2(meta_path, offsite_dir / meta_path.name)
+
+                synced.append(backup_path.name)
+                logger.info(f"Synced backup to off-site: {dest_path}")
+
+            except Exception as e:
+                errors.append(f"{backup_path.name}: {str(e)}")
+                logger.error(f"Failed to sync {backup_path.name}: {e}")
+
+        return {
+            'success': len(errors) == 0,
+            'synced': synced,
+            'errors': errors,
+            'offsite_path': str(offsite_dir)
+        }
+
+    def is_offsite_configured(self) -> bool:
+        """Check if off-site backup is configured."""
+        return bool(OFFSITE_BACKUP_PATH)
+
+    def get_offsite_path(self) -> Optional[str]:
+        """Get the configured off-site backup path."""
+        return OFFSITE_BACKUP_PATH if OFFSITE_BACKUP_PATH else None
 
 
 # Singleton instance
