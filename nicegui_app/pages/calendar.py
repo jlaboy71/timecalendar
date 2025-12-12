@@ -12,6 +12,7 @@ from calendar import monthcalendar, month_name
 from collections import defaultdict
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.formatting import fmt_days
 
 
 def calendar_page():
@@ -996,7 +997,7 @@ def calendar_page():
                                                 is_half = pto_entry.get('is_half_day', False)
                                                 half_day_indicator = " ½" if is_half else ""
                                                 display_text = f"{first_name} - {leave_label}{half_day_indicator}"
-                                                days_text = f"{pto_entry.get('total_days', 1):.1f} day(s)"
+                                                days_text = f"{fmt_days(pto_entry.get('total_days', 1))} day(s)"
                                                 tooltip_text = f"{pto_entry['full_name']} - {pto_entry['type'].title()} ({days_text}) - Click for details"
 
                                                 # Highlight half-day events if toggle is enabled

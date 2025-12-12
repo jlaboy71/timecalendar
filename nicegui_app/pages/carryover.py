@@ -10,6 +10,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.formatting import fmt_days
 
 
 def carryover_page():
@@ -87,7 +88,7 @@ def carryover_page():
             with ui.card().classes('w-full mb-4 p-4'):
                 with ui.row().classes('w-full justify-between items-center'):
                     ui.label('Available Sick Time').classes('font-medium')
-                    ui.label(f'{sick_unused:.0f} hrs ({sick_unused/8:.1f} days)').classes('text-xl font-bold text-green-600')
+                    ui.label(f'{sick_unused:.0f} hrs ({fmt_days(sick_unused/8)} days)').classes('text-xl font-bold text-green-600')
 
                 if max_carryover > 0:
                     ui.label(f'Policy cap: {max_carryover:.0f} hrs maximum carryover').classes('text-xs opacity-60 mt-2')
@@ -98,7 +99,7 @@ def carryover_page():
             with ui.card().classes('w-full mb-4 p-4'):
                 with ui.row().classes('w-full justify-between items-center mb-4'):
                     ui.label('Hours to Carry Over').classes('font-medium')
-                    ui.label(f'{max_requestable:.0f} hrs ({max_requestable/8:.1f} days)').classes('text-lg font-bold')
+                    ui.label(f'{max_requestable:.0f} hrs ({fmt_days(max_requestable/8)} days)').classes('text-lg font-bold')
 
                 hours_input = ui.number(
                     value=max_requestable,
@@ -190,7 +191,7 @@ def carryover_page():
                     with ui.row().classes('w-full justify-between items-center'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon(status_icon, color=status_color)
-                            ui.label(f'{hrs:.0f} hrs ({hrs/8:.1f} days)')
+                            ui.label(f'{hrs:.0f} hrs ({fmt_days(hrs/8)} days)')
                         ui.label(req.created_at.strftime('%m/%d/%Y')).classes('text-sm opacity-60')
 
                     if req.status == 'denied' and req.manager_notes:

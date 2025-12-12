@@ -14,6 +14,14 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+
+def _fmt_days(value: float) -> str:
+    """Format days value, removing unnecessary decimal for whole numbers."""
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.1f}"
+
+
 # Load TJM logo as base64 at module level
 _LOGO_BASE64 = None
 _logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
@@ -150,7 +158,7 @@ class ReportService:
             personal_total = personal_used = personal_avail = 0
 
         def hours_to_days(hours):
-            return f"{hours / 8:.1f}"
+            return _fmt_days(hours / 8)
 
         header = self.get_report_header_html(
             title=f"PTO Balance Summary - {year}",
@@ -334,7 +342,7 @@ class ReportService:
             <tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 10px;">{req.pto_type.title()}</td>
                 <td style="padding: 10px;">{date_range}</td>
-                <td style="padding: 10px; text-align: center;">{float(req.total_days or 0):.1f}</td>
+                <td style="padding: 10px; text-align: center;">{_fmt_days(float(req.total_days or 0))}</td>
                 <td style="padding: 10px;">
                     <span style="color: {color}; font-weight: bold;">{req.status.upper()}</span>
                     {processed_info}
@@ -348,15 +356,15 @@ class ReportService:
             <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 140px; padding: 15px; background: #e8f5e9; border-left: 4px solid #2e7d32; border-radius: 4px;">
                     <div style="font-size: 11px; color: #666;">Approved Days</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">{total_approved:.1f}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">{_fmt_days(total_approved)}</div>
                 </div>
                 <div style="flex: 1; min-width: 140px; padding: 15px; background: #fff3e0; border-left: 4px solid #f57c00; border-radius: 4px;">
                     <div style="font-size: 11px; color: #666;">Pending Days</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #f57c00;">{total_pending:.1f}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #f57c00;">{_fmt_days(total_pending)}</div>
                 </div>
                 <div style="flex: 1; min-width: 140px; padding: 15px; background: #ffebee; border-left: 4px solid #c62828; border-radius: 4px;">
                     <div style="font-size: 11px; color: #666;">Denied Days</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #c62828;">{total_denied:.1f}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #c62828;">{_fmt_days(total_denied)}</div>
                 </div>
                 <div style="flex: 1; min-width: 140px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
                     <div style="font-size: 11px; color: #666;">Total Requests</div>
@@ -467,7 +475,7 @@ class ReportService:
                 vac_total = vac_used = vac_avail = sick_total = sick_used = personal_total = personal_used = 0
 
             def h2d(h):
-                return f"{h/8:.1f}"
+                return _fmt_days(h / 8)
 
             rows_html += f'''
             <tr style="border-bottom: 1px solid #eee;">
@@ -604,14 +612,14 @@ class ReportService:
             summary_html += f'''
             <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f5f5; border-left: 4px solid {color}; border-radius: 4px;">
                 <div style="font-size: 11px; color: #666; text-transform: uppercase;">{pto_type.title()}</div>
-                <div style="font-size: 24px; font-weight: bold; color: {color};">{days:.1f}</div>
+                <div style="font-size: 24px; font-weight: bold; color: {color};">{_fmt_days(days)}</div>
                 <div style="font-size: 11px; color: #999;">days</div>
             </div>
             '''
         summary_html += f'''
         <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
             <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total</div>
-            <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{total_days:.1f}</div>
+            <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{_fmt_days(total_days)}</div>
             <div style="font-size: 11px; color: #999;">days</div>
         </div>
         '''
@@ -643,7 +651,7 @@ class ReportService:
                             {req.pto_type.title()}
                         </td>
                         <td style="padding: 8px;">{date_str}</td>
-                        <td style="padding: 8px; text-align: right;">{days:.1f} days</td>
+                        <td style="padding: 8px; text-align: right;">{_fmt_days(days)} days</td>
                         <td style="padding: 8px; color: #666; font-style: italic;">{req.notes or '-'}</td>
                     </tr>
                     '''
@@ -652,7 +660,7 @@ class ReportService:
                 <div style="margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
                     <div style="background: {self.TJM_GRAY}; color: white; padding: 10px 15px; display: flex; justify-content: space-between;">
                         <strong>{month_name}</strong>
-                        <span>{len(month_requests)} request(s) • {month_total:.1f} days</span>
+                        <span>{len(month_requests)} request(s) • {_fmt_days(month_total)} days</span>
                     </div>
                     <table style="width: 100%; border-collapse: collapse;">
                         <tbody>

@@ -3,6 +3,7 @@ from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.formatting import fmt_days
 from src.services.pto_service import PTOService
 from src.services.department_service import DepartmentService
 
@@ -219,7 +220,7 @@ def admin_approvals_page():
                                                     ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 days = float(req['total_days'])
-                                                ui.label(f'{days:.1f} days').classes('text-sm font-medium')
+                                                ui.label(f'{fmt_days(days)} days').classes('text-sm font-medium')
 
                                     ui.button('Review', icon='visibility',
                                              on_click=lambda r=req: ui.navigate.to(f"/manager/request/{r['request_id']}")).props('color=primary')

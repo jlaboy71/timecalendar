@@ -3,6 +3,7 @@ from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.formatting import fmt_days
 from src.services.pto_service import PTOService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
@@ -42,11 +43,40 @@ def manager_request_detail_page(request_id: int):
         with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
             page_header(title='PTO REQUEST REVIEW', show_back=False)
 
-            # Employee Info Card
-            with ui.card().classes('w-full p-4 mb-4'):
-                ui.label('Employee Information').classes('text-xl font-bold mb-2')
-                ui.label(f"Name: {detail['employee_name']}")
-                ui.label(f"Email: {detail['employee_email']}")
+            # Employee Info and PTO Balance side by side
+            with ui.row().classes('w-full gap-4 mb-4'):
+                # Employee Info Card
+                with ui.card().classes('flex-1 p-4'):
+                    ui.label('Employee Information').classes('text-xl font-bold mb-3')
+                    with ui.column().classes('gap-2'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('person', size='sm').classes('opacity-60')
+                            ui.label(f"{detail['employee_name']}").classes('font-medium')
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('email', size='sm').classes('opacity-60')
+                            ui.label(f"{detail['employee_email']}")
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('business', size='sm').classes('opacity-60')
+                            dept_name = detail.get('employee_department_name', 'Unknown')
+                            ui.label(f"{dept_name}").classes('text-sm')
+
+                # Current Balance Card
+                with ui.card().classes('flex-1 p-4'):
+                    ui.label('Current PTO Balance').classes('text-xl font-bold mb-3')
+                    # Convert hours to days (8 hours = 1 day)
+                    vac_avail = (balance.vacation_total - balance.vacation_used) / 8
+                    sick_avail = (balance.sick_total - balance.sick_used) / 8
+                    personal_avail = (balance.personal_total - balance.personal_used) / 8
+                    with ui.column().classes('gap-2'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.element('div').classes('w-3 h-3 rounded-full bg-blue-500')
+                            ui.label(f"Vacation: {fmt_days(vac_avail)} days available")
+                        with ui.row().classes('items-center gap-2'):
+                            ui.element('div').classes('w-3 h-3 rounded-full bg-green-500')
+                            ui.label(f"Sick: {fmt_days(sick_avail)} days available")
+                        with ui.row().classes('items-center gap-2'):
+                            ui.element('div').classes('w-3 h-3 rounded-full bg-purple-500')
+                            ui.label(f"Personal: {fmt_days(personal_avail)} days available")
 
             # Request Details Card
             with ui.card().classes('w-full p-4 mb-4'):
@@ -54,7 +84,7 @@ def manager_request_detail_page(request_id: int):
                 ui.label(f"Type: {request.pto_type.title()}")
                 ui.label(f"Start Date: {request.start_date.strftime('%Y-%m-%d')}")
                 ui.label(f"End Date: {request.end_date.strftime('%Y-%m-%d')}")
-                ui.label(f"Total Days: {request.total_days}")
+                ui.label(f"Total Days: {fmt_days(float(request.total_days))}")
                 ui.label(f"Status: {request.status.title()}")
                 ui.label(f"Submitted: {request.submitted_at.strftime('%Y-%m-%d %H:%M')}")
                 if request.notes:
@@ -102,13 +132,6 @@ def manager_request_detail_page(request_id: int):
                     ui.label(
                         'Note: Concurrent leave is allowed, but please consider staffing needs before approving.'
                     ).classes('text-xs opacity-60 mt-3 italic')
-
-            # Current Balance Card
-            with ui.card().classes('w-full p-4 mb-4'):
-                ui.label('Current PTO Balance').classes('text-xl font-bold mb-2')
-                ui.label(f"Vacation: {balance.vacation_total - balance.vacation_used:.1f} available")
-                ui.label(f"Sick: {balance.sick_total - balance.sick_used:.1f} available")
-                ui.label(f"Personal: {balance.personal_total - balance.personal_used:.1f} available")
 
             # Approval Actions
             if request.status == 'pending':
@@ -178,6 +201,9 @@ def manager_request_detail_page(request_id: int):
                     with ui.row().classes('gap-4 items-end'):
                         denial_input = ui.input('Denial Reason (optional)').classes('w-64')
                         ui.button('Deny', on_click=deny, color='negative')
+
+            # Back button at the bottom
+            ui.button('Back to Calendar', icon='arrow_back', on_click=lambda: ui.navigate.to('/calendar')).props('outline').classes('mt-6')
 
     finally:
         db.close()

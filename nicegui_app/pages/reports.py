@@ -15,6 +15,7 @@ from io import StringIO
 import csv
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode, skeleton_table
+from nicegui_app.components.formatting import fmt_days
 
 
 def reports_page():
@@ -273,10 +274,10 @@ def reports_page():
                     with ui.row().classes('w-full gap-4 mb-4 flex-wrap'):
                         with ui.card().classes('p-3 border-l-4 border-green-500'):
                             ui.label('Approved').classes('text-sm opacity-70')
-                            ui.label(f'{total_days:.1f} days').classes('text-xl font-bold text-green-600')
+                            ui.label(f'{fmt_days(total_days)} days').classes('text-xl font-bold text-green-600')
                         with ui.card().classes('p-3 border-l-4 border-amber-500'):
                             ui.label('Pending').classes('text-sm opacity-70')
-                            ui.label(f'{pending_days:.1f} days').classes('text-xl font-bold text-amber-600')
+                            ui.label(f'{fmt_days(pending_days)} days').classes('text-xl font-bold text-amber-600')
                         with ui.card().classes('p-3 border-l-4 border-blue-500'):
                             ui.label('Total Requests').classes('text-sm opacity-70')
                             ui.label(f'{len(requests)}').classes('text-xl font-bold text-blue-600')
@@ -321,7 +322,7 @@ def reports_page():
                                             ui.label(req.notes).classes('text-sm italic')
 
                                 with ui.column().classes('items-end'):
-                                    ui.label(f'{float(req.total_days or 0):.1f} days').classes('font-bold')
+                                    ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('font-bold')
 
             finally:
                 db.close()
@@ -346,8 +347,7 @@ def reports_page():
 
                     # Helper to format hours as days (8 hours = 1 day)
                     def hours_to_days(hours):
-                        days = hours / 8
-                        return f'{days:.1f}'
+                        return fmt_days(hours / 8)
 
                     # Helper to create a balance stat column
                     def balance_stat(value_days, value_hrs, label, color_class=''):
@@ -447,7 +447,7 @@ def reports_page():
                                         ui.label(req.start_date.strftime('%d')).classes('font-medium')
                                     else:
                                         ui.label(f'{req.start_date.strftime("%d")} - {req.end_date.strftime("%d")}').classes('font-medium')
-                                    ui.label(f'{float(req.total_days or 0):.1f} days').classes('opacity-70')
+                                    ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('opacity-70')
                                     if req.notes:
                                         ui.label(f'"{req.notes}"').classes('text-sm italic opacity-60 flex-1')
 
@@ -497,9 +497,9 @@ def reports_page():
                             ui.label('No employees found.').classes('opacity-60')
                         return
 
-                    # Helper to convert hours to days
+                    # Helper to convert hours to days with clean formatting
                     def h2d(hours):
-                        return hours / 8
+                        return fmt_days(hours / 8)
 
                     columns = [
                         {'name': 'name', 'label': 'Employee', 'field': 'name', 'sortable': True, 'align': 'left'},
@@ -529,13 +529,13 @@ def reports_page():
                         rows.append({
                             'id': user_obj.id,
                             'name': f'{user_obj.first_name} {user_obj.last_name}',
-                            'vacation_total': f'{h2d(vac_total):.1f}d',
-                            'vacation_used': f'{h2d(vac_used):.1f}d',
-                            'vacation_available': f'{h2d(vac_avail):.1f}d',
-                            'sick_total': f'{h2d(sick_total):.1f}d',
-                            'sick_used': f'{h2d(sick_used):.1f}d',
-                            'personal_total': f'{h2d(personal_total):.1f}d',
-                            'personal_used': f'{h2d(personal_used):.1f}d',
+                            'vacation_total': f'{h2d(vac_total)}d',
+                            'vacation_used': f'{h2d(vac_used)}d',
+                            'vacation_available': f'{h2d(vac_avail)}d',
+                            'sick_total': f'{h2d(sick_total)}d',
+                            'sick_used': f'{h2d(sick_used)}d',
+                            'personal_total': f'{h2d(personal_total)}d',
+                            'personal_used': f'{h2d(personal_used)}d',
                         })
 
                     ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
@@ -598,7 +598,7 @@ def reports_page():
                             with ui.card().classes('p-3'):
                                 ui.label(pto_type.title()).classes('font-semibold')
                                 ui.label(f'{stats["count"]} requests').classes('text-sm opacity-70')
-                                ui.label(f'{stats["days"]:.1f} days').classes('text-lg font-bold')
+                                ui.label(f'{fmt_days(stats["days"])} days').classes('text-lg font-bold')
 
                     columns = [
                         {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'sortable': True, 'align': 'left'},
@@ -617,7 +617,7 @@ def reports_page():
                             'type': request.pto_type.title(),
                             'start_date': request.start_date.strftime('%Y-%m-%d'),
                             'end_date': request.end_date.strftime('%Y-%m-%d'),
-                            'days': f'{float(request.total_days or 0):.1f}',
+                            'days': fmt_days(float(request.total_days or 0)),
                             'status': request.status.title(),
                         })
 

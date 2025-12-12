@@ -71,11 +71,30 @@ class PTOService:
         # Get/create balance
         balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
 
-        # Note: Balance validation removed - employees can request more than available
+        # Note: Vacation balance validation removed - employees can request more than available
         # (manager discretion on approval). UI shows warnings for over-limit requests.
+        # However, sick and personal days have hard limits that cannot be exceeded.
 
         # Auto-approve for managers/admins (they don't need approval)
         is_auto_approve = user.role in ['manager', 'admin', 'superadmin']
+
+        # Validate sick/personal days don't exceed available balance
+        # These have hard limits unlike vacation (which is manager discretion)
+        hours_requested = float(request_data.total_days) * 8
+        if request_data.pto_type == 'sick':
+            available = float(balance.sick_total or 0) - float(balance.sick_used or 0)
+            if hours_requested > available:
+                raise ValueError(
+                    f"Insufficient sick time. Requesting {request_data.total_days} days "
+                    f"but only {available / 8:.1f} days available."
+                )
+        elif request_data.pto_type == 'personal':
+            available = float(balance.personal_total or 0) - float(balance.personal_used or 0)
+            if hours_requested > available:
+                raise ValueError(
+                    f"Insufficient personal time. Requesting {request_data.total_days} days "
+                    f"but only {available / 8:.1f} days available."
+                )
 
         # Create PTORequest
         request = PTORequest(
@@ -237,6 +256,7 @@ class PTOService:
             'employee_name': f"{user.first_name} {user.last_name}",
             'employee_email': user.email,
             'employee_department_id': user.department_id,
+            'employee_department_name': user.department.name if user.department else 'No Department',
             'balance': balance
         }
 
@@ -269,7 +289,24 @@ class PTOService:
         # Get balance
         balance_service = BalanceService(db)
         balance = balance_service.get_or_create_balance(request.user_id, year)
-        
+
+        # Validate sick/personal days don't exceed available balance before approving
+        hours_requested = float(request.total_days) * 8
+        if request.pto_type == 'sick':
+            available = float(balance.sick_total or 0) - float(balance.sick_used or 0)
+            if hours_requested > available:
+                raise ValueError(
+                    f"Cannot approve: insufficient sick time. Request is for {request.total_days} days "
+                    f"but only {available / 8:.1f} days available."
+                )
+        elif request.pto_type == 'personal':
+            available = float(balance.personal_total or 0) - float(balance.personal_used or 0)
+            if hours_requested > available:
+                raise ValueError(
+                    f"Cannot approve: insufficient personal time. Request is for {request.total_days} days "
+                    f"but only {available / 8:.1f} days available."
+                )
+
         # Adjust balances based on PTO type
         if request.pto_type == 'vacation':
             balance_service.move_pending_to_used(balance.id, request.total_days)

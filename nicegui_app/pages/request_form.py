@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.formatting import fmt_days
 
 
 def request_form_page():
@@ -170,7 +171,7 @@ def request_form_page():
 
                         # Available
                         color = 'text-green-500' if available >= 16 else ('text-amber-500' if available > 0 else 'text-red-500')
-                        ui.label(f'{available/8:.1f}').classes(f'text-2xl font-bold {color}')
+                        ui.label(fmt_days(available/8)).classes(f'text-2xl font-bold {color}')
                         if not balance_allocated and target_year != date.today().year:
                             ui.label('not yet allocated').classes('text-xs text-amber-500')
                         else:
@@ -180,13 +181,13 @@ def request_form_page():
 
                     # Used
                     with ui.column().classes('items-center'):
-                        ui.label(f'{used/8:.1f}').classes('text-xl font-medium opacity-70')
+                        ui.label(fmt_days(used/8)).classes('text-xl font-medium opacity-70')
                         ui.label('days used').classes('text-xs opacity-60')
 
                     if pending > 0:
                         ui.element('div').classes('w-px h-10').style('background: rgba(128,128,128,0.3)')
                         with ui.column().classes('items-center'):
-                            ui.label(f'{pending/8:.1f}').classes('text-xl font-medium text-amber-500')
+                            ui.label(fmt_days(pending/8)).classes('text-xl font-medium text-amber-500')
                             ui.label('pending').classes('text-xs opacity-60')
 
         # ============ STEP 2: DATE SELECTION ============
@@ -363,7 +364,7 @@ def request_form_page():
 
                     # Hours/Days requested
                     with ui.column().classes('items-center'):
-                        ui.label(f'{total_days:.1f}' if total_days != int(total_days) else f'{int(total_days)}').classes('text-2xl font-bold text-blue-600')
+                        ui.label(fmt_days(total_days)).classes('text-2xl font-bold text-blue-600')
                         ui.label(f'day{"s" if total_days != 1 else ""} ({hours_requested:.0f} hrs)').classes('text-xs opacity-60')
 
                     ui.icon('arrow_forward').classes('opacity-40')
@@ -371,11 +372,11 @@ def request_form_page():
                     # Balance after
                     with ui.column().classes('items-center'):
                         if remaining < 0:
-                            ui.label(f'{remaining/8:.1f}').classes('text-2xl font-bold text-red-600')
+                            ui.label(fmt_days(remaining/8)).classes('text-2xl font-bold text-red-600')
                             ui.label('OVER LIMIT').classes('text-xs text-red-600 font-bold')
                         else:
                             color = 'text-green-600' if remaining >= 16 else 'text-amber-600'
-                            ui.label(f'{remaining/8:.1f}').classes(f'text-2xl font-bold {color}')
+                            ui.label(fmt_days(remaining/8)).classes(f'text-2xl font-bold {color}')
                             ui.label('days remaining').classes('text-xs opacity-60')
 
             # Initialize the date mode buttons
@@ -448,7 +449,7 @@ def request_form_page():
                             with ui.row().classes('items-start'):
                                 ui.icon('warning', color='red').classes('mr-2 mt-1')
                                 with ui.column().classes('gap-0'):
-                                    ui.label(f'Request exceeds available balance by {(hours_requested - available)/8:.1f} days').classes('text-red-500 font-medium')
+                                    ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)} days').classes('text-red-500 font-medium')
                                     ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
 
             with ui.row().classes('w-full gap-4'):

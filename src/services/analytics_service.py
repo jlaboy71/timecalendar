@@ -444,8 +444,8 @@ class AnalyticsService:
 
         return {
             'year': year,
-            'total_allocated_days': round(total_allocated, 1),
-            'total_used_days': round(total_used, 1),
+            'total_allocated_days': round(total_allocated / 8, 1),  # Convert hours to days
+            'total_used_days': round(total_used / 8, 1),  # Convert hours to days
             'utilization_rate': round(utilization_rate, 1),
             'employees_tracked': users_with_balance
         }
@@ -541,8 +541,9 @@ class AnalyticsService:
             if not balance:
                 continue
 
-            vacation_remaining = float(balance.vacation_total - balance.vacation_used)
-            vacation_total = float(balance.vacation_total)
+            # Convert hours to days (8 hours = 1 day)
+            vacation_remaining = float(balance.vacation_total - balance.vacation_used) / 8
+            vacation_total = float(balance.vacation_total) / 8
 
             if vacation_total == 0:
                 continue
