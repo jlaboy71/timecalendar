@@ -280,11 +280,25 @@ def admin_employees_add_page():
                 username_input = ui.input('Username').props('outlined').classes('flex-1')
                 email_input = ui.input('Email', validation={'Invalid email format': lambda v: bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v)) if v else False}).props('outlined').classes('flex-1')
 
+            # Password fields with visibility toggle
+            password_visible = {'value': False}
+
             with ui.row().classes('w-full gap-4 mt-2'):
                 password_input = ui.input('Password', password=True).props('outlined').classes('flex-1')
-                with ui.column().classes('flex-1'):
-                    ui.label('').classes('h-4')
-            ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-2')
+                confirm_password_input = ui.input('Confirm Password', password=True).props('outlined').classes('flex-1')
+
+            with ui.row().classes('w-full items-center gap-2 -mt-1'):
+                def toggle_password_visibility():
+                    password_visible['value'] = not password_visible['value']
+                    password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                    confirm_password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                    visibility_icon.props(f'name={"visibility_off" if password_visible["value"] else "visibility"}')
+
+                visibility_icon = ui.icon('visibility', size='sm').classes('cursor-pointer opacity-60 hover:opacity-100')
+                visibility_icon.on('click', toggle_password_visibility)
+                ui.label('Show passwords').classes('text-xs opacity-60')
+
+            ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-1')
 
         # Employment Details Section
         with ui.card().classes('w-full p-6 mb-4'):
@@ -368,6 +382,10 @@ def admin_employees_add_page():
                 if not validate_required(password_input, 'Password'):
                     valid = False
                 elif not validate_min_length(password_input, 8, 'Password'):
+                    valid = False
+                if password_input.value != confirm_password_input.value:
+                    confirm_password_input.props('error')
+                    ui.notify('Passwords do not match', type='negative')
                     valid = False
                 if not validate_required(hire_date_input, 'Hire Date'):
                     valid = False
@@ -514,13 +532,28 @@ def admin_employees_edit_page(user_id: int):
                     username_input = ui.input('Username', value=user.username).props('outlined').classes('flex-1')
                     email_input = ui.input('Email', value=user.email).props('outlined').classes('flex-1')
 
+                # Password fields with visibility toggle (admin only)
                 password_input = None
+                confirm_password_input = None
                 if not is_manager_editing:
+                    password_visible = {'value': False}
+
                     with ui.row().classes('w-full gap-4 mt-2'):
                         password_input = ui.input('New Password', password=True).props('outlined').classes('flex-1')
-                        with ui.column().classes('flex-1'):
-                            ui.label('').classes('h-4')
-                    ui.label('Leave blank to keep current password').classes('text-xs opacity-60 -mt-2')
+                        confirm_password_input = ui.input('Confirm Password', password=True).props('outlined').classes('flex-1')
+
+                    with ui.row().classes('w-full items-center gap-2 -mt-1'):
+                        def toggle_password_visibility():
+                            password_visible['value'] = not password_visible['value']
+                            password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                            confirm_password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                            visibility_icon.props(f'name={"visibility_off" if password_visible["value"] else "visibility"}')
+
+                        visibility_icon = ui.icon('visibility', size='sm').classes('cursor-pointer opacity-60 hover:opacity-100')
+                        visibility_icon.on('click', toggle_password_visibility)
+                        ui.label('Show passwords').classes('text-xs opacity-60')
+
+                    ui.label('Leave blank to keep current password').classes('text-xs opacity-60 -mt-1')
 
             # Employment Details Section
             with ui.card().classes('w-full p-6 mb-4'):
@@ -616,6 +649,11 @@ def admin_employees_edit_page(user_id: int):
                         valid = False
                     if password_input and password_input.value and not validate_min_length(password_input, 8, 'Password'):
                         valid = False
+                    if password_input and password_input.value and confirm_password_input:
+                        if password_input.value != confirm_password_input.value:
+                            confirm_password_input.props('error')
+                            ui.notify('Passwords do not match', type='negative')
+                            valid = False
                     if not validate_required(hire_date_input, 'Hire Date'):
                         valid = False
 

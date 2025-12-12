@@ -58,6 +58,7 @@ def calendar_page():
         'other': calendar_prefs.get('filter_other', True)
     }
     current_view = {'view': calendar_prefs.get('current_view', 'month')}  # 'month' or 'year'
+    highlight_half_days = {'value': calendar_prefs.get('highlight_half_days', False)}
 
     # Store PTO request details for click handlers
     pto_requests_cache = {}
@@ -74,7 +75,8 @@ def calendar_page():
             'filter_sick': leave_type_filters['sick'],
             'filter_personal': leave_type_filters['personal'],
             'filter_other': leave_type_filters['other'],
-            'current_view': current_view['view']
+            'current_view': current_view['view'],
+            'highlight_half_days': highlight_half_days['value']
         }
 
     # Main container
@@ -182,6 +184,10 @@ def calendar_page():
                                 save_preferences()
                                 render_current_view()
 
+                            # Validate selected employee exists in options
+                            if selected_employee['id'] not in emp_options:
+                                selected_employee['id'] = None
+
                             emp_select = ui.select(
                                 emp_options,
                                 value=selected_employee['id'],
@@ -249,6 +255,17 @@ def calendar_page():
                                 value=show_weekends['value'],
                                 on_change=on_weekends_change
                             )
+
+                            def on_half_days_change(e):
+                                highlight_half_days['value'] = e.value
+                                save_preferences()
+                                render_current_view()
+
+                            ui.checkbox(
+                                'Highlight ½ Days',
+                                value=highlight_half_days['value'],
+                                on_change=on_half_days_change
+                            ).tooltip('Highlight half-day PTO events')
 
         # ===== NAVIGATION ROW =====
         with ui.row().classes('w-full justify-between items-center mb-4'):
@@ -347,6 +364,9 @@ def calendar_page():
                     with ui.row().classes('gap-2 items-center'):
                         ui.element('div').classes('w-5 h-5 bg-gray-500/20 border-2 border-gray-500 rounded')
                         ui.label('Other').classes('text-sm font-medium')
+                    with ui.row().classes('gap-2 items-center'):
+                        ui.element('div').classes('w-5 h-5 rounded').style('border: 2px dashed orange; background: rgba(255,165,0,0.15);')
+                        ui.label('½ Day').classes('text-sm font-medium text-orange-600')
 
         # Back button
         ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
@@ -857,7 +877,9 @@ def calendar_page():
                                 'user': pto_user,
                                 'initials': initials,
                                 'type': pto.pto_type,
-                                'full_name': f"{pto_user.first_name} {pto_user.last_name}"
+                                'full_name': f"{pto_user.first_name} {pto_user.last_name}",
+                                'total_days': float(pto.total_days or 1),
+                                'is_half_day': float(pto.total_days or 1) < 1
                             })
                         current_date += timedelta(days=1)
 
@@ -968,16 +990,24 @@ def calendar_page():
 
                                             for pto_entry in pto_entries[:3]:
                                                 color_class = get_pto_color(pto_entry['type'])
-                                                # More descriptive label: First name + leave type
+                                                # More descriptive label: First name + leave type + half-day indicator
                                                 first_name = pto_entry['full_name'].split()[0]
                                                 leave_label = pto_entry['type'].title()
-                                                display_text = f"{first_name} - {leave_label}"
-                                                tooltip_text = f"{pto_entry['full_name']} - {pto_entry['type'].title()} - Click for details"
+                                                is_half = pto_entry.get('is_half_day', False)
+                                                half_day_indicator = " ½" if is_half else ""
+                                                display_text = f"{first_name} - {leave_label}{half_day_indicator}"
+                                                days_text = f"{pto_entry.get('total_days', 1):.1f} day(s)"
+                                                tooltip_text = f"{pto_entry['full_name']} - {pto_entry['type'].title()} ({days_text}) - Click for details"
+
+                                                # Highlight half-day events if toggle is enabled
+                                                highlight_style = 'min-height: 20px; font-size: 11px;'
+                                                if is_half and highlight_half_days['value']:
+                                                    highlight_style += ' border: 2px dashed orange; background: rgba(255,165,0,0.15);'
 
                                                 # Use a button styled as a div for reliable click handling
                                                 pto_btn = ui.button(display_text, on_click=create_pto_handler(pto_entry['request_id'])).props('flat dense no-caps').classes(
                                                     f'text-xs {color_class} px-1 py-0 rounded mt-1 w-full justify-start'
-                                                ).tooltip(tooltip_text).style('min-height: 20px; font-size: 11px;')
+                                                ).tooltip(tooltip_text).style(highlight_style)
 
                                             if len(pto_entries) > 3:
                                                 extra_count = len(pto_entries) - 3

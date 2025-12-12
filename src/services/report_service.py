@@ -535,3 +535,167 @@ class ReportService:
         </body>
         </html>
         '''
+
+    def generate_calendar_report_html(self, user_id: int, year: int) -> str:
+        """
+        Generate a formatted year-at-a-glance calendar report for an employee.
+
+        Args:
+            user_id: Employee's user ID
+            year: Year for the report
+
+        Returns:
+            Complete HTML document for the report
+        """
+        from src.models.user import User
+        from src.models.pto_request import PTORequest
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return "<p>User not found</p>"
+
+        requests = self.db.query(PTORequest).filter(
+            PTORequest.user_id == user_id,
+            PTORequest.status == 'approved',
+            PTORequest.start_date >= date(year, 1, 1),
+            PTORequest.end_date <= date(year, 12, 31)
+        ).order_by(PTORequest.start_date).all()
+
+        dept_name = user.department.name if user.department else "No Department"
+        employee_name = f"{user.first_name} {user.last_name}"
+
+        header = self.get_report_header_html(
+            title=f"Year at a Glance - {year}",
+            employee_name=employee_name,
+            department=dept_name
+        )
+
+        # Group by month
+        months = {}
+        month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        for req in requests:
+            month_key = req.start_date.month
+            if month_key not in months:
+                months[month_key] = []
+            months[month_key].append(req)
+
+        # Calculate totals by type
+        type_totals = {}
+        for req in requests:
+            pto_type = req.pto_type.lower()
+            if pto_type not in type_totals:
+                type_totals[pto_type] = 0
+            type_totals[pto_type] += float(req.total_days or 0)
+
+        # Type colors
+        type_colors = {
+            'vacation': '#1976d2',
+            'sick': '#2e7d32',
+            'personal': '#7b1fa2'
+        }
+
+        # Build summary cards
+        summary_html = '<div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">'
+        total_days = 0
+        for pto_type, days in sorted(type_totals.items()):
+            color = type_colors.get(pto_type, '#666')
+            total_days += days
+            summary_html += f'''
+            <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f5f5; border-left: 4px solid {color}; border-radius: 4px;">
+                <div style="font-size: 11px; color: #666; text-transform: uppercase;">{pto_type.title()}</div>
+                <div style="font-size: 24px; font-weight: bold; color: {color};">{days:.1f}</div>
+                <div style="font-size: 11px; color: #999;">days</div>
+            </div>
+            '''
+        summary_html += f'''
+        <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
+            <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total</div>
+            <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{total_days:.1f}</div>
+            <div style="font-size: 11px; color: #999;">days</div>
+        </div>
+        '''
+        summary_html += '</div>'
+
+        # Build month-by-month content
+        months_html = ""
+        for month_num in range(1, 13):
+            month_name = month_names[month_num - 1]
+            month_requests = months.get(month_num, [])
+
+            if month_requests:
+                rows_html = ""
+                month_total = 0
+                for req in month_requests:
+                    color = type_colors.get(req.pto_type.lower(), '#666')
+                    days = float(req.total_days or 0)
+                    month_total += days
+
+                    if req.start_date == req.end_date:
+                        date_str = req.start_date.strftime('%d')
+                    else:
+                        date_str = f"{req.start_date.strftime('%d')} - {req.end_date.strftime('%d')}"
+
+                    rows_html += f'''
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">
+                            <span style="display: inline-block; width: 10px; height: 10px; background: {color}; border-radius: 2px; margin-right: 8px;"></span>
+                            {req.pto_type.title()}
+                        </td>
+                        <td style="padding: 8px;">{date_str}</td>
+                        <td style="padding: 8px; text-align: right;">{days:.1f} days</td>
+                        <td style="padding: 8px; color: #666; font-style: italic;">{req.notes or '-'}</td>
+                    </tr>
+                    '''
+
+                months_html += f'''
+                <div style="margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
+                    <div style="background: {self.TJM_GRAY}; color: white; padding: 10px 15px; display: flex; justify-content: space-between;">
+                        <strong>{month_name}</strong>
+                        <span>{len(month_requests)} request(s) • {month_total:.1f} days</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tbody>
+                            {rows_html}
+                        </tbody>
+                    </table>
+                </div>
+                '''
+
+        if not months_html:
+            months_html = '''
+            <div style="padding: 40px; text-align: center; color: #666;">
+                <div style="font-size: 48px; opacity: 0.3; margin-bottom: 10px;">📅</div>
+                <p>No approved PTO for this year.</p>
+            </div>
+            '''
+
+        content = f'''
+        <div style="padding: 20px; font-family: 'Segoe UI', sans-serif;">
+            {summary_html}
+            {months_html}
+        </div>
+        '''
+
+        footer = self.get_report_footer_html()
+
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Year at a Glance - {employee_name} - {year}</title>
+            <style>
+                @media print {{
+                    body {{ margin: 0; padding: 0; }}
+                    @page {{ margin: 0.5in; }}
+                }}
+            </style>
+        </head>
+        <body style="margin: 0; padding: 0; background: white;">
+            {header}
+            {content}
+            {footer}
+        </body>
+        </html>
+        '''

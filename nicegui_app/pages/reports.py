@@ -497,9 +497,12 @@ def reports_page():
                             ui.label('No employees found.').classes('opacity-60')
                         return
 
+                    # Helper to convert hours to days
+                    def h2d(hours):
+                        return hours / 8
+
                     columns = [
                         {'name': 'name', 'label': 'Employee', 'field': 'name', 'sortable': True, 'align': 'left'},
-                        {'name': 'department', 'label': 'Department', 'field': 'department', 'sortable': True, 'align': 'left'},
                         {'name': 'vacation_total', 'label': 'Vac Total', 'field': 'vacation_total', 'sortable': True},
                         {'name': 'vacation_used', 'label': 'Vac Used', 'field': 'vacation_used', 'sortable': True},
                         {'name': 'vacation_available', 'label': 'Vac Avail', 'field': 'vacation_available', 'sortable': True},
@@ -511,8 +514,6 @@ def reports_page():
 
                     rows = []
                     for user_obj, balance in results:
-                        dept_name = user_obj.department.name if user_obj.department else 'No Dept'
-
                         if balance:
                             vac_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
                             vac_used = float(balance.vacation_used or 0)
@@ -528,18 +529,19 @@ def reports_page():
                         rows.append({
                             'id': user_obj.id,
                             'name': f'{user_obj.first_name} {user_obj.last_name}',
-                            'department': dept_name,
-                            'vacation_total': f'{vac_total:.1f}',
-                            'vacation_used': f'{vac_used:.1f}',
-                            'vacation_available': f'{vac_avail:.1f}',
-                            'sick_total': f'{sick_total:.1f}',
-                            'sick_used': f'{sick_used:.1f}',
-                            'personal_total': f'{personal_total:.1f}',
-                            'personal_used': f'{personal_used:.1f}',
+                            'vacation_total': f'{h2d(vac_total):.1f}d',
+                            'vacation_used': f'{h2d(vac_used):.1f}d',
+                            'vacation_available': f'{h2d(vac_avail):.1f}d',
+                            'sick_total': f'{h2d(sick_total):.1f}d',
+                            'sick_used': f'{h2d(sick_used):.1f}d',
+                            'personal_total': f'{h2d(personal_total):.1f}d',
+                            'personal_used': f'{h2d(personal_used):.1f}d',
                         })
 
                     ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                    ui.label(f'Total: {len(rows)} employees').classes('mt-2 opacity-60')
+                    with ui.row().classes('w-full justify-between items-center mt-2'):
+                        ui.label(f'Total: {len(rows)} employees').classes('opacity-60')
+                        ui.label('* Values shown in days (1 day = 8 hours)').classes('text-xs opacity-50')
 
             finally:
                 db.close()
@@ -977,6 +979,8 @@ def reports_page():
                     )
                 elif report_type == 'my_balance':
                     return report_service.generate_balance_report_html(user_id, year)
+                elif report_type == 'my_calendar':
+                    return report_service.generate_calendar_report_html(user_id, year)
                 elif report_type == 'team_balance':
                     return report_service.generate_team_balance_report_html(
                         year, filter_state['department_id'], filter_state.get('employee_id')

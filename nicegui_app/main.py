@@ -329,9 +329,19 @@ def health_check():
 
 if __name__ in {"__main__", "__mp_main__"}:
     logger.info("Starting TJM Time Calendar application")
-    ui.run(
-        port=8080,
-        host='0.0.0.0',
-        storage_secret=config.SECRET_KEY,
-        uvicorn_logging_level='warning'
-    )
+
+    # Build run options
+    run_options = {
+        'port': config.PORT,
+        'host': config.HOST,
+        'storage_secret': config.SECRET_KEY,
+        'uvicorn_logging_level': 'warning',
+    }
+
+    # Add SSL if configured
+    if config.ssl_enabled:
+        run_options['ssl_certfile'] = config.SSL_CERTFILE
+        run_options['ssl_keyfile'] = config.SSL_KEYFILE
+        logger.info(f"HTTPS enabled with certificate: {config.SSL_CERTFILE}")
+
+    ui.run(**run_options)

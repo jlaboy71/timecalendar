@@ -90,3 +90,9 @@ backups/
 # Log files
 logs/
 *.log
+
+# SSL certificates (never commit private keys)
+certs/
+*.pem
+*.key
+*.crt
