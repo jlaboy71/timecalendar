@@ -136,12 +136,13 @@ def show_request_detail_dialog(request, current_user_id: int, user_role: str):
     type_colors = {
         'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
         'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
-        'voting': 'cyan', 'military': 'deep-orange'
+        'voting': 'cyan', 'military': 'deep-orange', 'work_from_home': 'red'
     }
     type_icons = {
         'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
         'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
-        'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
+        'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech',
+        'work_from_home': 'home_work'
     }
     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
@@ -360,9 +361,9 @@ def requests_page():
                 """Update button styles based on current filter."""
                 for btn_name, btn in filter_buttons.items():
                     if current_filter['value'] and btn_name == current_filter['value']:
-                        btn.props('color=primary')
+                        btn.props('color=primary', remove='flat')
                     else:
-                        btn.props('flat')
+                        btn.props('flat', remove='color')
 
             # Calculate totals by type (for approved requests)
             vacation_approved = [r for r in approved_requests if r.pto_type.lower() == 'vacation']
@@ -395,8 +396,8 @@ def requests_page():
                     else:
                         with ui.card().classes('w-full'):
                             for req in requests_to_show:
-                                type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                                type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
                                 pto_type_lower = req.pto_type.lower()
                                 type_color = type_colors.get(pto_type_lower, 'gray')
@@ -455,9 +456,9 @@ def requests_page():
                 type_btn_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
                 for btn_type, btn in type_filter_buttons.items():
                     if pto_type and btn_type == pto_type:
-                        btn.props(f'color={type_btn_colors.get(btn_type, "primary")}')
+                        btn.props(f'color={type_btn_colors.get(btn_type, "primary")}', remove='flat')
                     else:
-                        btn.props('flat')
+                        btn.props('flat', remove='color')
                 # Clear other dropdown if not selecting other
                 if other_dropdown_ref['select'] and pto_type not in other_types:
                     other_dropdown_ref['select'].value = None

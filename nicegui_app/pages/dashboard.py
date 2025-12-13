@@ -91,11 +91,13 @@ def dashboard_page():
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
 
             # Header with logo, greeting and logout
+            is_dark = app.storage.general.get('dark_mode', False)
+            greeting_color = '#C9A227' if is_dark else '#5a6a72'
             with ui.row().classes('w-full justify-between items-center mb-6'):
                 with ui.column().classes('gap-2'):
                     ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
                     greeting = get_time_based_greeting()
-                    ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-xl font-bold uppercase').style('color: #5a6a72;')
+                    ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-base font-medium uppercase').style(f'color: {greeting_color};')
 
                 with ui.row().classes('items-center gap-2'):
                     # Help button
@@ -385,8 +387,8 @@ def dashboard_page():
                             ui.badge(f'{len(team_pending_requests)} pending', color='indigo').props('outline')
 
                     # Type colors for border
-                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
                     for req in team_pending_requests[:5]:  # Show first 5
                         pto_type_lower = req['pto_type'].lower()
@@ -431,8 +433,8 @@ def dashboard_page():
 
             # ============ CANCELLATION REQUESTS (Managers/Admins) ============
             if cancellation_requests:
-                type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
                 with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
@@ -618,8 +620,8 @@ def dashboard_page():
                                 ui.badge(f'{pending_count} pending', color='amber').props('outline')
 
                         # Type colors for border
-                        type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                        type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                        type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                        type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
                         for req in admin_pending_requests[:5]:  # Show first 5
                             pto_type_lower = req['pto_type'].lower()
@@ -734,7 +736,7 @@ def dashboard_page():
                         ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
 
                 if recent_requests:
-                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
 
                     # Scrollable container with max height
                     with ui.scroll_area().classes('w-full').style('max-height: 300px'):
@@ -1032,12 +1034,13 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                             type_colors = {
                                 'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
                                 'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
-                                'voting': 'cyan', 'military': 'deep-orange'
+                                'voting': 'cyan', 'military': 'deep-orange', 'work_from_home': 'red'
                             }
                             type_icons = {
                                 'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
                                 'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
-                                'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
+                                'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech',
+                                'work_from_home': 'home_work'
                             }
                             status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
@@ -1092,7 +1095,7 @@ def show_pto_detail_dialog(request):
     type_colors = {
         'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
         'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
-        'voting': 'cyan', 'military': 'deep-orange'
+        'voting': 'cyan', 'military': 'deep-orange', 'work_from_home': 'red'
     }
     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 

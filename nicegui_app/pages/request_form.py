@@ -108,11 +108,12 @@ def request_form_page():
             'vacation': {'color': 'blue', 'bg': 'bg-blue-500', 'text': 'text-blue-600', 'border': 'border-blue-500'},
             'sick': {'color': 'green', 'bg': 'bg-green-500', 'text': 'text-green-600', 'border': 'border-green-500'},
             'personal': {'color': 'purple', 'bg': 'bg-purple-500', 'text': 'text-purple-600', 'border': 'border-purple-500'},
+            'work_from_home': {'color': 'red', 'bg': 'bg-red-500', 'text': 'text-red-600', 'border': 'border-red-500'},
             'other': {'color': 'grey', 'bg': 'bg-grey-500', 'text': 'text-grey-600', 'border': 'border-grey-500'},
         }
 
-        # Primary types (balance-tracked) vs Other types
-        primary_types = ['vacation', 'sick', 'personal']
+        # Primary types (with dedicated buttons) vs Other types
+        primary_types = ['vacation', 'sick', 'personal', 'work_from_home']
         other_types = {k: v for k, v in leave_type_options.items() if k not in primary_types}
 
         # State for selected type
@@ -120,6 +121,10 @@ def request_form_page():
 
         # Calendar widget references for dynamic color updates
         calendar_widgets = {}
+        # Half-day container reference for visibility control
+        half_day_container = {'ref': None}
+        # Date range button reference for WFH single-day enforcement
+        date_range_btn = {'ref': None}
 
         with ui.card().classes('w-full mb-4'):
             with ui.row().classes('items-center mb-3'):
@@ -134,10 +139,16 @@ def request_form_page():
                 def create_type_handler(type_code):
                     def handler():
                         selected_type['value'] = type_code
+                        # Reset half-day for WFH since it doesn't support half-days
+                        if type_code == 'work_from_home':
+                            state['is_half_day'] = False
                         update_type_button_styles()
                         update_balance_display()
                         update_summary_color()
                         update_calendar_colors()
+                        update_half_day_visibility()
+                        update_date_mode_buttons()
+                        update_notes_label()
                     return handler
 
                 # Vacation button
@@ -164,6 +175,14 @@ def request_form_page():
                         on_click=create_type_handler('personal')
                     ).classes('flex-1')
 
+                # Work From Home button (red)
+                if 'work_from_home' in leave_type_options:
+                    type_buttons['work_from_home'] = ui.button(
+                        'WFH',
+                        icon='home_work',
+                        on_click=create_type_handler('work_from_home')
+                    ).classes('flex-1')
+
             # Other types dropdown (if any exist)
             other_select = None
             if other_types:
@@ -187,6 +206,9 @@ def request_form_page():
                             update_balance_display()
                             update_summary_color()
                             update_calendar_colors()
+                            update_half_day_visibility()
+                            update_date_mode_buttons()
+                            update_notes_label()
 
                     other_select.on('update:model-value', on_other_select_change)
 
@@ -202,6 +224,9 @@ def request_form_page():
                         update_balance_display()
                         update_summary_color()
                         update_calendar_colors()
+                        update_half_day_visibility()
+                        update_date_mode_buttons()
+                        update_notes_label()
 
             def update_type_button_styles():
                 """Update button styles based on current selection."""
@@ -215,7 +240,7 @@ def request_form_page():
                             btn.props(remove='outline')
                             btn.props('color=grey')
                         else:
-                            btn.props(remove='color=grey color=blue color=green color=purple')
+                            btn.props(remove='color=grey color=blue color=green color=purple color=red')
                             btn.props('outline')
                     elif type_code == current:
                         # Selected primary button
@@ -224,12 +249,38 @@ def request_form_page():
                         btn.props(f'color={color}')
                     else:
                         # Unselected primary button
-                        btn.props(remove='color=blue color=green color=purple color=grey')
+                        btn.props(remove='color=blue color=green color=purple color=red color=grey')
                         btn.props('outline')
 
                 # Clear other select if primary type selected
                 if not is_other and other_select:
                     other_select.value = None
+
+            def update_half_day_visibility():
+                """Show/hide half-day option based on selected type."""
+                if half_day_container['ref']:
+                    # WFH doesn't support half-day
+                    if selected_type['value'] == 'work_from_home':
+                        half_day_container['ref'].set_visibility(False)
+                    else:
+                        half_day_container['ref'].set_visibility(True)
+
+            def update_date_mode_buttons():
+                """Enable/disable date range button based on selected type. WFH is single-day only."""
+                if date_range_btn['ref']:
+                    if selected_type['value'] == 'work_from_home':
+                        # WFH is single-day only - disable date range and force single day
+                        date_range_btn['ref'].props('disabled')
+                        date_range_btn['ref'].tooltip('WFH requests are limited to single day only')
+                        # Force single day mode if not already
+                        if not state['is_single_day']:
+                            state['is_single_day'] = True
+                            state['end_date'] = state['start_date']
+                            build_date_selector()
+                            update_summary()
+                    else:
+                        date_range_btn['ref'].props(remove='disabled')
+                        date_range_btn['ref'].tooltip('')
 
             # Initialize button styles
             update_type_button_styles()
@@ -293,11 +344,38 @@ def request_form_page():
                 finally:
                     db_session.close()
 
+            def get_wfh_usage():
+                """Get total WFH days used by the employee."""
+                db_session = next(get_db())
+                try:
+                    # Count approved WFH requests
+                    wfh_requests = db_session.query(PTORequest).filter(
+                        PTORequest.user_id == _user_id,
+                        PTORequest.pto_type.ilike('work_from_home'),
+                        PTORequest.status == 'approved'
+                    ).all()
+                    total_days = sum(float(r.total_days) for r in wfh_requests)
+                    return total_days
+                finally:
+                    db_session.close()
+
             def update_balance_display():
                 balance_row.clear()
                 with balance_row:
                     if not pto_type.value:
                         ui.label('Select a leave type').classes('opacity-60')
+                        return
+
+                    # WFH has no balance - show usage count only
+                    if pto_type.value == 'work_from_home':
+                        wfh_days = get_wfh_usage()
+                        with ui.column().classes('items-center'):
+                            ui.icon('home_work', color='red').classes('text-2xl')
+                            ui.label(f'{wfh_days:.1f}' if wfh_days % 1 else f'{int(wfh_days)}').classes('text-xl font-bold text-red-500')
+                            ui.label('DAYS USED').classes('text-xs opacity-60')
+                        with ui.column().classes('items-center ml-6'):
+                            ui.label('No balance limit').classes('text-sm opacity-60')
+                            ui.label('Requires manager approval').classes('text-xs opacity-40')
                         return
 
                     total, used, pending, available, balance_allocated = get_balance_for_type(pto_type.value)
@@ -342,6 +420,7 @@ def request_form_page():
             with ui.row().classes('w-full mb-4 gap-2'):
                 single_day_btn = ui.button('Single Day', on_click=lambda: set_date_mode(True)).classes('flex-1')
                 range_btn = ui.button('Date Range', on_click=lambda: set_date_mode(False)).classes('flex-1')
+                date_range_btn['ref'] = range_btn  # Store reference for WFH single-day enforcement
 
             # Date selection container
             date_selection_container = ui.column().classes('w-full')
@@ -356,9 +435,10 @@ def request_form_page():
                     'vacation': 'border-blue-500',
                     'sick': 'border-green-500',
                     'personal': 'border-purple-500',
+                    'work_from_home': 'border-red-500',
                 }
                 new_border = color_map.get(current, 'border-grey-500')
-                summary_container.classes(remove='border-blue-500 border-green-500 border-purple-500 border-grey-500')
+                summary_container.classes(remove='border-blue-500 border-green-500 border-purple-500 border-red-500 border-grey-500')
                 summary_container.classes(add=new_border)
 
             def update_calendar_colors():
@@ -371,7 +451,7 @@ def request_form_page():
                     cal_color = 'grey'
                 for key, cal in calendar_widgets.items():
                     if cal:
-                        cal.props(remove='color=blue color=green color=purple color=grey')
+                        cal.props(remove='color=blue color=green color=purple color=red color=grey')
                         cal.props(f'color={cal_color}')
 
             def set_date_mode(is_single):
@@ -409,14 +489,20 @@ def request_form_page():
                         ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
                         calendar_widgets['single'] = calendar
 
-                        # Half-day option (only for single day)
-                        with ui.row().classes('w-full mt-3 items-center'):
+                        # Half-day option (only for single day, not for WFH)
+                        half_day_row = ui.row().classes('w-full mt-3 items-center')
+                        half_day_container['ref'] = half_day_row
+                        with half_day_row:
                             def on_half_day_change(e):
                                 state['is_half_day'] = e.value
                                 update_summary()
                                 update_warning()
 
                             ui.switch('Half Day (4 hours)', value=state['is_half_day'], on_change=on_half_day_change)
+
+                        # Hide half-day for WFH
+                        if selected_type['value'] == 'work_from_home':
+                            half_day_row.set_visibility(False)
 
                     else:
                         # DATE RANGE MODE
@@ -502,12 +588,13 @@ def request_form_page():
                         total_days = (state['end_date'] - state['start_date']).days + 1
                     hours_requested = total_days * 8
 
-                    _, _, _, available, _ = get_balance_for_type(pto_type.value)
-                    remaining = available - hours_requested
+                    is_wfh = pto_type.value == 'work_from_home'
+                    icon_color = 'red' if is_wfh else 'blue'
+                    text_color = 'text-red-600' if is_wfh else 'text-blue-600'
 
                     # Date display
                     with ui.column().classes('items-center'):
-                        ui.icon('event', color='blue').classes('text-2xl')
+                        ui.icon('event', color=icon_color).classes('text-2xl')
                         if state['start_date'] == state['end_date']:
                             ui.label(state['start_date'].strftime('%b %d, %Y')).classes('font-medium')
                             if state['is_half_day']:
@@ -519,20 +606,27 @@ def request_form_page():
 
                     # Hours/Days requested
                     with ui.column().classes('items-center'):
-                        ui.label(fmt_days(total_days)).classes('text-2xl font-bold text-blue-600')
+                        ui.label(fmt_days(total_days)).classes(f'text-2xl font-bold {text_color}')
                         ui.label(f'day{"s" if total_days != 1 else ""} ({hours_requested:.0f} hrs)').classes('text-xs opacity-60')
 
                     ui.icon('arrow_forward').classes('opacity-40')
 
-                    # Balance after
-                    with ui.column().classes('items-center'):
-                        if remaining < 0:
-                            ui.label(fmt_days(remaining/8)).classes('text-2xl font-bold text-red-600')
-                            ui.label('OVER LIMIT').classes('text-xs text-red-600 font-bold')
-                        else:
-                            color = 'text-green-600' if remaining >= 16 else 'text-amber-600'
-                            ui.label(fmt_days(remaining/8)).classes(f'text-2xl font-bold {color}')
-                            ui.label('days remaining').classes('text-xs opacity-60')
+                    # Balance after (or WFH indicator)
+                    if is_wfh:
+                        with ui.column().classes('items-center'):
+                            ui.icon('home_work', color='red').classes('text-2xl')
+                            ui.label('WFH').classes('text-xs opacity-60')
+                    else:
+                        _, _, _, available, _ = get_balance_for_type(pto_type.value)
+                        remaining = available - hours_requested
+                        with ui.column().classes('items-center'):
+                            if remaining < 0:
+                                ui.label(fmt_days(remaining/8)).classes('text-2xl font-bold text-red-600')
+                                ui.label('OVER LIMIT').classes('text-xs text-red-600 font-bold')
+                            else:
+                                color = 'text-green-600' if remaining >= 16 else 'text-amber-600'
+                                ui.label(fmt_days(remaining/8)).classes(f'text-2xl font-bold {color}')
+                                ui.label('days remaining').classes('text-xs opacity-60')
 
             # Initialize the date mode buttons
             single_day_btn.props('color=primary')
@@ -544,9 +638,7 @@ def request_form_page():
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">3</span>', sanitize=False)
                 notes_header = ui.label('Notes (optional)').classes('text-lg font-semibold')
 
-            description = ui.input(
-                placeholder='e.g., Family vacation, doctor appointment...'
-            ).classes('w-full').props('dense')
+            description = ui.input().classes('w-full').props('dense')
 
             # Private toggle - only for managers/admins/superadmins
             if user_role in ['manager', 'admin', 'superadmin']:
@@ -557,9 +649,12 @@ def request_form_page():
                     ui.switch('Keep Private', value=state['is_private'], on_change=on_private_change)
                     ui.label('(Hidden from department calendar)').classes('text-xs opacity-60')
 
-            # Update header if documentation required
+            # Update header if documentation required or WFH (requires reason)
             def update_notes_label():
-                if pto_type.value in requires_doc_types:
+                if pto_type.value == 'work_from_home':
+                    notes_header.text = 'Reason (required)'
+                    notes_header.classes('text-lg font-semibold text-red-600', remove='text-gray-600')
+                elif pto_type.value in requires_doc_types:
                     notes_header.text = 'Notes (required)'
                     notes_header.classes('text-lg font-semibold text-red-600', remove='text-gray-600')
                 else:
@@ -585,36 +680,50 @@ def request_form_page():
                 else:
                     total_days = (state['end_date'] - state['start_date']).days + 1
                 hours_requested = total_days * 8
+                is_wfh = pto_type.value == 'work_from_home'
                 _, _, _, available, balance_allocated = get_balance_for_type(pto_type.value)
                 target_year = state['start_date'].year
 
                 with warning_container:
-                    # Warning for unallocated future year balance
-                    if not balance_allocated and target_year != date.today().year:
-                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
-                            with ui.row().classes('items-start'):
-                                ui.icon('info', color='amber').classes('mr-2 mt-1')
-                                with ui.column().classes('gap-0'):
-                                    ui.label(f'{target_year} PTO balance not yet allocated').classes('text-amber-600 font-medium')
-                                    ui.label('Your request will be submitted for manager approval. Balance will be deducted once allocated.').classes('text-sm opacity-70')
+                    # WFH date restriction: only within 1 week allowed
+                    if is_wfh:
+                        one_week_out = date.today() + timedelta(days=7)
+                        if state['start_date'] > one_week_out:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('error', color='red').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label('WFH requests limited to within 1 week').classes('text-red-500 font-medium')
+                                        ui.label('Work From Home must be submitted within 7 days. For advance requests, contact your manager.').classes('text-sm opacity-70')
 
-                    # Warning for cross-year requests
-                    if state['start_date'].year != state['end_date'].year:
-                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-purple-500'):
-                            with ui.row().classes('items-start'):
-                                ui.icon('calendar_month', color='purple').classes('mr-2 mt-1')
-                                with ui.column().classes('gap-0'):
-                                    ui.label(f'Request spans {state["start_date"].year} and {state["end_date"].year}').classes('text-purple-600 font-medium')
-                                    ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
+                    # Skip balance-related warnings for WFH (no balance system)
+                    if not is_wfh:
+                        # Warning for unallocated future year balance
+                        if not balance_allocated and target_year != date.today().year:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('info', color='amber').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(f'{target_year} PTO balance not yet allocated').classes('text-amber-600 font-medium')
+                                        ui.label('Your request will be submitted for manager approval. Balance will be deducted once allocated.').classes('text-sm opacity-70')
 
-                    # Warning for exceeding available balance
-                    if hours_requested > available:
-                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
-                            with ui.row().classes('items-start'):
-                                ui.icon('warning', color='red').classes('mr-2 mt-1')
-                                with ui.column().classes('gap-0'):
-                                    ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)} days').classes('text-red-500 font-medium')
-                                    ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
+                        # Warning for cross-year requests
+                        if state['start_date'].year != state['end_date'].year:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-purple-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('calendar_month', color='purple').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(f'Request spans {state["start_date"].year} and {state["end_date"].year}').classes('text-purple-600 font-medium')
+                                        ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
+
+                        # Warning for exceeding available balance
+                        if hours_requested > available:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('warning', color='red').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)} days').classes('text-red-500 font-medium')
+                                        ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
 
                     # Check for holidays in the selected date range
                     try:
@@ -686,6 +795,15 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             submit_btn.props(remove='loading disabled')
         return
 
+    # WFH date restriction: only within 1 week allowed (employees only)
+    if pto_type.lower() == 'work_from_home':
+        one_week_out = date.today() + timedelta(days=7)
+        if start_date > one_week_out:
+            ui.notify('WFH requests are limited to within 1 week', type='negative')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
+            return
+
     db = None
     try:
         db = next(get_db())
@@ -693,6 +811,13 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         leave_type = db.query(LeaveType).filter(
             LeaveType.code == pto_type.upper()
         ).first()
+
+        # WFH requires a reason
+        if pto_type.lower() == 'work_from_home' and not description.strip():
+            ui.notify('A reason is required for Work From Home requests', type='negative')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
+            return
 
         if leave_type and leave_type.requires_documentation and not description.strip():
             ui.notify(f'Description is required for {leave_type.name}', type='negative')

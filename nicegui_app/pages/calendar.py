@@ -58,6 +58,7 @@ def calendar_page():
         'vacation': calendar_prefs.get('filter_vacation', True),
         'sick': calendar_prefs.get('filter_sick', True),
         'personal': calendar_prefs.get('filter_personal', True),
+        'work_from_home': calendar_prefs.get('filter_work_from_home', True),
         'other': calendar_prefs.get('filter_other', True)
     }
     current_view = {'view': calendar_prefs.get('current_view', 'month')}  # 'month' or 'year'
@@ -77,18 +78,224 @@ def calendar_page():
             'filter_vacation': leave_type_filters['vacation'],
             'filter_sick': leave_type_filters['sick'],
             'filter_personal': leave_type_filters['personal'],
+            'filter_work_from_home': leave_type_filters['work_from_home'],
             'filter_other': leave_type_filters['other'],
             'current_view': current_view['view'],
             'highlight_half_days': highlight_half_days['value']
         }
 
+    def show_wfh_for_employee_dialog():
+        """Show dialog for managers to submit WFH request on behalf of an employee."""
+        db = next(get_db())
+        try:
+            # Get employees based on role
+            if user_role == 'superadmin':
+                employees = db.query(User).filter(User.is_active == True).order_by(User.first_name).all()
+            elif user_role == 'admin':
+                employees = db.query(User).filter(User.is_active == True).order_by(User.first_name).all()
+            else:  # manager
+                current_manager = db.query(User).filter(User.id == user_id).first()
+                if current_manager and current_manager.department_id:
+                    employees = db.query(User).filter(
+                        User.department_id == current_manager.department_id,
+                        User.is_active == True,
+                        User.id != user_id  # Exclude self - managers should use regular form
+                    ).order_by(User.first_name).all()
+                else:
+                    employees = []
+
+            employee_options = {emp.id: f"{emp.first_name} {emp.last_name}" for emp in employees}
+        finally:
+            db.close()
+
+        if not employee_options:
+            ui.notify('No employees found to submit WFH for', type='warning')
+            return
+
+        with ui.dialog() as wfh_dialog, ui.card().classes('min-w-[400px] p-4'):
+            ui.label('Submit WFH for Employee').classes('text-xl font-bold mb-4')
+            ui.label('Submit a Work From Home request on behalf of a team member.').classes('text-sm opacity-70 mb-4')
+
+            # Employee select
+            employee_select = ui.select(
+                employee_options,
+                label='Select Employee',
+                with_input=True
+            ).props('outlined').classes('w-full mb-4')
+
+            # Date select (within 1 week, excluding weekends)
+            date_options = {}
+            for i in range(8):  # Today through 7 days out
+                d = date.today() + timedelta(days=i)
+                if d.weekday() < 5:  # Monday=0 through Friday=4
+                    label = "Today" if i == 0 else d.strftime('%A, %b %d')
+                    date_options[d.isoformat()] = f"{label} ({d.strftime('%b %d, %Y')})"
+            date_select = ui.select(
+                date_options,
+                label='Date',
+                value=date.today().isoformat() if date.today().weekday() < 5 else list(date_options.keys())[0]
+            ).props('outlined').classes('w-full mb-4')
+
+            # Notes/reason (required)
+            notes_input = ui.textarea(
+                label='Reason (required)'
+            ).props('outlined autogrow').classes('w-full mb-4')
+
+            def submit_wfh_for_employee():
+                if not employee_select.value:
+                    ui.notify('Please select an employee', type='negative')
+                    return
+                if not notes_input.value or not notes_input.value.strip():
+                    ui.notify('Reason is required for WFH requests', type='negative')
+                    return
+
+                wfh_db = next(get_db())
+                try:
+                    from src.services.pto_service import PTOService
+                    from src.schemas.pto_schemas import PTORequestCreate
+
+                    selected_date = date.fromisoformat(date_select.value)
+
+                    request_data = PTORequestCreate(
+                        user_id=employee_select.value,
+                        pto_type='work_from_home',
+                        start_date=selected_date,
+                        end_date=selected_date,
+                        total_days=1.0,
+                        notes=f"[Submitted by manager] {notes_input.value.strip()}"
+                    )
+
+                    pto_service = PTOService(wfh_db)
+                    pto_request = pto_service.create_request(request_data)
+
+                    # Auto-approve since manager is submitting
+                    if pto_request.status == 'pending':
+                        pto_service.approve_request(pto_request.id, user_id)
+
+                    wfh_db.commit()
+                    ui.notify(f'WFH submitted for {employee_options[employee_select.value]}', type='positive')
+                    wfh_dialog.close()
+                    render_current_view()
+                except Exception as e:
+                    ui.notify(f'Error submitting WFH: {str(e)}', type='negative')
+                finally:
+                    wfh_db.close()
+
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('Cancel', on_click=wfh_dialog.close).props('flat')
+                ui.button('Submit WFH', icon='home_work', on_click=submit_wfh_for_employee).props('color=red')
+
+        wfh_dialog.open()
+
     # Main container
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+        # Print CSS styles - printer-friendly with white background
+        ui.add_head_html('''
+        <style>
+            @media print {
+                /* Hide specific non-essential elements */
+                .no-print,
+                .q-drawer,
+                .q-expansion-item {
+                    display: none !important;
+                }
+
+                /* Reset page margins and use landscape */
+                @page {
+                    size: landscape;
+                    margin: 0.3in;
+                }
+
+                /* Force white background on page */
+                html, body {
+                    background: white !important;
+                    color: black !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+
+                /* Main container - white background */
+                .q-page, .q-layout, .q-page-container, .nicegui-content {
+                    background: white !important;
+                }
+
+                /* Override dark mode backgrounds */
+                body.body--dark,
+                .body--dark .q-page,
+                .body--dark .q-card,
+                .body--dark .q-layout {
+                    background: white !important;
+                    color: black !important;
+                }
+
+                /* Cards - white with border, no shadow */
+                .q-card {
+                    box-shadow: none !important;
+                    background: white !important;
+                    border: 1px solid #ccc !important;
+                }
+
+                /* Force dark text everywhere */
+                body, p, span, div, label, td, th {
+                    color: black !important;
+                }
+
+                /* Calendar grid cells - white background */
+                .print-calendar td,
+                .print-calendar th {
+                    background: white !important;
+                    border: 1px solid #999 !important;
+                    color: black !important;
+                }
+
+                /* Day header row - light gray */
+                .print-calendar th,
+                .print-calendar .font-bold {
+                    background: #f0f0f0 !important;
+                }
+
+                /* PTO event colors - light pastels for print */
+                [class*="bg-blue"] { background-color: #dbeafe !important; }
+                [class*="bg-green"] { background-color: #dcfce7 !important; }
+                [class*="bg-purple"] { background-color: #f3e8ff !important; }
+                [class*="bg-red"] { background-color: #fee2e2 !important; }
+                [class*="bg-orange"] { background-color: #ffedd5 !important; }
+                [class*="bg-amber"] { background-color: #fef3c7 !important; }
+                [class*="bg-teal"] { background-color: #ccfbf1 !important; }
+                [class*="bg-indigo"] { background-color: #e0e7ff !important; }
+                [class*="bg-gray"], [class*="bg-grey"] { background-color: #f3f4f6 !important; }
+
+                /* Remove max-width constraint for print */
+                .max-w-6xl {
+                    max-width: 100% !important;
+                    padding: 0.1in !important;
+                    margin: 0 !important;
+                }
+
+                /* Print header visible */
+                .print-header {
+                    display: flex !important;
+                    color: black !important;
+                    margin-bottom: 0.2in !important;
+                }
+            }
+
+            /* Hide print header on screen */
+            .print-header {
+                display: none;
+            }
+        </style>
+        ''')
+
+        # Print header (only visible when printing)
+        with ui.row().classes('print-header w-full justify-between items-center mb-2'):
+            ui.label('Team Calendar').classes('text-xl font-bold')
+
         # Header with greeting
         page_header(title='TEAM CALENDAR', show_back=False)
 
-        # ===== VIEW TOGGLE + ACTION BUTTONS =====
-        with ui.row().classes('w-full mb-4 gap-2 justify-between items-center'):
+        # ===== VIEW TOGGLE + ACTION BUTTONS ===== (hidden in print)
+        with ui.row().classes('w-full mb-4 gap-2 justify-between items-center no-print'):
             # Left side: View toggle
             with ui.row().classes('gap-2 items-center'):
                 ui.label('View:').classes('font-medium self-center')
@@ -126,6 +333,10 @@ def calendar_page():
             # Right side: Action buttons
             with ui.row().classes('gap-2 items-center'):
                 ui.button('New PTO Request', icon='add', on_click=lambda: ui.navigate.to('/submit-request')).props('color=primary')
+
+                # Submit WFH for Employee button (managers/admins only)
+                if user_role in ['manager', 'admin', 'superadmin']:
+                    ui.button('WFH for Employee', icon='home_work', on_click=lambda: show_wfh_for_employee_dialog()).props('color=red outline')
 
                 def print_calendar():
                     ui.run_javascript('window.print()')
@@ -227,8 +438,8 @@ def calendar_page():
                                 on_change=on_weekends_change
                             )
 
-        # ===== MY BALANCE SUMMARY =====
-        balance_container = ui.column().classes('w-full mb-4')
+        # ===== MY BALANCE SUMMARY ===== (hidden in print)
+        balance_container = ui.column().classes('w-full mb-4 no-print')
 
         def render_balance_summary():
             """Render the user's PTO balance summary."""
@@ -263,9 +474,8 @@ def calendar_page():
                             with ui.row().classes('gap-2 items-center'):
                                 ui.element('div').classes('w-4 h-4 bg-blue-500 rounded-full')
                                 vac_hours = vac_total - vac_used - vac_pending
-                                vac_color = 'text-green-600' if vac_avail >= 2 else ('text-amber-500' if vac_avail > 0 else 'text-red-500')
                                 vac_display, vac_tooltip = format_days_hours(vac_hours)
-                                ui.label(f'Vacation: {vac_display}').classes(f'font-medium {vac_color}').tooltip(vac_tooltip)
+                                ui.label(f'Vacation: {vac_display}').classes('font-medium text-blue-600').tooltip(vac_tooltip)
                                 if vac_pending > 0:
                                     pending_display, _ = format_days_hours(vac_pending)
                                     ui.label(f'({pending_display} pending)').classes('text-xs text-amber-500')
@@ -276,9 +486,8 @@ def calendar_page():
                             with ui.row().classes('gap-2 items-center'):
                                 ui.element('div').classes('w-4 h-4 bg-green-500 rounded-full')
                                 sick_hours = sick_total - sick_used
-                                sick_color = 'text-green-600' if sick_avail >= 2 else ('text-amber-500' if sick_avail > 0 else 'text-red-500')
                                 sick_display, sick_tooltip = format_days_hours(sick_hours)
-                                ui.label(f'Sick: {sick_display}').classes(f'font-medium {sick_color}').tooltip(sick_tooltip)
+                                ui.label(f'Sick: {sick_display}').classes('font-medium text-green-600').tooltip(sick_tooltip)
 
                             ui.element('div').classes('w-px h-6').style('background: rgba(128,128,128,0.3)')
 
@@ -286,9 +495,8 @@ def calendar_page():
                             with ui.row().classes('gap-2 items-center'):
                                 ui.element('div').classes('w-4 h-4 bg-purple-500 rounded-full')
                                 personal_hours = personal_total - personal_used
-                                personal_color = 'text-green-600' if personal_avail >= 1 else ('text-amber-500' if personal_avail > 0 else 'text-red-500')
                                 personal_display, personal_tooltip = format_days_hours(personal_hours)
-                                ui.label(f'Personal: {personal_display}').classes(f'font-medium {personal_color}').tooltip(personal_tooltip)
+                                ui.label(f'Personal: {personal_display}').classes('font-medium text-purple-600').tooltip(personal_tooltip)
                 finally:
                     db.close()
 
@@ -299,16 +507,16 @@ def calendar_page():
         with ui.row().classes('w-full justify-between items-center mb-4'):
             # Month/Year navigation
             with ui.row().classes('gap-2 items-center'):
-                ui.button(icon='chevron_left', on_click=lambda: navigate_month(-1)).props('flat aria-label="Previous month"')
+                ui.button(icon='chevron_left', on_click=lambda: navigate_month(-1)).props('flat aria-label="Previous month"').classes('no-print')
 
                 month_label = ui.label().classes('text-xl font-semibold min-w-48 text-center')
 
-                ui.button(icon='chevron_right', on_click=lambda: navigate_month(1)).props('flat aria-label="Next month"')
+                ui.button(icon='chevron_right', on_click=lambda: navigate_month(1)).props('flat aria-label="Next month"').classes('no-print')
 
-                ui.button('Today', on_click=lambda: go_to_today()).props('flat')
+                ui.button('Today', on_click=lambda: go_to_today()).props('flat').classes('no-print')
 
-            # Export and View toggle
-            with ui.row().classes('gap-2 items-center'):
+            # Export and View toggle (hidden in print)
+            with ui.row().classes('gap-2 items-center no-print'):
                 # Export dropdown
                 with ui.dropdown_button('Export', icon='download', auto_close=True).props('flat color=primary'):
                     def export_my_calendar():
@@ -368,11 +576,11 @@ def calendar_page():
                 # Set initial styles
                 update_period_button_styles()
 
-        # Calendar container
-        calendar_container = ui.column().classes('w-full')
+        # Calendar container (printable)
+        calendar_container = ui.column().classes('w-full print-calendar')
 
-        # Legend - Interactive filtering with checkboxes (no color boxes)
-        with ui.card().classes('w-full p-4 mt-2'):
+        # Legend - Interactive filtering with checkboxes (hidden in print)
+        with ui.card().classes('w-full p-4 mt-2 no-print'):
             with ui.row().classes('w-full gap-4 flex-wrap items-center'):
                 ui.label('Calendar Legend').classes('font-bold text-lg')
                 ui.element('div').classes('flex-grow')
@@ -424,6 +632,13 @@ def calendar_page():
                         on_change=create_legend_filter_handler('personal')
                     ).props('dense').classes('text-sm font-medium text-purple-600')
 
+                    # Work From Home - filterable
+                    ui.checkbox(
+                        'WFH',
+                        value=leave_type_filters['work_from_home'],
+                        on_change=create_legend_filter_handler('work_from_home')
+                    ).props('dense').classes('text-sm font-medium text-red-600')
+
                     # Other - filterable
                     ui.checkbox(
                         'Other',
@@ -438,8 +653,8 @@ def calendar_page():
                         on_change=on_legend_half_days_change
                     ).props('dense').classes('text-sm font-medium text-orange-600')
 
-        # Back button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+        # Back button (hidden in print)
+        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6 no-print')
 
         # ===== MODAL FUNCTIONS =====
 
@@ -820,16 +1035,18 @@ def calendar_page():
             render_current_view()
 
         def get_pto_color(pto_type: str) -> str:
-            """Get color class based on PTO type."""
+            """Get color class based on PTO type - solid background with white text."""
             pto_type_lower = pto_type.lower()
             if 'vacation' in pto_type_lower:
-                return 'bg-blue-500/20 border-blue-500 text-blue-600'
+                return 'bg-blue-500 text-white'
             elif 'sick' in pto_type_lower:
-                return 'bg-green-500/20 border-green-500 text-green-600'
+                return 'bg-green-500 text-white'
             elif 'personal' in pto_type_lower:
-                return 'bg-purple-500/20 border-purple-500 text-purple-600'
+                return 'bg-purple-500 text-white'
+            elif 'work_from_home' in pto_type_lower or 'wfh' in pto_type_lower:
+                return 'bg-red-500 text-white'
             else:
-                return 'bg-gray-500/20 border-gray-500'
+                return 'bg-gray-500 text-white'
 
         def get_leave_type_category(pto_type: str) -> str:
             """Categorize leave type for filtering."""
@@ -840,6 +1057,8 @@ def calendar_page():
                 return 'sick'
             elif 'personal' in pto_type_lower:
                 return 'personal'
+            elif 'work_from_home' in pto_type_lower or 'wfh' in pto_type_lower:
+                return 'work_from_home'
             else:
                 return 'other'
 
@@ -857,7 +1076,7 @@ def calendar_page():
                 render_calendar()
 
         def render_year_view():
-            """Render compact 12-month year overview."""
+            """Render 12-month year overview with mini calendars in 2 rows (Jan-Jun / Jul-Dec)."""
             calendar_container.clear()
             year = current_month['year']
 
@@ -874,9 +1093,10 @@ def calendar_page():
                     MarketHoliday.holiday_date <= year_end
                 ).all() if show_holidays['value'] else []
 
-                holidays_by_month = defaultdict(set)
+                # Build holiday lookup by date
+                holidays_by_date = set()
                 for h in holidays:
-                    holidays_by_month[h.holiday_date.month].add(h.holiday_date.day)
+                    holidays_by_date.add(h.holiday_date)
 
                 # Query PTO based on view mode
                 pto_query = db.query(PTORequest).filter(
@@ -888,7 +1108,6 @@ def calendar_page():
                 if view_mode['mode'] == 'my':
                     pto_query = pto_query.filter(PTORequest.user_id == user_id)
                 elif user_role == 'employee' and view_mode['mode'] == 'team':
-                    # Employee department view: see their department's non-private PTO
                     if user_department_id:
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == user_department_id,
@@ -896,56 +1115,51 @@ def calendar_page():
                         ).all()]
                         pto_query = pto_query.filter(
                             PTORequest.user_id.in_(dept_user_ids),
-                            PTORequest.is_private == False  # Exclude private PTO
+                            PTORequest.is_private == False
                         )
                     else:
-                        # No department, fallback to my calendar
                         pto_query = pto_query.filter(PTORequest.user_id == user_id)
                 elif user_role in ['manager', 'admin'] and view_mode['mode'] == 'team':
-                    # Manager/Admin: restricted to their department
                     if selected_employee['id']:
                         pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
                     elif user_department_id:
-                        # Show all employees in their department
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == user_department_id,
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
                 elif user_role == 'superadmin' and view_mode['mode'] == 'team':
-                    # Superadmin: can see all departments, with optional filters
                     if selected_employee['id']:
                         pto_query = pto_query.filter(PTORequest.user_id == selected_employee['id'])
                     elif selected_department['id']:
-                        # Filter by selected department
                         dept_user_ids = [u.id for u in db.query(User).filter(
                             User.department_id == selected_department['id'],
                             User.is_active == True
                         ).all()]
                         pto_query = pto_query.filter(PTORequest.user_id.in_(dept_user_ids))
-                    # If no filters selected, superadmin sees all
 
                 approved_pto = pto_query.all()
 
-                # Count PTO days per month
-                pto_by_month = defaultdict(int)
+                # Build PTO lookup by date with type info
+                pto_by_date = defaultdict(list)
                 for pto in approved_pto:
                     if not should_show_pto(pto.pto_type):
                         continue
                     current_date = max(pto.start_date, year_start)
                     end = min(pto.end_date, year_end)
                     while current_date <= end:
-                        pto_by_month[current_date.month] += 1
+                        pto_by_date[current_date].append(pto.pto_type)
                         current_date += timedelta(days=1)
 
             finally:
                 db.close()
 
+            # Fixed 6-column grid layout (Jan-Jun / Jul-Dec) - full width
             with calendar_container:
-                with ui.element('div').classes('grid grid-cols-4 gap-4'):
+                # 6-column CSS grid that fills full width
+                with ui.element('div').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%;'):
                     for month_num in range(1, 13):
-                        holiday_count = len(holidays_by_month[month_num])
-                        pto_count = pto_by_month[month_num]
+                        is_current_month = month_num == today.month and year == today.year
 
                         def create_month_click_handler(m):
                             def handler():
@@ -955,19 +1169,71 @@ def calendar_page():
                                 render_current_view()
                             return handler
 
-                        with ui.card().classes('p-3 cursor-pointer hover:shadow-lg transition-shadow').on('click', create_month_click_handler(month_num)):
-                            ui.label(month_name[month_num]).classes('font-semibold text-center')
+                        # Card with ring highlight for current month
+                        card_style = 'width: 100%; max-width: none;'
+                        if is_current_month:
+                            card_style += ' box-shadow: 0 0 0 2px var(--q-primary);'
 
-                            # Show density indicators
-                            with ui.row().classes('justify-center gap-2 mt-2'):
-                                if holiday_count > 0 and show_holidays['value']:
-                                    ui.badge(str(holiday_count), color='red').tooltip(f'{holiday_count} holidays')
-                                if pto_count > 0:
-                                    ui.badge(str(pto_count), color='blue').tooltip(f'{pto_count} PTO days')
+                        with ui.card().classes('p-2 cursor-pointer hover:shadow-lg').style(card_style).on('click', create_month_click_handler(month_num)):
+                            # Month name header
+                            ui.label(month_name[month_num]).classes('text-sm font-semibold text-center mb-1')
 
-                            # Highlight current month
-                            if month_num == today.month and year == today.year:
-                                ui.element('div').classes('w-full h-1 bg-primary mt-2 rounded')
+                            # Build HTML table for mini calendar (guaranteed alignment)
+                            weeks = monthcalendar(year, month_num)
+
+                            # Build table HTML
+                            table_html = '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">'
+                            # Header row
+                            table_html += '<tr>'
+                            for day_name in ['S', 'M', 'T', 'W', 'T', 'F', 'S']:
+                                table_html += f'<th style="text-align:center; font-size:0.7rem; opacity:0.5; padding:2px 0; font-weight:normal;">{day_name}</th>'
+                            table_html += '</tr>'
+
+                            # Week rows - convert Mon-start to Sun-start
+                            for week in weeks:
+                                sun_week = [week[6]] + week[0:6]
+                                table_html += '<tr>'
+                                for day_num in sun_week:
+                                    if day_num == 0:
+                                        table_html += '<td style="padding:2px 0;"></td>'
+                                    else:
+                                        current_date = date(year, month_num, day_num)
+                                        is_today_date = current_date == today
+                                        is_holiday = current_date in holidays_by_date
+                                        pto_types = pto_by_date.get(current_date, [])
+
+                                        # Determine background color
+                                        bg_color = ''
+                                        text_color = 'inherit'
+                                        if is_holiday:
+                                            bg_color = '#f97316'
+                                            text_color = 'white'
+                                        elif pto_types:
+                                            first_type = pto_types[0].lower()
+                                            if 'vacation' in first_type:
+                                                bg_color = '#3b82f6'
+                                            elif 'sick' in first_type:
+                                                bg_color = '#22c55e'
+                                            elif 'personal' in first_type:
+                                                bg_color = '#a855f7'
+                                            elif 'work_from_home' in first_type or 'wfh' in first_type:
+                                                bg_color = '#ef4444'
+                                            else:
+                                                bg_color = '#6b7280'
+                                            text_color = 'white'
+
+                                        # Build cell style
+                                        cell_style = 'text-align:center; font-size:0.7rem; padding:2px 0; border-radius:2px;'
+                                        if bg_color:
+                                            cell_style += f' background:{bg_color}; color:{text_color};'
+                                        if is_today_date:
+                                            cell_style += ' box-shadow:0 0 0 2px var(--q-primary); font-weight:bold;'
+
+                                        table_html += f'<td style="{cell_style}">{day_num}</td>'
+                                table_html += '</tr>'
+                            table_html += '</table>'
+
+                            ui.html(table_html, sanitize=False)
 
         def render_calendar():
             """Render the calendar grid for the current month."""
@@ -1146,34 +1412,52 @@ def calendar_page():
 
                                     with cell_element:
                                         day_classes = 'text-sm font-medium'
+                                        is_clickable_day = user_role == 'employee' and current_date >= today and not has_holiday
+
+                                        def create_day_click_handler(d):
+                                            def handler():
+                                                app.storage.general['prefill_pto_date'] = d.isoformat()
+                                                ui.navigate.to('/submit-request')
+                                            return handler
+
                                         if is_today:
-                                            with ui.element('div').classes('w-6 h-6 bg-primary rounded-full flex items-center justify-center'):
-                                                ui.label(str(day_num)).classes('text-white text-sm font-bold')
+                                            if is_clickable_day:
+                                                day_el = ui.element('div').classes('w-6 h-6 bg-primary rounded-full flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-1').tooltip('Click to request time off')
+                                                day_el.on('click', create_day_click_handler(current_date))
+                                                with day_el:
+                                                    ui.label(str(day_num)).classes('text-white text-sm font-bold')
+                                            else:
+                                                with ui.element('div').classes('w-6 h-6 bg-primary rounded-full flex items-center justify-center'):
+                                                    ui.label(str(day_num)).classes('text-white text-sm font-bold')
                                         else:
                                             if is_weekend:
                                                 day_classes += ' opacity-50'
-                                            ui.label(str(day_num)).classes(day_classes)
+                                            if is_clickable_day:
+                                                day_el = ui.element('div').classes('inline-block cursor-pointer hover:bg-blue-100 hover:rounded-full px-1').tooltip('Click to request time off')
+                                                day_el.on('click', create_day_click_handler(current_date))
+                                                with day_el:
+                                                    ui.label(str(day_num)).classes(day_classes)
+                                            else:
+                                                ui.label(str(day_num)).classes(day_classes)
 
-                                        # Show holidays
+                                        # Show holidays - ONE entry per date (consolidate different market names)
                                         if has_holiday:
                                             holiday_list = holidays_by_date[current_date]
-                                            holiday_names_map = {}
-                                            for h in holiday_list:
-                                                if h.name not in holiday_names_map:
-                                                    holiday_names_map[h.name] = []
-                                                holiday_names_map[h.name].append(h.market)
+                                            # Get unique holiday names and use the shortest one for display
+                                            unique_names = set(h.name for h in holiday_list)
+                                            display_name = min(unique_names, key=len)  # Use shortest name
+                                            all_markets = list(set(h.market for h in holiday_list))
 
                                             def create_holiday_handler(d, h_list):
                                                 return lambda: show_holiday_modal(d, h_list)
 
-                                            for h_name, markets in holiday_names_map.items():
-                                                tooltip_text = f"{h_name} ({', '.join(markets)}) - Click for details"
-                                                holiday_el = ui.element('div').classes(
-                                                    'text-xs bg-red-500/20 text-red-500 px-1 rounded mt-1 truncate cursor-pointer hover:bg-red-500/30'
-                                                ).tooltip(tooltip_text)
-                                                holiday_el.on('click', create_holiday_handler(current_date, holiday_list))
-                                                with holiday_el:
-                                                    ui.label(h_name[:15] + ('...' if len(h_name) > 15 else '')).classes('text-xs')
+                                            tooltip_text = f"{display_name} ({', '.join(all_markets)}) - Click for details"
+                                            holiday_el = ui.element('div').classes(
+                                                'text-xs bg-orange-500 text-white px-1 rounded mt-1 truncate cursor-pointer hover:bg-orange-600'
+                                            ).tooltip(tooltip_text)
+                                            holiday_el.on('click', create_holiday_handler(current_date, holiday_list))
+                                            with holiday_el:
+                                                ui.label(display_name[:15] + ('...' if len(display_name) > 15 else '')).classes('text-xs text-white')
 
                                         # Show PTO entries
                                         if has_pto:
@@ -1196,7 +1480,7 @@ def calendar_page():
                                                 # Highlight half-day events if toggle is enabled
                                                 highlight_style = 'min-height: 20px; font-size: 11px;'
                                                 if is_half and highlight_half_days['value']:
-                                                    highlight_style += ' border: 2px dashed orange; background: rgba(255,165,0,0.15);'
+                                                    highlight_style += ' border: 2px dotted white; box-shadow: 0 0 0 1px rgba(0,0,0,0.3);'
 
                                                 # Use a button styled as a div for reliable click handling
                                                 pto_btn = ui.button(display_text, on_click=create_pto_handler(pto_entry['request_id'])).props('flat dense no-caps align=left').classes(

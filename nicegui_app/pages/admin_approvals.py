@@ -162,8 +162,8 @@ def admin_approvals_page():
                         ui.label(f'({len(filtered)} requests)').classes('text-sm opacity-60')
 
                     # Type colors
-                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
                     # Pre-compute conflicts
                     pto_service = PTOService(db)

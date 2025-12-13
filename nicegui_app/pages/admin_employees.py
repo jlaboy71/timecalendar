@@ -140,14 +140,6 @@ def admin_employees_list_page():
         def filter_and_render():
             table_container.clear()
 
-            if not has_any_filter():
-                results_label.text = f'{len(all_rows)} employees total'
-                with table_container:
-                    with ui.column().classes('w-full items-center py-8'):
-                        ui.icon('search', size='xl').classes('opacity-40 mb-2')
-                        ui.label('Use the search or filters above to find employees').classes('text-gray-500')
-                return
-
             filtered_rows = all_rows.copy()
 
             search_term = filter_state['search'].lower().strip()

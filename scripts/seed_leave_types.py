@@ -98,6 +98,17 @@ LEAVE_TYPES = [
         "is_paid": False,
         "sort_order": 8,
     },
+    {
+        "code": "WORK_FROM_HOME",
+        "name": "Work From Home",
+        "description": "Remote work due to circumstances like sick child or transportation issues",
+        "category": "tracking_only",
+        "requires_approval": True,
+        "requires_documentation": True,  # Requires reason in notes
+        "deducts_from_balance": False,
+        "is_paid": True,
+        "sort_order": 9,
+    },
 ]
 
 

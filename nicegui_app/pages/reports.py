@@ -72,14 +72,30 @@ def reports_page():
         'employee_id': None,
     }
 
+    # Report name mapping for display
+    report_names = {
+        'my_history': 'My PTO History',
+        'my_balance': 'My Balance Summary',
+        'my_calendar': 'My Year at a Glance',
+        'team_balance': 'Team Balance Summary',
+        'team_usage': 'Team Usage Report',
+        'audit': 'Audit Log'
+    }
+
     # Main container
     with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
         # Header with greeting (no back arrow - we'll add button at bottom)
         page_header(title='REPORTS', show_back=False)
 
+        # ===== ACTIONS BAR (Top) =====
+        actions_card = ui.card().classes('w-full mb-4 p-3')
+
+        # ===== REPORT INDICATOR =====
+        report_indicator = ui.row().classes('w-full mb-2 items-center gap-2')
+
         # Report type selector
         with ui.card().classes('w-full mb-4 p-4'):
-            ui.label('Select Report Type').classes('text-lg font-semibold mb-3')
+            ui.label('Choose Report').classes('text-lg font-semibold mb-3')
 
             with ui.column().classes('gap-3'):
                 # Personal Reports Section (NOT for admin/superadmin - they don't have PTO)
@@ -124,14 +140,60 @@ def reports_page():
 
         def switch_report(report_type):
             filter_state['report_type'] = report_type
-            # Update button styles
+            # Update button styles - must remove 'outline' for selected, add for others
             for btn_type, btn in all_buttons.items():
                 if btn_type == report_type:
-                    btn.props('color=primary')
+                    btn.props('color=primary', remove='outline')
                 else:
-                    btn.props('outline')
+                    btn.props('outline', remove='color')
+            render_report_indicator()
             render_filters()
             render_report()
+
+        def render_report_indicator():
+            """Update the 'Viewing' indicator with current report name and year."""
+            report_indicator.clear()
+            with report_indicator:
+                ui.icon('description', color='primary').classes('text-lg')
+                report_name = report_names.get(filter_state['report_type'], 'Report')
+                ui.label(f'Viewing: {report_name}').classes('text-sm font-medium')
+                ui.label(f'({filter_state["year"]})').classes('text-sm opacity-60')
+
+        def render_actions():
+            """Render the action buttons bar."""
+            actions_card.clear()
+            with actions_card:
+                with ui.row().classes('w-full justify-between items-center'):
+                    # Left side: Actions label
+                    ui.label('Actions').classes('text-xs font-semibold uppercase opacity-50')
+
+                    # Right side: Action buttons
+                    with ui.row().classes('gap-2 flex-wrap'):
+                        # Refresh button
+                        ui.button('Refresh', icon='refresh', on_click=lambda: render_report()).props('flat dense')
+
+                        # Download dropdown
+                        with ui.dropdown_button('Download', icon='download', auto_close=True).props('flat dense') as download_dropdown:
+                            async def handle_download_csv():
+                                download_dropdown.close()
+                                ui.notify('Generating CSV...', type='info')
+                                await asyncio.sleep(0.1)
+                                export_csv()
+
+                            async def handle_download_pdf():
+                                download_dropdown.close()
+                                ui.notify('Generating PDF...', type='info')
+                                await asyncio.sleep(0.1)
+                                download_pdf()
+
+                            ui.item('Download CSV', on_click=handle_download_csv)
+                            ui.item('Download PDF', on_click=handle_download_pdf)
+
+                        # Print Preview button
+                        ui.button('Print Preview', icon='print', on_click=show_print_preview).props('flat dense')
+
+                        # Email Report button
+                        ui.button('Email Report', icon='email', on_click=show_email_dialog).props('flat dense')
 
         def render_filters():
             filters_card.clear()
@@ -159,12 +221,24 @@ def reports_page():
 
                     # PTO type filter for history/usage/calendar reports
                     if filter_state['report_type'] in ['my_history', 'my_calendar', 'team_usage']:
+                        pto_type_options = {
+                            'all': 'All Types',
+                            'vacation': 'Vacation',
+                            'sick': 'Sick',
+                            'personal': 'Personal',
+                            'work_from_home': 'Work From Home',
+                            'bereavement': 'Bereavement',
+                            'fmla': 'FMLA',
+                            'jury_duty': 'Jury Duty',
+                            'voting': 'Voting',
+                            'military': 'Military'
+                        }
                         ui.select(
-                            {'all': 'All Types', 'vacation': 'Vacation', 'sick': 'Sick', 'personal': 'Personal'},
+                            pto_type_options,
                             label='PTO Type',
                             value=filter_state['pto_type_filter'],
                             on_change=lambda e: update_filter('pto_type_filter', e.value)
-                        ).classes('w-36')
+                        ).classes('w-44')
 
                     # Department filter (team reports only)
                     if filter_state['report_type'] in ['team_balance', 'team_usage', 'audit']:
@@ -204,36 +278,10 @@ def reports_page():
                             with_input=True
                         ).props('dense outlined use-input clearable').classes('w-56')
 
-                # Row 2: Action buttons aligned below filters
-                with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
-                    # Refresh button
-                    ui.button('Refresh', icon='refresh', on_click=render_report).props('outline')
-
-                    # Download dropdown (renamed from Export)
-                    with ui.dropdown_button('Download', icon='download', auto_close=True).props('color=secondary') as download_dropdown:
-                        async def handle_download_csv():
-                            download_dropdown.close()
-                            ui.notify('Generating CSV...', type='info')
-                            await asyncio.sleep(0.1)
-                            export_csv()
-
-                        async def handle_download_pdf():
-                            download_dropdown.close()
-                            ui.notify('Generating PDF...', type='info')
-                            await asyncio.sleep(0.1)
-                            download_pdf()
-
-                        ui.item('Download CSV', on_click=handle_download_csv)
-                        ui.item('Download PDF', on_click=handle_download_pdf)
-
-                    # Print Preview button (separate from dropdown)
-                    ui.button('Print Preview', icon='print', on_click=show_print_preview).props('outline')
-
-                    # Email Report button (separate from dropdown)
-                    ui.button('Email Report', icon='email', on_click=show_email_dialog).props('outline')
-
         def update_filter(key, value):
             filter_state[key] = value
+            if key == 'year':
+                render_report_indicator()
             render_report()
 
         def render_report():
@@ -301,7 +349,8 @@ def reports_page():
                         type_colors = {
                             'vacation': 'border-blue-500',
                             'sick': 'border-green-500',
-                            'personal': 'border-purple-500'
+                            'personal': 'border-purple-500',
+                            'work_from_home': 'border-red-500'
                         }
                         status_icons = {
                             'approved': 'check_circle',
@@ -455,7 +504,8 @@ def reports_page():
                                 type_colors = {
                                     'vacation': 'blue',
                                     'sick': 'green',
-                                    'personal': 'purple'
+                                    'personal': 'purple',
+                                    'work_from_home': 'red'
                                 }
                                 color = type_colors.get(req.pto_type.lower(), 'grey')
 
@@ -1277,6 +1327,8 @@ def reports_page():
             dialog.open()
 
         # Initial render
+        render_actions()
+        render_report_indicator()
         render_filters()
         render_report()
 

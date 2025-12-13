@@ -63,12 +63,12 @@ def apply_dark_mode():
     # NiceGUI/Quasar uses body--light and body--dark classes
     ui.add_head_html(f'''
     <style>
-        /* Light mode - Medium Cream (softer than pure white) */
+        /* Light mode - Warm Gray (1 shade darker than cream) */
         body.body--light {{
-            background-color: #F5F3EE !important;
+            background-color: #E8E6E1 !important;
         }}
         body.body--light .q-page {{
-            background-color: #F5F3EE !important;
+            background-color: #E8E6E1 !important;
         }}
         /* Dark mode - Dark Slate Gray */
         body.body--dark {{

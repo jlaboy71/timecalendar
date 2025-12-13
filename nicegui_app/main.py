@@ -338,6 +338,8 @@ if __name__ in {"__main__", "__mp_main__"}:
 
     # Build run options
     run_options = {
+        'title': 'TJM Time Calendar',
+        'favicon': STATIC_DIR / 'favicon.ico',
         'port': config.PORT,
         'host': config.HOST,
         'storage_secret': config.SECRET_KEY,
