@@ -628,6 +628,53 @@ def admin_employees_edit_page(user_id: int):
 
                     is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('flex-1 self-center')
 
+            # Trusted Employee Section - only for admins/superadmins editing regular employees
+            is_trusted_check = None
+            if not is_manager_editing and user.role == 'employee':
+                with ui.card().classes('w-full p-6 mb-4').style('border-left: 4px solid #c9a227'):
+                    with ui.row().classes('w-full items-center gap-3'):
+                        ui.icon('verified_user', size='md').style('color: #c9a227')
+                        ui.label('Trusted Employee').classes('text-lg font-semibold').style('color: #5a6a72')
+
+                    ui.label('Trusted employees have their standard PTO requests auto-approved').classes('text-sm opacity-60 mt-2 mb-3')
+
+                    with ui.row().classes('w-full items-center gap-4'):
+                        is_trusted_check = ui.checkbox('Enable auto-approve for this employee', value=user.is_trusted)
+
+                        with ui.element('div').classes('ml-auto'):
+                            with ui.tooltip():
+                                ui.html('''
+                                    <div style="max-width: 280px; padding: 8px;">
+                                        <p style="font-weight: bold; margin-bottom: 8px;">Auto-approve applies to:</p>
+                                        <p style="color: #22c55e;">✓ Vacation</p>
+                                        <p style="color: #22c55e;">✓ Sick</p>
+                                        <p style="color: #22c55e;">✓ Personal</p>
+                                        <p style="font-weight: bold; margin: 8px 0;">Still requires approval:</p>
+                                        <p style="color: #ef4444;">✗ Bereavement, FMLA</p>
+                                        <p style="color: #ef4444;">✗ Jury Duty, Voting, Military</p>
+                                        <p style="color: #ef4444;">✗ Work From Home</p>
+                                        <p style="margin-top: 8px; font-style: italic; opacity: 0.8;">Manager still receives email notifications for ALL requests.</p>
+                                    </div>
+                                ''')
+                            ui.icon('help_outline', size='sm').classes('cursor-pointer opacity-60')
+
+                    # Show trust history if currently trusted
+                    if user.is_trusted and user.trusted_at:
+                        trusted_date = user.trusted_at.strftime('%B %d, %Y')
+                        trusted_by_name = 'Unknown'
+                        if user.trusted_by_id:
+                            trust_db = next(get_db())
+                            try:
+                                trusted_by_user = UserService(trust_db).get_user_by_id(user.trusted_by_id)
+                                if trusted_by_user:
+                                    trusted_by_name = f'{trusted_by_user.first_name} {trusted_by_user.last_name}'
+                            finally:
+                                trust_db.close()
+
+                        with ui.row().classes('w-full items-center gap-2 mt-3 p-2 rounded').style('background: rgba(201, 162, 39, 0.1)'):
+                            ui.icon('history', size='xs').classes('opacity-60')
+                            ui.label(f'Trusted since {trusted_date} by {trusted_by_name}').classes('text-xs opacity-70')
+
             # Work Location Section - only for admins
             location_state_select = None
             location_city_select = None
@@ -738,6 +785,20 @@ def admin_employees_edit_page(user_id: int):
                             update_data['role'] = role_select.value
                             update_data['location_state'] = location_state_select.value
                             update_data['location_city'] = location_city_select.value if location_city_select.value else None
+
+                            # Handle trusted employee status change
+                            if is_trusted_check is not None:
+                                new_trust_status = is_trusted_check.value
+                                if new_trust_status != user.is_trusted:
+                                    update_data['is_trusted'] = new_trust_status
+                                    if new_trust_status:
+                                        # Granting trust - record who and when
+                                        update_data['trusted_by_id'] = current_user_id
+                                        update_data['trusted_at'] = datetime.now()
+                                    else:
+                                        # Revoking trust - clear the fields
+                                        update_data['trusted_by_id'] = None
+                                        update_data['trusted_at'] = None
 
                         if password_input and password_input.value:
                             update_data['password'] = password_input.value

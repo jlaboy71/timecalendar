@@ -24,6 +24,7 @@ from nicegui_app.pages.handbook import handbook_page
 from nicegui_app.pages.reports import reports_page
 from nicegui_app.pages.password_reset import password_reset_request_page, password_reset_page
 from nicegui_app.pages.manager_team import manager_team_page
+from nicegui_app.pages.manager_settings import manager_settings_page
 from nicegui_app.pages.requests import requests_page, cancel_user_request
 from nicegui_app.pages.manager_request_detail import manager_request_detail_page
 from nicegui_app.pages.admin_dashboard import admin_dashboard_page
@@ -111,6 +112,13 @@ def manager_team():
     if not require_auth():
         return
     manager_team_page()
+
+@ui.page('/manager/settings')
+def manager_settings():
+    """Manager notification settings page."""
+    if not require_auth():
+        return
+    manager_settings_page()
 
 @ui.page('/handbook')
 def handbook():
@@ -302,6 +310,42 @@ def export_calendar(
         )
     finally:
         db.close()
+
+
+# ============================================================
+# NOTIFICATION DIGEST SCHEDULER
+# ============================================================
+import os
+from apscheduler.schedulers.background import BackgroundScheduler
+
+# Initialize scheduler
+digest_scheduler = BackgroundScheduler()
+
+def process_notification_digests():
+    """Hourly job to check and send digest emails."""
+    from src.services.notification_service import NotificationService
+
+    db = next(get_db())
+    try:
+        service = NotificationService(db)
+        service.process_digests()
+        logger.debug("Digest processing completed")
+    except Exception as e:
+        logger.error(f"Digest processing failed: {e}")
+    finally:
+        db.close()
+
+# Only enable scheduler if configured (default: enabled)
+if os.getenv('ENABLE_DIGEST_SCHEDULER', 'true').lower() == 'true':
+    digest_scheduler.add_job(
+        process_notification_digests,
+        'interval',
+        hours=1,
+        id='digest_processor',
+        replace_existing=True
+    )
+    digest_scheduler.start()
+    logger.info("Notification digest scheduler started (hourly)")
 
 
 @ui.page('/health')

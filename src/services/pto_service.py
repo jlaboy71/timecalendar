@@ -12,6 +12,12 @@ from ..models.user import User
 from ..schemas.pto_schemas import PTORequestCreate
 from .balance_service import BalanceService
 
+# PTO types eligible for trusted employee auto-approve
+TRUSTED_AUTO_APPROVE_TYPES = {'vacation', 'sick', 'personal'}
+
+# PTO types that ALWAYS require manager approval regardless of trust status
+ALWAYS_REQUIRES_APPROVAL = {'bereavement', 'fmla', 'jury_duty', 'voting', 'military', 'wfh'}
+
 
 class PTOService:
     """
@@ -89,8 +95,23 @@ class PTOService:
         # (manager discretion on approval). UI shows warnings for over-limit requests.
         # However, sick and personal days have hard limits that cannot be exceeded.
 
-        # Auto-approve for managers/admins (they don't need approval)
-        is_auto_approve = user.role in ['manager', 'admin', 'superadmin']
+        # Determine if auto-approve applies
+        pto_type_lower = request_data.pto_type.lower()
+        is_auto_approve = False
+
+        # Manager/Admin/Superadmin: auto-approve standard PTO types only
+        if user.role in ['manager', 'admin', 'superadmin']:
+            if pto_type_lower in TRUSTED_AUTO_APPROVE_TYPES:
+                is_auto_approve = True
+            # Special leave types still need documentation/approval even for managers
+
+        # Trusted Employee: auto-approve ONLY for vacation, sick, personal
+        elif user.is_trusted and pto_type_lower in TRUSTED_AUTO_APPROVE_TYPES:
+            is_auto_approve = True
+
+        # All other combinations: requires approval
+        # - Non-trusted employees: always pending
+        # - Bereavement, FMLA, Jury Duty, Voting, Military, WFH: always pending
 
         # Validate sick/personal days don't exceed available balance
         # These have hard limits unlike vacation (which is manager discretion)
@@ -150,6 +171,16 @@ class PTOService:
                     request_data.total_days,
                     is_pending=True
                 )
+
+        # MANDATORY: Notify manager of all PTO requests (regardless of auto-approve)
+        try:
+            from .notification_service import NotificationService
+            notification_service = NotificationService(self.db)
+            notification_service.notify_manager_of_request(request, user)
+        except Exception as e:
+            # Don't fail the request if notification fails
+            import logging
+            logging.getLogger(__name__).error(f"Failed to notify manager: {e}")
 
         return request
     

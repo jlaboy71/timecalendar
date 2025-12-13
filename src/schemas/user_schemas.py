@@ -58,6 +58,10 @@ class UserUpdate(BaseModel):
     remote_schedule: Optional[str] = None
     anniversary_date: Optional[date] = None
     password: Optional[str] = None
+    # Trusted employee fields
+    is_trusted: Optional[bool] = None
+    trusted_by_id: Optional[int] = None
+    trusted_at: Optional[datetime] = None
 
 
 class UserResponse(UserBase):

@@ -15,6 +15,8 @@ from .audit_log import AuditLog
 from .password_reset import PasswordResetToken
 from .handbook_revision import HandbookRevision
 from .year_end_status import YearEndStatus
+from .manager_notification_preference import ManagerNotificationPreference
+from .pending_notification import PendingNotification
 
 # Make all models available when importing from this module
 __all__ = [
@@ -32,4 +34,6 @@ __all__ = [
     'PasswordResetToken',
     'HandbookRevision',
     'YearEndStatus',
+    'ManagerNotificationPreference',
+    'PendingNotification',
 ]

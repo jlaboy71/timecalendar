@@ -62,6 +62,25 @@ class User(Base):
         nullable=True,
         comment="City name (e.g., Chicago for IL-specific rules)"
     )
+
+    # Trusted employee designation (auto-approve standard PTO)
+    is_trusted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="If true, vacation/sick/personal auto-approve"
+    )
+    trusted_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        comment="Manager who granted trust"
+    )
+    trusted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="When trust was granted"
+    )
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
