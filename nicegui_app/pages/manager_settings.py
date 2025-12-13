@@ -72,7 +72,7 @@ def manager_settings_page():
 
                 if freq in ['daily', 'weekly', 'biweekly', 'monthly']:
                     with time_prefs_container:
-                        with ui.card().classes('w-full p-4 mb-4').style('background: #f8f9fa'):
+                        with ui.card().classes('w-full p-4 mb-4').style('border-left: 4px solid #c9a227'):
                             ui.label('Delivery Schedule').classes('font-semibold mb-3')
 
                             with ui.row().classes('w-full gap-4'):
@@ -193,7 +193,7 @@ def manager_settings_page():
                 ui.label('No pending notifications. All caught up!').classes('text-sm opacity-60')
 
         # Help Card
-        with ui.card().classes('w-full p-6').style('background: #f8f9fa'):
+        with ui.card().classes('w-full p-6').style('border-left: 4px solid #5a6a72'):
             with ui.row().classes('items-center gap-2 mb-3'):
                 ui.icon('info', size='sm').classes('opacity-60')
                 ui.label('About Notifications').classes('font-semibold')
