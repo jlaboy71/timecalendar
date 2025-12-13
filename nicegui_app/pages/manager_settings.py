@@ -2,7 +2,7 @@
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog
 from src.services.notification_service import NotificationService
 
 
@@ -140,7 +140,7 @@ def manager_settings_page():
                             preferred_day=day_select.value if day_select else current_day,
                             export_format=format_select.value
                         )
-                        ui.notify('Preferences saved successfully', type='positive')
+                        show_info_dialog('Success', 'Your notification preferences have been saved.')
                     except Exception as e:
                         show_error_dialog('Error', f'Failed to save preferences: {str(e)}')
                     finally:
@@ -178,10 +178,9 @@ def manager_settings_page():
                         notification_service = NotificationService(db)
                         sent_count = notification_service.force_send_digest(user_id)
                         if sent_count > 0:
-                            ui.notify(f'Digest sent with {sent_count} notification(s)', type='positive')
-                            ui.navigate.to('/manager/settings')  # Refresh page
+                            show_info_dialog('Digest Sent', f'Your digest email has been sent with {sent_count} notification(s).')
                         else:
-                            ui.notify('No pending notifications to send', type='info')
+                            show_info_dialog('No Pending', 'There are no pending notifications to send.')
                     except Exception as e:
                         show_error_dialog('Error', f'Failed to send digest: {str(e)}')
                     finally:
