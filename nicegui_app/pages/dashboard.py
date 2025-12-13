@@ -93,41 +93,43 @@ def dashboard_page():
             # Header with logo, greeting and logout
             is_dark = app.storage.general.get('dark_mode', False)
             greeting_color = '#C9A227' if is_dark else '#5a6a72'
-            with ui.row().classes('w-full justify-between items-center mb-6'):
-                with ui.column().classes('gap-2'):
+            with ui.row().classes('w-full justify-between items-start mb-6'):
+                with ui.column().classes('gap-1'):
                     ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+
+                with ui.column().classes('items-end gap-1'):
+                    # Greeting at top right
                     greeting = get_time_based_greeting()
                     ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-base font-medium uppercase').style(f'color: {greeting_color};')
+                    with ui.row().classes('items-center gap-2'):
+                        # Help button
+                        ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
 
-                with ui.row().classes('items-center gap-2'):
-                    # Help button
-                    ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
+                        # Dark mode toggle
+                        dark_mode = ui.dark_mode()
 
-                    # Dark mode toggle
-                    dark_mode = ui.dark_mode()
+                        def toggle_dark_mode():
+                            # Get current state from storage, default to False (light mode)
+                            current = app.storage.general.get('dark_mode', False)
+                            new_state = not current
+                            app.storage.general['dark_mode'] = new_state
+                            if new_state:
+                                dark_mode.enable()
+                            else:
+                                dark_mode.disable()
+                            dark_toggle.props(f'icon={"light_mode" if new_state else "dark_mode"}')
 
-                    def toggle_dark_mode():
-                        # Get current state from storage, default to False (light mode)
-                        current = app.storage.general.get('dark_mode', False)
-                        new_state = not current
-                        app.storage.general['dark_mode'] = new_state
-                        if new_state:
+                        # Initialize based on stored preference
+                        is_dark = app.storage.general.get('dark_mode', False)
+                        if is_dark:
                             dark_mode.enable()
-                        else:
-                            dark_mode.disable()
-                        dark_toggle.props(f'icon={"light_mode" if new_state else "dark_mode"}')
 
-                    # Initialize based on stored preference
-                    is_dark = app.storage.general.get('dark_mode', False)
-                    if is_dark:
-                        dark_mode.enable()
+                        dark_toggle = ui.button(
+                            icon='light_mode' if is_dark else 'dark_mode',
+                            on_click=toggle_dark_mode
+                        ).props('flat round')
 
-                    dark_toggle = ui.button(
-                        icon='light_mode' if is_dark else 'dark_mode',
-                        on_click=toggle_dark_mode
-                    ).props('flat round')
-
-                    ui.button('Logout', icon='logout', on_click=lambda: logout()).props('flat')
+                        ui.button('LOGOUT', icon='logout', on_click=lambda: logout()).props('flat color=red')
 
             # ============ PTO BALANCES CARD (not for admin/superadmin - they don't take PTO) ============
             if user_role not in ['admin', 'superadmin']:
@@ -541,6 +543,7 @@ def dashboard_page():
                         with ui.column().classes('w-full gap-3'):
                             ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
+                                ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit')
                                 ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
                                 ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
@@ -880,8 +883,9 @@ def cancel_request(request_id: int):
         if request.pto_type.lower() == 'vacation':
             balance_service = BalanceService(db)
             balance = balance_service.get_or_create_balance(request.user_id, request.start_date.year)
-            # Remove from pending
-            balance_service.adjust_vacation_used(balance.id, -float(request.total_days), is_pending=True)
+            # Remove from pending (convert to Decimal for balance service)
+            from decimal import Decimal
+            balance_service.adjust_vacation_used(balance.id, -Decimal(str(request.total_days)), is_pending=True)
 
         db.commit()
         ui.notify('Request cancelled successfully', type='positive')
@@ -1290,3 +1294,107 @@ def show_pto_detail_dialog(request):
                         ui.label('Cancellation Pending').classes('text-amber-600 text-sm italic')
 
     detail_dialog.open()
+
+
+def show_user_profile_dialog(user, _db=None):
+    """Show a dialog with user profile details."""
+    if not user:
+        ui.notify('User information not available', type='warning')
+        return
+
+    # Collect all needed info from database first
+    db = next(get_db())
+    try:
+        # Get department name
+        department_name = 'Not Assigned'
+        if user.department_id:
+            dept = DepartmentService.get_department_by_id(db, user.department_id)
+            if dept:
+                department_name = dept.name
+
+        # Get manager info
+        manager_name = 'Not Assigned'
+        if user.department_id:
+            dept = DepartmentService.get_department_by_id(db, user.department_id)
+            if dept and dept.manager_id:
+                user_service = UserService(db)
+                manager = user_service.get_user_by_id(dept.manager_id)
+                if manager:
+                    manager_name = f'{manager.first_name} {manager.last_name}'
+    finally:
+        db.close()
+
+    # Calculate tenure
+    hire_date_str = None
+    tenure_text = None
+    if user.hire_date:
+        hire_date_str = user.hire_date.strftime('%B %d, %Y')
+        today = date.today()
+        years = today.year - user.hire_date.year
+        if (today.month, today.day) < (user.hire_date.month, user.hire_date.day):
+            years -= 1
+        tenure_text = f'{years} year{"s" if years != 1 else ""}' if years > 0 else 'Less than 1 year'
+
+    # Work location
+    location_text = ''
+    if user.location_city and user.location_state:
+        location_text = f'{user.location_city}, {user.location_state}'
+    elif user.location_state:
+        location_text = user.location_state
+    else:
+        location_text = 'Not Set'
+
+    # Use app theme color for header
+    is_dark = app.storage.general.get('dark_mode', False)
+    header_color = '#C9A227' if is_dark else '#5a6a72'
+
+    with ui.dialog() as profile_dialog, ui.card().classes('w-full max-w-md p-0'):
+        # Header - using app theme color
+        with ui.row().classes('w-full justify-between items-center p-4 text-white').style(f'background-color: {header_color};'):
+            with ui.row().classes('gap-2 items-center'):
+                ui.icon('person').classes('text-2xl')
+                ui.label('My Profile').classes('text-lg font-bold')
+            ui.button(icon='close', on_click=profile_dialog.close).props('flat round dense color=white')
+
+        # Content
+        with ui.column().classes('w-full p-4 gap-3'):
+            # Name
+            with ui.card().classes('w-full p-3'):
+                ui.label('Name').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(f'{user.first_name} {user.last_name}').classes('font-medium text-lg')
+
+            # Email
+            with ui.card().classes('w-full p-3'):
+                ui.label('Email').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(user.email).classes('font-medium')
+
+            # Hire Date
+            with ui.card().classes('w-full p-3 border-l-4').style(f'border-color: {header_color};'):
+                ui.label('Hire Date').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                if hire_date_str:
+                    ui.label(hire_date_str).classes('font-medium')
+                    ui.label(f'Tenure: {tenure_text}').classes('text-sm opacity-70')
+                else:
+                    ui.label('Not Set').classes('font-medium opacity-60')
+
+            # Department
+            with ui.card().classes('w-full p-3 border-l-4 border-indigo-500'):
+                ui.label('Department').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(department_name).classes('font-medium')
+
+            # Work Location
+            with ui.card().classes('w-full p-3 border-l-4 border-green-500'):
+                ui.label('Work Location').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(location_text).classes('font-medium')
+
+            # Role
+            with ui.card().classes('w-full p-3'):
+                ui.label('Role').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(user.role.title()).classes('font-medium')
+
+            # Manager (at bottom)
+            with ui.card().classes('w-full p-3 border-l-4 border-teal-500'):
+                ui.label('Manager').classes('text-xs font-semibold uppercase opacity-60 mb-1')
+                ui.label(manager_name).classes('font-medium')
+
+    profile_dialog.open()

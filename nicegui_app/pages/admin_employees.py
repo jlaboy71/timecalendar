@@ -9,6 +9,7 @@ from nicegui_app.components.theme import apply_dark_mode, validate_required, val
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
+from src.services.balance_service import BalanceService
 from src.schemas.user_schemas import UserCreate, UserUpdate
 
 
@@ -310,6 +311,37 @@ def admin_employees_add_page():
                 with ui.column().classes('flex-1'):
                     department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('w-full')
 
+            # Manager display (auto-filled based on department selection)
+            manager_display_container = ui.row().classes('w-full mt-2')
+
+            def update_manager_display():
+                manager_display_container.clear()
+                dept_id = department_select.value
+                if dept_id:
+                    mgr_db = next(get_db())
+                    try:
+                        dept = DepartmentService.get_department_by_id(mgr_db, dept_id)
+                        if dept and dept.manager_id:
+                            manager = UserService(mgr_db).get_user_by_id(dept.manager_id)
+                            if manager:
+                                with manager_display_container:
+                                    with ui.card().classes('w-full p-3 border-l-4 border-teal-500'):
+                                        with ui.row().classes('items-center gap-2'):
+                                            ui.icon('supervisor_account', color='teal').classes('text-lg')
+                                            ui.label('Department Manager:').classes('text-sm font-medium opacity-70')
+                                            ui.label(f'{manager.first_name} {manager.last_name}').classes('font-semibold')
+                        else:
+                            with manager_display_container:
+                                with ui.card().classes('w-full p-3 border-l-4 border-amber-500'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('warning', color='amber').classes('text-lg')
+                                        ui.label('No manager assigned to this department').classes('text-amber-600 font-medium')
+                                        ui.label('(Required for employee role)').classes('text-xs opacity-60')
+                    finally:
+                        mgr_db.close()
+
+            department_select.on('update:model-value', lambda e: update_manager_display())
+
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
                 role_select = ui.select(role_options, label='Role', value='employee').props('outlined').classes('flex-1')
@@ -382,6 +414,22 @@ def admin_employees_add_page():
                 if not validate_required(hire_date_input, 'Hire Date'):
                     valid = False
 
+                # Employees must be assigned to a department with a manager
+                if role_select.value == 'employee':
+                    if not department_select.value:
+                        ui.notify('Employees must be assigned to a department', type='negative')
+                        valid = False
+                    else:
+                        # Check if department has a manager
+                        check_db = next(get_db())
+                        try:
+                            dept = DepartmentService.get_department_by_id(check_db, department_select.value)
+                            if not dept or not dept.manager_id:
+                                ui.notify('Selected department must have a manager assigned', type='negative')
+                                valid = False
+                        finally:
+                            check_db.close()
+
                 if not valid:
                     ui.notify('Please fix the highlighted errors', type='warning')
                     create_btn.props(remove='loading disabled')
@@ -421,6 +469,10 @@ def admin_employees_add_page():
 
                     user_service = UserService(db)
                     new_user = user_service.create_user(user_data)
+
+                    # Allocate standard PTO balance for the new employee
+                    balance_service = BalanceService(db)
+                    balance_service.allocate_standard_balance(new_user.id)
 
                     current_user = app.storage.general.get('user')
                     AuditService.log_user_create(

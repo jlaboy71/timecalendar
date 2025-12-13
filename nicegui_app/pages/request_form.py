@@ -16,6 +16,29 @@ from nicegui_app.components.theme import apply_dark_mode
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 
 
+def count_business_days(start_date, end_date):
+    """Count business days (Mon-Fri) between two dates, inclusive.
+
+    Args:
+        start_date: Start date
+        end_date: End date
+
+    Returns:
+        Number of business days (weekdays only)
+    """
+    if start_date > end_date:
+        return 0
+
+    business_days = 0
+    current = start_date
+    while current <= end_date:
+        # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+        if current.weekday() < 5:  # Monday to Friday
+            business_days += 1
+        current += timedelta(days=1)
+    return business_days
+
+
 def request_form_page():
     """PTO request form page with improved UX and intuitive date selection."""
 
@@ -56,7 +79,7 @@ def request_form_page():
             MarketHoliday.holiday_date >= date(current_year, 1, 1),
             MarketHoliday.holiday_date <= date(current_year + 1, 12, 31)
         ).all()
-        # Get unique dates as ISO strings for JavaScript validation
+        # Get unique dates as ISO strings for JavaScript validation (YYYY-MM-DD format)
         holiday_dates_set = set(h.holiday_date.isoformat() for h in holidays)
         holiday_dates_js = str(list(holiday_dates_set)).replace("'", '"')
 
@@ -480,13 +503,13 @@ def request_form_page():
                                 update_summary()
                                 update_warning()
 
-                        # Set minimum date to today, exclude weekends and market holidays
-                        # Get initial color based on selected type (grey for non-primary types)
+                        # Set minimum date to today, exclude weekends and holidays (market closures)
+                        # Note: Quasar uses YYYY/MM/DD format, so convert to YYYY-MM-DD for comparison
                         cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                         calendar = ui.date(
                             value=state['start_date'].isoformat(),
                             on_change=on_single_date_change
-                        ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                        ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
                         calendar_widgets['single'] = calendar
 
                         # Half-day option (only for single day, not for WFH)
@@ -526,12 +549,12 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
-                                # Set minimum date to today, exclude weekends and market holidays
+                                # Set minimum date to today, exclude weekends and holidays (market closures)
                                 cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                                 start_calendar = ui.date(
                                     value=state['start_date'].isoformat(),
                                     on_change=on_start_change
-                                ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                                ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
                                 calendar_widgets['start'] = start_calendar
 
                             with ui.column().classes('flex-1'):
@@ -548,12 +571,12 @@ def request_form_page():
                                         update_summary()
                                         update_warning()
 
-                                # Set minimum date to today, exclude weekends and market holidays
+                                # Set minimum date to today, exclude weekends and holidays (market closures)
                                 cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
                                 end_calendar = ui.date(
                                     value=state['end_date'].isoformat(),
                                     on_change=on_end_change
-                                ).props(f'color={cal_color} :options="date => {{ const d = new Date(date); const day = d.getUTCDay(); const holidays = {holiday_dates_js}; return date >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(date); }}"').classes('w-full')
+                                ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
                                 calendar_widgets['end'] = end_calendar
 
                         # Quick range buttons
@@ -581,11 +604,11 @@ def request_form_page():
             def update_summary():
                 summary_container.clear()
                 with summary_container:
-                    # Calculate request details
+                    # Calculate request details - count only business days (Mon-Fri)
                     if state['is_half_day']:
                         total_days = 0.5
                     else:
-                        total_days = (state['end_date'] - state['start_date']).days + 1
+                        total_days = count_business_days(state['start_date'], state['end_date'])
                     hours_requested = total_days * 8
 
                     is_wfh = pto_type.value == 'work_from_home'
@@ -804,6 +827,71 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 submit_btn.props(remove='loading disabled')
             return
 
+    # Block if start or end date is a weekend (server-side safety check)
+    # Note: Calendar picker already blocks weekend selection, but this catches bypassed validation
+    # Weekends IN BETWEEN dates are fine - they're just excluded from business day count
+    weekend_endpoints = []
+    if start_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+        weekend_endpoints.append(('Start date', start_date.strftime('%A, %b %d')))
+    if end_date.weekday() >= 5:
+        weekend_endpoints.append(('End date', end_date.strftime('%A, %b %d')))
+    if weekend_endpoints:
+        with ui.dialog() as weekend_dialog, ui.card().classes('p-0 max-w-md'):
+            with ui.row().classes('w-full p-4 bg-amber-500 text-white items-center'):
+                ui.icon('weekend', size='md').classes('mr-2')
+                ui.label('Weekend Selected').classes('text-lg font-bold')
+            with ui.column().classes('p-4 gap-3'):
+                ui.label('Start and end dates must be business days.').classes('text-base')
+                with ui.column().classes('pl-4'):
+                    for label, wd in weekend_endpoints:
+                        ui.label(f'• {label}: {wd}').classes('text-sm font-medium')
+                ui.label('Please select Monday through Friday for your date range.').classes('text-sm opacity-70 mt-2')
+                with ui.row().classes('w-full justify-end mt-2'):
+                    ui.button('OK', on_click=weekend_dialog.close).props('color=primary')
+        weekend_dialog.open()
+        if submit_btn:
+            submit_btn.props(remove='loading disabled')
+        return
+
+    # Block PTO requests on federal holidays
+    db_holiday_check = None
+    try:
+        db_holiday_check = next(get_db())
+        holidays_in_range = db_holiday_check.query(MarketHoliday).filter(
+            MarketHoliday.holiday_date >= start_date,
+            MarketHoliday.holiday_date <= end_date
+        ).all()
+        if holidays_in_range:
+            # Get unique holiday names with their dates
+            holiday_info = []
+            seen = set()
+            for h in holidays_in_range:
+                key = (h.holiday_date, h.name)
+                if key not in seen:
+                    seen.add(key)
+                    holiday_info.append((h.holiday_date.strftime('%A, %b %d'), h.name))
+
+            with ui.dialog() as holiday_dialog, ui.card().classes('p-0 max-w-md'):
+                with ui.row().classes('w-full p-4 bg-orange-500 text-white items-center'):
+                    ui.icon('celebration', size='md').classes('mr-2')
+                    ui.label('Company Holiday').classes('text-lg font-bold')
+                with ui.column().classes('p-4 gap-3'):
+                    ui.label('PTO requests cannot include company holidays.').classes('text-base')
+                    ui.label('You already have these days off:').classes('text-sm opacity-70')
+                    with ui.column().classes('pl-4'):
+                        for hdate, hname in holiday_info:
+                            ui.label(f'• {hname} ({hdate})').classes('text-sm font-medium')
+                    ui.label('No need to use your PTO balance for holidays!').classes('text-sm opacity-70 mt-2')
+                    with ui.row().classes('w-full justify-end mt-2'):
+                        ui.button('OK', on_click=holiday_dialog.close).props('color=primary')
+            holiday_dialog.open()
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
+            return
+    finally:
+        if db_holiday_check:
+            db_holiday_check.close()
+
     db = None
     try:
         db = next(get_db())
@@ -845,9 +933,21 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         policy = accrual_service.get_policy_for_employee(employee, pto_type.upper())
 
-        total_days = (end_date - start_date).days + 1
+        # Calculate business days only (Mon-Fri)
+        total_days = count_business_days(start_date, end_date)
         if half_day:
             total_days = 0.5
+        elif total_days == 0:
+            # No business days in range - shouldn't happen with client validation, but check anyway
+            with ui.dialog() as dialog, ui.card().classes('p-6'):
+                ui.label('No Business Days Selected').classes('text-lg font-bold text-amber-600 mb-2')
+                ui.label('The selected date range contains no business days (Mon-Fri).').classes('mb-4')
+                ui.label('Please select a range that includes at least one weekday.').classes('text-gray-600 mb-4')
+                ui.button('OK', on_click=dialog.close).props('color=primary')
+            dialog.open()
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
+            return
         hours_requested = total_days * 8
 
         if policy and policy.min_increment_hours:

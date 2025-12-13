@@ -47,52 +47,54 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
     is_dark = app.storage.general.get('dark_mode', False)
     greeting_color = '#C9A227' if is_dark else '#5a6a72'
 
-    with ui.row().classes('w-full justify-between items-center mb-6 no-print'):
-        with ui.column().classes('gap-2'):
+    with ui.row().classes('w-full justify-between items-start mb-6 no-print'):
+        with ui.column().classes('gap-1'):
             ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto; cursor: pointer;').on('click', lambda: ui.navigate.to('/dashboard'))
             if title:
                 with ui.row().classes('items-center gap-2'):
                     if show_back:
                         ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to(back_url)).props('flat round dense aria-label="Go back"')
                     ui.label(title).classes('text-xl font-bold uppercase').style(f'color: {greeting_color};')
+
+        with ui.column().classes('items-end gap-1'):
+            # Greeting at top right
             ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-base font-medium uppercase').style(f'color: {greeting_color};')
+            with ui.row().classes('items-center gap-2'):
+                # Help button
+                ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
 
-        with ui.row().classes('items-center gap-2'):
-            # Help button
-            ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
-
-            # Dark mode toggle
-            dark_mode = ui.dark_mode()
-            is_dark = app.storage.general.get('dark_mode', False)
-            if is_dark:
-                dark_mode.enable()
-
-            def toggle_dark_mode():
-                is_currently_dark = app.storage.general.get('dark_mode', False)
-                new_dark_mode = not is_currently_dark
-                app.storage.general['dark_mode'] = new_dark_mode
-                if new_dark_mode:
+                # Dark mode toggle
+                dark_mode = ui.dark_mode()
+                is_dark = app.storage.general.get('dark_mode', False)
+                if is_dark:
                     dark_mode.enable()
-                else:
-                    dark_mode.disable()
 
-            ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode')
+                def toggle_dark_mode():
+                    is_currently_dark = app.storage.general.get('dark_mode', False)
+                    new_dark_mode = not is_currently_dark
+                    app.storage.general['dark_mode'] = new_dark_mode
+                    if new_dark_mode:
+                        dark_mode.enable()
+                    else:
+                        dark_mode.disable()
 
-            def logout():
-                """Clear user session, log logout, and redirect to login."""
-                current_user = app.storage.general.get('user')
-                if current_user:
-                    try:
-                        db = next(get_db())
-                        AuditService.log_logout(db, current_user.get('id'), current_user.get('username'))
-                        db.close()
-                    except Exception:
-                        pass  # Don't block logout if audit logging fails
+                ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode')
 
-                SessionManager.clear_session()
-                ui.navigate.to('/')
+                def logout():
+                    """Clear user session, log logout, and redirect to login."""
+                    current_user = app.storage.general.get('user')
+                    if current_user:
+                        try:
+                            db = next(get_db())
+                            AuditService.log_logout(db, current_user.get('id'), current_user.get('username'))
+                            db.close()
+                        except Exception:
+                            pass  # Don't block logout if audit logging fails
 
-            ui.button('Logout', on_click=logout).props('flat color=red')
+                    SessionManager.clear_session()
+                    ui.navigate.to('/')
+
+                ui.button('LOGOUT', icon='logout', on_click=logout).props('flat color=red')
 
     # Session timeout warning system
     _setup_session_timeout_warning()
