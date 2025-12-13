@@ -7,7 +7,7 @@ from src.services.export_service import ExportService
 from datetime import date, timedelta
 import base64
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog
 from nicegui_app.components.charts import (
     attendance_heatmap,
     monthly_trend_chart,
@@ -33,7 +33,7 @@ def analytics_page():
     user_id = user.get('id')
     user_role = user.get('role')
     if user_role not in ['manager', 'admin', 'superadmin']:
-        ui.notify('Access denied. Manager or higher role required.', type='negative')
+        show_error_dialog('Access Denied', 'Manager or higher role is required to access analytics.')
         ui.navigate.to('/dashboard')
         return
 
@@ -189,7 +189,7 @@ def analytics_page():
                         ui.download(pdf_bytes, filename)
                         ui.notify('PDF report downloaded', type='positive')
                     except Exception as e:
-                        ui.notify(f'Export failed: {str(e)}', type='negative')
+                        show_error_dialog('Export Failed', f'Error exporting PDF: {str(e)}')
                     finally:
                         db.close()
 
@@ -209,7 +209,7 @@ def analytics_page():
                         ui.download(csv_str.encode('utf-8'), filename)
                         ui.notify('CSV report downloaded', type='positive')
                     except Exception as e:
-                        ui.notify(f'Export failed: {str(e)}', type='negative')
+                        show_error_dialog('Export Failed', f'Error exporting CSV: {str(e)}')
                     finally:
                         db.close()
 

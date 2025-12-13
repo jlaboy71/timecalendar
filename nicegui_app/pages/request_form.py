@@ -12,7 +12,7 @@ from src.models.market_holiday import MarketHoliday
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 
 
@@ -805,7 +805,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
     from datetime import datetime
 
     if not start_date or not end_date:
-        ui.notify('Start date and end date are required', type='negative')
+        show_warning_dialog('Missing Dates', 'Please select both a start date and end date for your request.')
         return
 
     # Show loading state
@@ -813,7 +813,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         submit_btn.props('loading disabled')
 
     if start_date > end_date:
-        ui.notify('Start date cannot be after end date', type='negative')
+        show_warning_dialog('Invalid Date Range', 'Start date cannot be after end date. Please adjust your dates.')
         if submit_btn:
             submit_btn.props(remove='loading disabled')
         return
@@ -822,7 +822,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
     if pto_type.lower() == 'work_from_home':
         one_week_out = date.today() + timedelta(days=7)
         if start_date > one_week_out:
-            ui.notify('WFH requests are limited to within 1 week', type='negative')
+            show_warning_dialog('WFH Time Limit', 'Work From Home requests can only be submitted for dates within the next 7 days.')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
@@ -902,13 +902,13 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         # WFH requires a reason
         if pto_type.lower() == 'work_from_home' and not description.strip():
-            ui.notify('A reason is required for Work From Home requests', type='negative')
+            show_warning_dialog('Reason Required', 'Please provide a reason for your Work From Home request in the notes field.')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
 
         if leave_type and leave_type.requires_documentation and not description.strip():
-            ui.notify(f'Description is required for {leave_type.name}', type='negative')
+            show_warning_dialog('Description Required', f'Please provide a description for your {leave_type.name} request in the notes field.')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
@@ -917,7 +917,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         employee = user_service.get_user_by_id(user_id)
 
         if not employee:
-            ui.notify('User not found', type='negative')
+            show_error_dialog('User Not Found', 'Unable to find your user account. Please try logging in again.')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
@@ -926,7 +926,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         can_use, reason = accrual_service.can_use_leave(employee, pto_type.upper())
         if not can_use:
-            ui.notify(f'Cannot use {leave_type.name if leave_type else pto_type}: {reason}', type='negative')
+            leave_name = leave_type.name if leave_type else pto_type
+            show_warning_dialog('Cannot Submit Request', f'{leave_name} is not available: {reason}')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
@@ -1039,7 +1040,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         ui.navigate.to('/dashboard')
 
     except Exception as e:
-        ui.notify(f'Error submitting request: {str(e)}', type='negative')
+        show_error_dialog('Submit Error', f'Error submitting request: {str(e)}')
         if submit_btn:
             submit_btn.props(remove='loading disabled')
 

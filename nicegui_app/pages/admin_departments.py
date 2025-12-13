@@ -2,7 +2,7 @@
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, validate_required
+from nicegui_app.components.theme import apply_dark_mode, validate_required, show_warning_dialog, show_error_dialog
 from src.services.department_service import DepartmentService
 from src.services.user_service import UserService
 from src.models.user import User
@@ -81,7 +81,7 @@ def admin_departments_page():
                         if not validate_required(code_input, 'Department Code'):
                             valid = False
                         if not valid:
-                            ui.notify('Please fix the highlighted errors', type='warning')
+                            show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
                             return
                         db = next(get_db())
                         try:
@@ -90,7 +90,7 @@ def admin_departments_page():
                             ui.notify(f'Department "{name_input.value}" created successfully', type='positive')
                             ui.navigate.to('/admin/departments')
                         except ValueError as e:
-                            ui.notify(str(e), type='negative')
+                            show_error_dialog('Error', str(e))
                         finally:
                             db.close()
 
@@ -220,7 +220,7 @@ def admin_departments_page():
                                                 if not validate_required(edit_code, 'Department Code'):
                                                     valid = False
                                                 if not valid:
-                                                    ui.notify('Please fix the highlighted errors', type='warning')
+                                                    show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
                                                     return
                                                 db = next(get_db())
                                                 try:
@@ -230,7 +230,7 @@ def admin_departments_page():
                                                     edit_dialog.close()
                                                     ui.navigate.to('/admin/departments')
                                                 except ValueError as e:
-                                                    ui.notify(str(e), type='negative')
+                                                    show_error_dialog('Error', str(e))
                                                 finally:
                                                     db.close()
 
@@ -261,7 +261,7 @@ def admin_departments_page():
                                                             delete_dialog.close()
                                                             ui.navigate.to('/admin/departments')
                                                         except ValueError as e:
-                                                            ui.notify(str(e), type='negative')
+                                                            show_error_dialog('Error', str(e))
                                                         finally:
                                                             db.close()
                                                     ui.button('Delete', on_click=confirm).props('color=red')

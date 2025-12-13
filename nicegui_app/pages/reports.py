@@ -14,7 +14,7 @@ from datetime import date, datetime
 from io import StringIO
 import csv
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, skeleton_table
+from nicegui_app.components.theme import apply_dark_mode, skeleton_table, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import fmt_days
 
 
@@ -1032,7 +1032,7 @@ def reports_page():
                 ui.notify(f'Downloaded {filename}', type='positive')
 
             except Exception as e:
-                ui.notify(f'Error exporting CSV: {str(e)}', type='negative')
+                show_error_dialog('Export Error', f'Error exporting CSV: {str(e)}')
             finally:
                 db.close()
 
@@ -1140,7 +1140,7 @@ def reports_page():
 
                 preview_dialog.open()
             except Exception as e:
-                ui.notify(f'Error generating print preview: {str(e)}', type='negative')
+                show_error_dialog('Preview Error', f'Error generating print preview: {str(e)}')
 
         def download_pdf():
             """Download report as PDF using reportlab."""
@@ -1155,7 +1155,7 @@ def reports_page():
                 ui.download(pdf_bytes, filename)
                 ui.notify(f'Downloaded {filename}', type='positive')
             except Exception as e:
-                ui.notify(f'Error generating PDF: {str(e)}', type='negative')
+                show_error_dialog('PDF Error', f'Error generating PDF: {str(e)}')
 
         def show_email_dialog():
             """Show dialog to email the report with format selection."""
@@ -1201,7 +1201,7 @@ def reports_page():
 
                 async def send_email():
                     if not email_input.value or '@' not in email_input.value:
-                        ui.notify('Please enter a valid email address', type='negative')
+                        show_error_dialog('Invalid Email', 'Please enter a valid email address.')
                         return
 
                     try:
@@ -1234,7 +1234,7 @@ def reports_page():
                                 attachment_name = f'{base_name}.pdf'
                                 attachment_type = 'pdf'
                             except Exception as pdf_error:
-                                ui.notify(f'PDF generation failed: {pdf_error}. Sending as HTML.', type='warning')
+                                show_warning_dialog('PDF Generation Failed', f'PDF generation failed: {pdf_error}. Sending as HTML instead.')
                                 attachment_data = html_content.encode('utf-8')
                                 attachment_name = f'{base_name}.html'
                                 attachment_type = 'html'
@@ -1253,10 +1253,10 @@ def reports_page():
                             ui.notify(f'Report sent to {email_input.value}', type='positive')
                             dialog.close()
                         else:
-                            ui.notify('Email service not configured. Please configure SMTP settings.', type='warning')
+                            show_warning_dialog('Email Not Configured', 'Email service not configured. Please configure SMTP settings.')
 
                     except Exception as e:
-                        ui.notify(f'Error sending email: {str(e)}', type='negative')
+                        show_error_dialog('Email Error', f'Error sending email: {str(e)}')
 
                 def generate_csv_for_email() -> str:
                     """Generate CSV content for the current report."""

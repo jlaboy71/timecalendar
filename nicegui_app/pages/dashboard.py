@@ -10,7 +10,7 @@ from datetime import datetime, date
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
-from nicegui_app.components.theme import apply_dark_mode, skeleton_card
+from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import format_days_hours
 
 
@@ -869,11 +869,11 @@ def cancel_request(request_id: int):
         request = pto_service.get_request_by_id(request_id)
 
         if not request:
-            ui.notify('Request not found', type='negative')
+            show_error_dialog('Not Found', 'The request you are looking for was not found.')
             return
 
         if request.status != 'pending':
-            ui.notify('Only pending requests can be cancelled', type='warning')
+            show_warning_dialog('Cannot Cancel', 'Only pending requests can be cancelled.')
             return
 
         # Update the request status
@@ -892,7 +892,7 @@ def cancel_request(request_id: int):
         ui.navigate.to('/dashboard')
 
     except Exception as e:
-        ui.notify(f'Error cancelling request: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error cancelling request: {str(e)}')
     finally:
         if db:
             db.close()
@@ -909,7 +909,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
         # Get employee info
         employee = user_service.get_user_by_id(employee_id)
         if not employee:
-            ui.notify('Employee not found', type='negative')
+            show_error_dialog('Not Found', 'The employee you are looking for was not found.')
             return
 
         # Get available years (current year and previous)
@@ -1088,7 +1088,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
         history_dialog.open()
 
     except Exception as e:
-        ui.notify(f'Error loading employee history: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error loading employee history: {str(e)}')
     finally:
         if db:
             db.close()
@@ -1187,7 +1187,7 @@ def show_pto_detail_dialog(request):
                     from src.models.pto_request import PTORequest
                     req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                     if not req:
-                        ui.notify('Request not found', type='negative')
+                        show_error_dialog('Not Found', 'The request was not found.')
                         return
 
                     req.status = 'cancelled'
@@ -1223,7 +1223,7 @@ def show_pto_detail_dialog(request):
                     from src.models.pto_request import PTORequest
                     req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                     if not req:
-                        ui.notify('Request not found', type='negative')
+                        show_error_dialog('Not Found', 'The request was not found.')
                         return
 
                     req.status = 'cancelled'
@@ -1259,7 +1259,7 @@ def show_pto_detail_dialog(request):
                             from src.models.pto_request import PTORequest
                             req = req_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                             if not req:
-                                ui.notify('Request not found', type='negative')
+                                show_error_dialog('Not Found', 'The request was not found.')
                                 return
 
                             req.cancellation_requested = True
@@ -1299,7 +1299,7 @@ def show_pto_detail_dialog(request):
 def show_user_profile_dialog(user, _db=None):
     """Show a dialog with user profile details."""
     if not user:
-        ui.notify('User information not available', type='warning')
+        show_warning_dialog('Not Available', 'User information is not available.')
         return
 
     # Collect all needed info from database first

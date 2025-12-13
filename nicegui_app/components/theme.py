@@ -277,3 +277,39 @@ def validate_min_length(input_element, min_len: int, field_name: str = 'This fie
         return False
     input_element.props(remove='error error-message')
     return True
+
+
+def show_validation_dialog(title: str, message: str, icon: str = 'info', icon_color: str = 'amber'):
+    """
+    Show a friendly validation/warning dialog instead of toast notifications.
+
+    Args:
+        title: Dialog title
+        message: Message to display
+        icon: Material icon name (default: 'info')
+        icon_color: Icon color (default: 'amber')
+    """
+    with ui.dialog() as dialog, ui.card().classes('p-0 max-w-sm'):
+        with ui.row().classes(f'w-full p-4 bg-{icon_color}-500 text-white items-center'):
+            ui.icon(icon, size='md').classes('mr-2')
+            ui.label(title).classes('text-lg font-bold')
+        with ui.column().classes('p-4 gap-3'):
+            ui.label(message).classes('text-base')
+            with ui.row().classes('w-full justify-end mt-2'):
+                ui.button('OK', on_click=dialog.close).props('color=primary')
+    dialog.open()
+
+
+def show_error_dialog(title: str, message: str):
+    """Show an error dialog with red styling."""
+    show_validation_dialog(title, message, icon='error', icon_color='red')
+
+
+def show_warning_dialog(title: str, message: str):
+    """Show a warning dialog with amber styling."""
+    show_validation_dialog(title, message, icon='warning', icon_color='amber')
+
+
+def show_info_dialog(title: str, message: str):
+    """Show an info dialog with blue styling."""
+    show_validation_dialog(title, message, icon='info', icon_color='blue')

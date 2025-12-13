@@ -8,7 +8,7 @@ from nicegui import ui, app
 from src.database import get_db
 from src.config import config
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 
 
 def admin_system_page():
@@ -17,7 +17,7 @@ def admin_system_page():
 
     user_role = app.storage.general.get('user', {}).get('role')
     if user_role != 'superadmin':
-        ui.notify('Access denied - Super Admin only', type='negative')
+        show_error_dialog('Access Denied', 'Super Admin role is required to access this page.')
         ui.navigate.to('/')
         return
 
@@ -146,12 +146,12 @@ def admin_system_page():
                                 ui.notify(f'Backup successful: {backup_file.name}', type='positive')
                             else:
                                 backup_status.set_text('Warning: Backup size mismatch')
-                                ui.notify('Backup created but size differs from source', type='warning')
+                                show_warning_dialog('Backup Warning', 'Backup was created but the size differs from the source database.')
 
                             refresh_backups()
                         except Exception as e:
                             backup_status.set_text(f'Error: {str(e)}')
-                            ui.notify(f'Backup failed: {str(e)}', type='negative')
+                            show_error_dialog('Backup Failed', f'Error creating backup: {str(e)}')
 
                     ui.button('Create Backup Now', icon='backup', on_click=run_backup).props('color=primary')
 
@@ -232,7 +232,7 @@ def admin_system_page():
                                                             ui.notify('Database restored successfully. Please restart the application.', type='positive')
                                                             dialog.close()
                                                         except Exception as e:
-                                                            ui.notify(f'Restore failed: {str(e)}', type='negative')
+                                                            show_error_dialog('Restore Failed', f'Error restoring database: {str(e)}')
 
                                                     with ui.row().classes('gap-2 justify-end'):
                                                         ui.button('Cancel', on_click=dialog.close).props('flat')
@@ -254,7 +254,7 @@ def admin_system_page():
                                                             dialog.close()
                                                             refresh_backups()
                                                         except Exception as e:
-                                                            ui.notify(f'Delete failed: {str(e)}', type='negative')
+                                                            show_error_dialog('Delete Failed', f'Error deleting backup: {str(e)}')
 
                                                     with ui.row().classes('gap-2 justify-end'):
                                                         ui.button('Cancel', on_click=dialog.close).props('flat')
@@ -339,18 +339,18 @@ def admin_system_page():
                                 msg = f'{year}: Synced {result.count} holidays from {source_display}'
                                 if result.warning:
                                     msg += f' (Warning: {result.warning})'
-                                    ui.notify(msg, type='warning')
+                                    show_warning_dialog('Sync Warning', msg)
                                 else:
                                     ui.notify(msg, type='positive')
                                 sync_status_label.set_text(msg)
                             else:
-                                ui.notify(f'Sync failed: {result.error}', type='negative')
+                                show_error_dialog('Sync Failed', f'Sync failed: {result.error}')
                                 sync_status_label.set_text(f'Error: {result.error}')
 
                             refresh_holiday_stats()
                         except Exception as e:
                             sync_status_label.set_text(f'Error: {str(e)}')
-                            ui.notify(f'Sync error: {str(e)}', type='negative')
+                            show_error_dialog('Sync Error', f'Error syncing holidays: {str(e)}')
 
                     def refresh_holiday_stats():
                         """Refresh the holiday statistics display."""
@@ -454,10 +454,10 @@ def admin_system_page():
 
                         def send_test_email():
                             if not test_email_input.value:
-                                ui.notify('Please enter an email address', type='warning')
+                                show_warning_dialog('Email Required', 'Please enter an email address to send the test to.')
                                 return
                             if not email_configured:
-                                ui.notify('SMTP not configured. Set environment variables first.', type='negative')
+                                show_error_dialog('SMTP Not Configured', 'SMTP is not configured. Please set the environment variables first.')
                                 return
 
                             ui.notify('Sending test email...', type='info')
@@ -471,9 +471,9 @@ def admin_system_page():
                                 if success:
                                     ui.notify('Test email sent successfully!', type='positive')
                                 else:
-                                    ui.notify('Failed to send email - check logs', type='negative')
+                                    show_error_dialog('Email Failed', 'Failed to send email. Please check the logs for more details.')
                             except Exception as e:
-                                ui.notify(f'Error: {str(e)}', type='negative')
+                                show_error_dialog('Error', f'Error sending email: {str(e)}')
 
                         ui.button('Send Test', icon='send', on_click=send_test_email).props('color=primary')
 
@@ -664,7 +664,7 @@ SMTP_FROM=noreply@company.com
                                     refresh_logs()
                                     refresh_log_cards()  # Update the file size display
                                 except Exception as e:
-                                    ui.notify(f'Error: {str(e)}', type='negative')
+                                    show_error_dialog('Error', f'Error clearing log: {str(e)}')
 
                         ui.button('Clear Log', icon='delete_sweep', on_click=clear_current_log).props('flat dense color=red')
 
@@ -698,7 +698,7 @@ SMTP_FROM=noreply@company.com
 
                                         def analyze_full_log():
                                             if not log_state['current_content']:
-                                                ui.notify('No log content to analyze', type='warning')
+                                                show_warning_dialog('No Content', 'There is no log content to analyze.')
                                                 return
                                             run_ai_analysis(log_state['current_content'], is_selection=False)
 
@@ -718,7 +718,7 @@ SMTP_FROM=noreply@company.com
 
                                         def analyze_selection():
                                             if not selection_input.value.strip():
-                                                ui.notify('Please paste some log content to analyze', type='warning')
+                                                show_warning_dialog('No Content', 'Please paste some log content to analyze.')
                                                 return
                                             run_ai_analysis(selection_input.value.strip(), is_selection=True)
 
@@ -805,7 +805,7 @@ LOG CONTENT:
                                 with ui.card().classes('w-full p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20'):
                                     ui.label('Analysis Failed').classes('font-semibold text-red-700 dark:text-red-400')
                                     ui.label(f'Error: {str(e)}').classes('text-sm')
-                            ui.notify(f'Analysis failed: {str(e)}', type='negative')
+                            show_error_dialog('Analysis Failed', f'Error during log analysis: {str(e)}')
 
             # ========== SETTINGS TAB ==========
             with ui.tab_panel(settings_tab):

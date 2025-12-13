@@ -6,7 +6,7 @@ from src.database import get_db
 from src.config import config
 from src.logging_config import get_logger
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from src.services.handbook_revision_service import HandbookRevisionService
 from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
 
@@ -108,7 +108,7 @@ def admin_handbook_page():
 
                     async def handle_pdf_upload(e):
                         if not e.content:
-                            ui.notify('No file selected', type='warning')
+                            show_warning_dialog('No File', 'Please select a PDF file to upload.')
                             return
 
                         try:
@@ -227,15 +227,15 @@ def admin_handbook_page():
                                             save_path = save_dir / upload_state['filename']
                                             save_path.write_bytes(upload_state['pdf_bytes'])
                                             content_input.value = full_text
-                                            ui.notify(f'PDF saved. Missing sections may cause issues.', type='warning')
+                                            show_warning_dialog('Missing Sections', 'PDF saved, but missing sections may cause issues.')
                                             validation_container.set_visibility(False)
 
                                         ui.button('Save Anyway (Not Recommended)', icon='warning', on_click=save_anyway).props('color=warning outline')
 
                         except ImportError:
-                            ui.notify('PDF parsing library not installed. Run: pip install pypdf', type='negative')
+                            show_error_dialog('Library Missing', 'PDF parsing library not installed. Run: pip install pypdf')
                         except Exception as ex:
-                            ui.notify(f'Error reading PDF: {str(ex)}', type='negative')
+                            show_error_dialog('PDF Error', f'Error reading PDF: {str(ex)}')
 
                     with ui.row().classes('items-center gap-4'):
                         ui.upload(
@@ -272,7 +272,7 @@ def admin_handbook_page():
                     def preview_changes():
                         new_content = content_input.value.strip()
                         if not new_content:
-                            ui.notify('Content cannot be empty', type='negative')
+                            show_error_dialog('Empty Content', 'Content cannot be empty. Please enter or paste content first.')
                             return
 
                         preview_db = next(get_db())
@@ -327,7 +327,7 @@ def admin_handbook_page():
                                     ui.label('A backup will be automatically created before applying changes.').classes('text-sm')
 
                         except Exception as e:
-                            ui.notify(f'Error analyzing changes: {str(e)}', type='negative')
+                            show_error_dialog('Analysis Error', f'Error analyzing changes: {str(e)}')
                         finally:
                             preview_db.close()
 
@@ -339,7 +339,7 @@ def admin_handbook_page():
 
                     def confirm_and_save():
                         if not preview_state['new_content'] or not preview_state['report']:
-                            ui.notify('Please preview changes first', type='warning')
+                            show_warning_dialog('Preview Required', 'Please preview changes before applying them.')
                             return
 
                         import shutil
@@ -360,7 +360,7 @@ def admin_handbook_page():
                             preview_state['backup_file'] = backup_file
                             logger.info(f"Created handbook change backup: {backup_file}")
                         except Exception as e:
-                            ui.notify(f'Backup failed: {str(e)}. Changes not applied.', type='negative')
+                            show_error_dialog('Backup Failed', f'Backup failed: {str(e)}. Changes not applied.')
                             logger.error(f"Handbook backup failed: {str(e)}")
                             return
 
@@ -381,7 +381,7 @@ def admin_handbook_page():
                             cancel_preview()
 
                         except Exception as e:
-                            ui.notify(f'Error saving: {str(e)}. Backup available at {backup_file.name}', type='negative')
+                            show_error_dialog('Save Failed', f'Error saving: {str(e)}. Backup available at {backup_file.name}')
                             logger.error(f"Handbook save failed: {str(e)}")
                         finally:
                             save_db.close()

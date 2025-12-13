@@ -9,7 +9,7 @@ from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import fmt_days
 
 
@@ -111,11 +111,11 @@ def carryover_page():
             # Submit
             def submit_carryover():
                 if not hours_input.value or hours_input.value < 8:
-                    ui.notify('Enter at least 8 hours (1 day)', type='warning')
+                    show_warning_dialog('Minimum Hours Required', 'Please enter at least 8 hours (1 day) for carryover.')
                     return
 
                 if hours_input.value % 8 != 0:
-                    ui.notify('Must be in full-day (8-hour) increments', type='warning')
+                    show_warning_dialog('Full Days Only', 'Carryover hours must be in full-day (8-hour) increments.')
                     return
 
                 db = next(get_db())
@@ -153,7 +153,7 @@ def carryover_page():
                     ui.navigate.to('/carryover')
 
                 except Exception as e:
-                    ui.notify(f'Error: {str(e)}', type='negative')
+                    show_error_dialog('Error', f'An error occurred: {str(e)}')
                 finally:
                     db.close()
 

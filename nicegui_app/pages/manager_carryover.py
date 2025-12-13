@@ -11,7 +11,7 @@ from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 
 
 def manager_carryover_page():
@@ -26,7 +26,7 @@ def manager_carryover_page():
         return
 
     if user.get('role') not in ['manager', 'admin', 'superadmin']:
-        ui.notify('Access denied. Manager or Admin role required.', type='negative')
+        show_error_dialog('Access Denied', 'Manager or Admin role is required to access this page.')
         ui.navigate.to('/dashboard')
         return
 
@@ -234,11 +234,11 @@ def manager_carryover_page():
                 # Get the request
                 request = db.query(CarryoverRequest).filter(CarryoverRequest.id == request_id).first()
                 if not request:
-                    ui.notify('Request not found', type='negative')
+                    show_error_dialog('Not Found', 'The carryover request was not found.')
                     return
 
                 if request.status != 'pending':
-                    ui.notify('Request has already been processed', type='warning')
+                    show_warning_dialog('Already Processed', 'This request has already been processed.')
                     load_requests()
                     return
 
@@ -280,7 +280,7 @@ def manager_carryover_page():
 
             except Exception as e:
                 db.rollback()
-                ui.notify(f'Error approving request: {str(e)}', type='negative')
+                show_error_dialog('Error', f'Error approving request: {str(e)}')
             finally:
                 db.close()
 
@@ -290,11 +290,11 @@ def manager_carryover_page():
             try:
                 request = db.query(CarryoverRequest).filter(CarryoverRequest.id == request_id).first()
                 if not request:
-                    ui.notify('Request not found', type='negative')
+                    show_error_dialog('Not Found', 'The carryover request was not found.')
                     return
 
                 if request.status != 'pending':
-                    ui.notify('Request has already been processed', type='warning')
+                    show_warning_dialog('Already Processed', 'This request has already been processed.')
                     load_requests()
                     return
 
@@ -305,12 +305,12 @@ def manager_carryover_page():
                 request.manager_notes = manager_notes.strip() if manager_notes else None
 
                 db.commit()
-                ui.notify('Carryover request denied', type='warning')
+                ui.notify('Carryover request denied', type='info')
                 load_requests()
 
             except Exception as e:
                 db.rollback()
-                ui.notify(f'Error denying request: {str(e)}', type='negative')
+                show_error_dialog('Error', f'Error denying request: {str(e)}')
             finally:
                 db.close()
 

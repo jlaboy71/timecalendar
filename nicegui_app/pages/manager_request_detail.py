@@ -2,7 +2,7 @@
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
@@ -242,7 +242,7 @@ def manager_request_detail_page(request_id: int):
                             ui.notify('Request approved!', type='positive')
                             ui.navigate.to('/dashboard')
                         else:
-                            ui.notify('Error approving request', type='negative')
+                            show_error_dialog('Approval Failed', 'There was an error approving the request. Please try again.')
                     finally:
                         db.close()
 
@@ -272,7 +272,7 @@ def manager_request_detail_page(request_id: int):
                             ui.notify('Request denied', type='warning')
                             ui.navigate.to('/dashboard')
                         else:
-                            ui.notify('Error denying request', type='negative')
+                            show_error_dialog('Denial Failed', 'There was an error denying the request. Please try again.')
                     finally:
                         db.close()
 

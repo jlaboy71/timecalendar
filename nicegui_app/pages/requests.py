@@ -3,7 +3,7 @@ from datetime import date, datetime
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
 
@@ -19,11 +19,11 @@ def cancel_user_request(request_id: int, pto_type: str, total_days: float, year:
         request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
 
         if not request:
-            ui.notify('Request not found', type='negative')
+            show_error_dialog('Not Found', 'The request was not found.')
             return
 
         if request.status != 'pending':
-            ui.notify('Only pending requests can be cancelled', type='warning')
+            show_warning_dialog('Cannot Cancel', 'Only pending requests can be cancelled.')
             return
 
         # Update the request status
@@ -40,7 +40,7 @@ def cancel_user_request(request_id: int, pto_type: str, total_days: float, year:
         ui.navigate.to('/requests')
 
     except Exception as e:
-        ui.notify(f'Error cancelling request: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error cancelling request: {str(e)}')
     finally:
         if db:
             db.close()
@@ -56,11 +56,11 @@ def cancel_approved_request(request_id: int, pto_type: str, total_days: float, y
         request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
 
         if not request:
-            ui.notify('Request not found', type='negative')
+            show_error_dialog('Not Found', 'The request was not found.')
             return
 
         if request.status != 'approved':
-            ui.notify('Only approved requests can be cancelled this way', type='warning')
+            show_warning_dialog('Cannot Cancel', 'Only approved requests can be cancelled this way.')
             return
 
         # Update the request status
@@ -88,7 +88,7 @@ def cancel_approved_request(request_id: int, pto_type: str, total_days: float, y
         ui.navigate.to('/requests')
 
     except Exception as e:
-        ui.notify(f'Error cancelling request: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error cancelling request: {str(e)}')
     finally:
         if db:
             db.close()
@@ -104,15 +104,15 @@ def request_cancellation(request_id: int, reason: str = None):
         request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
 
         if not request:
-            ui.notify('Request not found', type='negative')
+            show_error_dialog('Not Found', 'The request was not found.')
             return
 
         if request.status != 'approved':
-            ui.notify('Only approved requests can have cancellation requested', type='warning')
+            show_warning_dialog('Cannot Request Cancellation', 'Only approved requests can have cancellation requested.')
             return
 
         if request.cancellation_requested:
-            ui.notify('Cancellation already requested', type='warning')
+            show_warning_dialog('Already Requested', 'A cancellation has already been requested for this time off.')
             return
 
         # Mark cancellation as requested
@@ -125,7 +125,7 @@ def request_cancellation(request_id: int, reason: str = None):
         ui.navigate.to('/requests')
 
     except Exception as e:
-        ui.notify(f'Error requesting cancellation: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error requesting cancellation: {str(e)}')
     finally:
         if db:
             db.close()
@@ -261,7 +261,7 @@ def delete_request_with_balance(request_id: int, pto_type: str, total_days: floa
 
         request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
         if not request:
-            ui.notify('Request not found', type='negative')
+            show_error_dialog('Not Found', 'The request was not found.')
             return
 
         request.status = 'cancelled'
@@ -289,7 +289,7 @@ def delete_request_with_balance(request_id: int, pto_type: str, total_days: floa
         ui.navigate.to('/requests')
 
     except Exception as e:
-        ui.notify(f'Error deleting request: {str(e)}', type='negative')
+        show_error_dialog('Error', f'Error deleting request: {str(e)}')
     finally:
         if db:
             db.close()

@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from calendar import monthcalendar, month_name
 from collections import defaultdict
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 from src.services.balance_service import BalanceService
 from datetime import datetime as dt
@@ -109,7 +109,7 @@ def calendar_page():
             db.close()
 
         if not employee_options:
-            ui.notify('No employees found to submit WFH for', type='warning')
+            show_warning_dialog('No Employees', 'No employees found in your department to submit WFH for.')
             return
 
         with ui.dialog() as wfh_dialog, ui.card().classes('min-w-[400px] p-4'):
@@ -143,10 +143,10 @@ def calendar_page():
 
             def submit_wfh_for_employee():
                 if not employee_select.value:
-                    ui.notify('Please select an employee', type='negative')
+                    show_warning_dialog('Employee Required', 'Please select an employee from the dropdown.')
                     return
                 if not notes_input.value or not notes_input.value.strip():
-                    ui.notify('Reason is required for WFH requests', type='negative')
+                    show_warning_dialog('Reason Required', 'Please provide a reason for the Work From Home request.')
                     return
 
                 wfh_db = next(get_db())
@@ -177,7 +177,7 @@ def calendar_page():
                     wfh_dialog.close()
                     render_current_view()
                 except Exception as e:
-                    ui.notify(f'Error submitting WFH: {str(e)}', type='negative')
+                    show_error_dialog('Error', f'Error submitting WFH: {str(e)}')
                 finally:
                     wfh_db.close()
 
@@ -664,7 +664,7 @@ def calendar_page():
             try:
                 pto_request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
                 if not pto_request:
-                    ui.notify('Request not found', type='negative')
+                    show_error_dialog('Not Found', 'The request was not found.')
                     return
 
                 pto_user = db.query(User).filter(User.id == pto_request.user_id).first()
@@ -776,9 +776,9 @@ def calendar_page():
                                             save_db.commit()
                                             ui.notify('Notes saved successfully', type='positive')
                                         else:
-                                            ui.notify('Request not found', type='negative')
+                                            show_error_dialog('Not Found', 'The request was not found.')
                                     except Exception as e:
-                                        ui.notify(f'Error saving notes: {str(e)}', type='negative')
+                                        show_error_dialog('Error', f'Error saving notes: {str(e)}')
                                     finally:
                                         save_db.close()
 
@@ -814,7 +814,7 @@ def calendar_page():
                                 try:
                                     req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                                     if not req:
-                                        ui.notify('Request not found', type='negative')
+                                        show_error_dialog('Not Found', 'The request was not found.')
                                         return
 
                                     req.status = 'cancelled'
@@ -852,7 +852,7 @@ def calendar_page():
                                 try:
                                     req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                                     if not req:
-                                        ui.notify('Request not found', type='negative')
+                                        show_error_dialog('Not Found', 'The request was not found.')
                                         return
 
                                     req.status = 'cancelled'
@@ -888,7 +888,7 @@ def calendar_page():
                                         try:
                                             req = req_db.query(PTORequest).filter(PTORequest.id == req_id).first()
                                             if not req:
-                                                ui.notify('Request not found', type='negative')
+                                                show_error_dialog('Not Found', 'The request was not found.')
                                                 return
 
                                             req.cancellation_requested = True
@@ -990,7 +990,7 @@ def calendar_page():
                 return
 
             if click_date < today:
-                ui.notify('Cannot request time off for past dates', type='warning')
+                show_warning_dialog('Past Date', 'Cannot request time off for past dates. Please select a future date.')
                 return
 
             with ui.dialog() as dialog, ui.card().classes('min-w-80'):

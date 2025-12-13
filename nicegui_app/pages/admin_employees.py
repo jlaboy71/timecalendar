@@ -5,7 +5,7 @@ from datetime import datetime
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length
+from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
@@ -409,7 +409,7 @@ def admin_employees_add_page():
                     valid = False
                 if password_input.value != confirm_password_input.value:
                     confirm_password_input.props('error')
-                    ui.notify('Passwords do not match', type='negative')
+                    show_error_dialog('Password Mismatch', 'The passwords you entered do not match. Please try again.')
                     valid = False
                 if not validate_required(hire_date_input, 'Hire Date'):
                     valid = False
@@ -417,7 +417,7 @@ def admin_employees_add_page():
                 # Employees must be assigned to a department with a manager
                 if role_select.value == 'employee':
                     if not department_select.value:
-                        ui.notify('Employees must be assigned to a department', type='negative')
+                        show_error_dialog('Department Required', 'Employees must be assigned to a department.')
                         valid = False
                     else:
                         # Check if department has a manager
@@ -425,20 +425,20 @@ def admin_employees_add_page():
                         try:
                             dept = DepartmentService.get_department_by_id(check_db, department_select.value)
                             if not dept or not dept.manager_id:
-                                ui.notify('Selected department must have a manager assigned', type='negative')
+                                show_error_dialog('Manager Required', 'The selected department must have a manager assigned before adding employees.')
                                 valid = False
                         finally:
                             check_db.close()
 
                 if not valid:
-                    ui.notify('Please fix the highlighted errors', type='warning')
+                    show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
                     create_btn.props(remove='loading disabled')
                     return
 
                 try:
                     hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
                 except ValueError:
-                    ui.notify('Invalid hire date format', type='negative')
+                    show_error_dialog('Invalid Date', 'The hire date format is invalid. Please select a valid date.')
                     create_btn.props(remove='loading disabled')
                     return
 
@@ -485,7 +485,7 @@ def admin_employees_add_page():
                     ui.navigate.to('/admin/employees')
 
                 except Exception as e:
-                    ui.notify(f'Error creating employee: {str(e)}', type='negative')
+                    show_error_dialog('Error', f'Error creating employee: {str(e)}')
                     create_btn.props(remove='loading disabled')
                 finally:
                     db.close()
@@ -518,21 +518,21 @@ def admin_employees_edit_page(user_id: int):
         user = user_service.get_user_by_id(user_id)
 
         if not user:
-            ui.notify('Employee not found', type='negative')
+            show_error_dialog('Not Found', 'The employee you are looking for was not found.')
             ui.navigate.to('/admin/employees')
             return
 
         if is_manager_editing:
             if user.department_id != current_department_id:
-                ui.notify('You can only edit employees in your department', type='negative')
+                show_error_dialog('Access Denied', 'You can only edit employees in your department.')
                 ui.navigate.to('/dashboard')
                 return
             if user.role in ['manager', 'admin', 'superadmin']:
-                ui.notify('You cannot edit managers or administrators', type='negative')
+                show_error_dialog('Access Denied', 'You cannot edit managers or administrators.')
                 ui.navigate.to('/dashboard')
                 return
             if user.id == current_user_id:
-                ui.notify('Use your profile to edit your own information', type='warning')
+                show_warning_dialog('Use Profile', 'Please use your profile page to edit your own information.')
                 ui.navigate.to('/dashboard')
                 return
 
@@ -696,20 +696,20 @@ def admin_employees_edit_page(user_id: int):
                     if password_input and password_input.value and confirm_password_input:
                         if password_input.value != confirm_password_input.value:
                             confirm_password_input.props('error')
-                            ui.notify('Passwords do not match', type='negative')
+                            show_error_dialog('Password Mismatch', 'The passwords you entered do not match. Please try again.')
                             valid = False
                     if not validate_required(hire_date_input, 'Hire Date'):
                         valid = False
 
                     if not valid:
-                        ui.notify('Please fix the highlighted errors', type='warning')
+                        show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
                         save_btn.props(remove='loading disabled')
                         return
 
                     try:
                         hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
                     except ValueError:
-                        ui.notify('Invalid hire date format', type='negative')
+                        show_error_dialog('Invalid Date', 'The hire date format is invalid. Please select a valid date.')
                         save_btn.props(remove='loading disabled')
                         return
 
@@ -756,11 +756,11 @@ def admin_employees_edit_page(user_id: int):
                             ui.notify(f'Employee updated successfully', type='positive')
                             ui.navigate.to(back_url)
                         else:
-                            ui.notify('Error updating employee', type='negative')
+                            show_error_dialog('Update Failed', 'There was an error updating the employee. Please try again.')
                             save_btn.props(remove='loading disabled')
 
                     except Exception as e:
-                        ui.notify(f'Error updating employee: {str(e)}', type='negative')
+                        show_error_dialog('Error', f'Error updating employee: {str(e)}')
                         save_btn.props(remove='loading disabled')
                     finally:
                         db.close()
@@ -799,7 +799,7 @@ def admin_employees_edit_page(user_id: int):
                                                     dialog.close()
                                                     ui.navigate.to('/admin/employees')
                                                 else:
-                                                    ui.notify('Error deactivating employee', type='negative')
+                                                    show_error_dialog('Deactivation Failed', 'There was an error deactivating the employee. Please try again.')
                                             finally:
                                                 db.close()
                                         ui.button('Deactivate', on_click=do_deactivate, color='orange')
@@ -831,7 +831,7 @@ def admin_employees_edit_page(user_id: int):
                                                 dialog.close()
                                                 ui.navigate.to('/admin/employees')
                                             else:
-                                                ui.notify('Error deleting employee', type='negative')
+                                                show_error_dialog('Deletion Failed', 'There was an error deleting the employee. Please try again.')
                                         finally:
                                             db.close()
                                     ui.button('Delete Permanently', on_click=do_delete, color='red')

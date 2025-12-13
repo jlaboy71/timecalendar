@@ -2,7 +2,7 @@
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog
 from nicegui_app.components.formatting import fmt_days
 from src.services.pto_service import PTOService
 from src.services.department_service import DepartmentService
@@ -67,7 +67,7 @@ def admin_approvals_page():
 
                         def bulk_approve():
                             if not selected_requests:
-                                ui.notify('No requests selected', type='warning')
+                                show_warning_dialog('No Selection', 'Please select at least one request to approve.')
                                 return
                             approve_btn.props('loading disabled')
                             count = len(selected_requests)
@@ -82,7 +82,7 @@ def admin_approvals_page():
 
                         def bulk_deny():
                             if not selected_requests:
-                                ui.notify('No requests selected', type='warning')
+                                show_warning_dialog('No Selection', 'Please select at least one request to deny.')
                                 return
                             # Show denial reason dialog
                             with ui.dialog() as deny_dialog, ui.card().classes('p-4').style('min-width: 350px;'):
