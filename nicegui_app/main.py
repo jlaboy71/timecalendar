@@ -36,6 +36,7 @@ from nicegui_app.pages.admin_year_end import admin_year_end_page
 from nicegui_app.pages.help import help_page as help_page_content
 from nicegui_app.pages.admin_system import admin_system_page
 from nicegui_app.pages.admin_email_preview import email_preview_page
+from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length
 from src.services.session_manager import SessionManager, require_auth
@@ -241,6 +242,14 @@ def admin_email_preview():
     if not require_auth():
         return
     email_preview_page()
+
+
+@ui.page('/admin/auto-notify-reports')
+def admin_auto_notify_reports():
+    """Auto-notify reports page for managers and admins."""
+    if not require_auth():
+        return
+    auto_notify_reports_page()
 
 
 # ============================================================

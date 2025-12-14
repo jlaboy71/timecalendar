@@ -1,0 +1,71 @@
+ADMIN DASHBOARD UI CONCEPT - Image Generation Prompt
+
+=== STYLE ===
+Modern dark theme admin dashboard, professional enterprise software UI, dark gray background (#111827), card-based layout, clean minimalist design, subtle gradients, soft shadows, high contrast text
+
+=== LAYOUT (Top to Bottom) ===
+
+1. HEADER BAR
+- Left: Red settings icon + "Administration Dashboard" title in white bold text
+- Right: Green "Admin" pill badge with rounded corners
+
+2. STATS ROW (4 equal cards in a row)
+- Card 1: Blue gradient circle icon (people), large "10" number, "Active Employees" label, small green "+2 this month" trend
+- Card 2: Purple gradient circle icon (building), large "2" number, "Departments" label
+- Card 3: Orange gradient circle icon (clock), large "3" number, "Pending Requests" label, orange "Action Required" badge
+- Card 4: Green gradient circle icon (calendar), large "4" number, "PTO This Week" label, "employees out" subtitle
+- Each card has left colored border accent matching icon color
+
+3. QUICK INSIGHTS ROW (2 cards)
+- Left Card "Upcoming Time Off":
+  - List of 3 employees with colored avatar circles, names, PTO type badges, date ranges
+  - "View Full Calendar" link at bottom
+- Right Card "Department PTO Usage":
+  - Two horizontal progress bars (Technology 75% blue, Operations 45% green)
+  - "% of allocated PTO used this year" subtitle
+
+4. MANAGEMENT SECTION
+- Gray "MANAGEMENT" header with settings icon
+- 3 buttons: "Manage Departments" (blue outline), "Manage Employees" (blue outline), "Add Employee" (green filled)
+
+5. APPROVALS SECTION
+- Gray "APPROVALS" header with checkmark icon
+- 2 buttons: "PTO Approvals" (orange outline, red "3" badge), "Carryover Approvals" (orange outline, orange "1" badge)
+
+6. RESOURCES SECTION
+- Gray "RESOURCES" header with folder icon
+- 5 buttons in row: Calendar, Manage Handbook, Reports (all purple outline), Auto Notify (gold outline with glow), Analytics (purple outline)
+
+7. SYSTEM SECTION
+- Gray "SYSTEM" header with gear icon
+- 3 buttons: "Year-End Processing" (orange, full width), "System Settings" (gray), "Email Templates" (gray)
+
+=== COLOR PALETTE ===
+- Background: #111827 (very dark blue-gray)
+- Cards: #1f2937 (dark gray)
+- Borders: #374151 (medium gray)
+- Primary Accent: #C9A227 (gold)
+- Blue: #3b82f6
+- Green: #22c55e
+- Orange: #f59e0b
+- Purple: #8b5cf6
+- Red: #ef4444
+- Text Primary: #e5e7eb (light gray)
+- Text Secondary: #9ca3af (muted gray)
+
+=== VISUAL EFFECTS ===
+- Stat cards have subtle left border accent (4px colored)
+- Icon circles use gradient backgrounds
+- Hover states show subtle glow
+- Buttons have rounded corners
+- Cards have soft shadow
+- Clean 24px spacing between sections
+
+=== TYPOGRAPHY ===
+- Headers: Uppercase, letter-spaced, small, muted
+- Numbers: Large (36px+), bold, white
+- Labels: Medium size, light gray
+- Buttons: All caps, medium weight
+
+=== MOOD ===
+Professional, modern, clean, organized, enterprise-grade, dark mode optimized

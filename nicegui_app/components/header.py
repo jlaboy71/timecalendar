@@ -61,7 +61,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
             ui.label(f'{greeting}, {user_first_name} {user_last_name}').classes('text-base font-medium uppercase').style(f'color: {greeting_color};')
             with ui.row().classes('items-center gap-2'):
                 # Help button
-                ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center')
+                ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round aria-label="Help Center"').tooltip('Help Center').style('color: #C9A227 !important;')
 
                 # Dark mode toggle
                 dark_mode = ui.dark_mode()
@@ -78,7 +78,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = '/das
                     else:
                         dark_mode.disable()
 
-                ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode')
+                ui.button(icon='dark_mode', on_click=toggle_dark_mode).props('flat round aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode').style('color: #C9A227 !important;')
 
                 def logout():
                     """Clear user session, log logout, and redirect to login."""

@@ -17,7 +17,7 @@ def email_preview_page():
         ui.navigate.to('/dashboard')
         return
 
-    page_header(title='Email Template Preview', back_url='/dashboard')
+    page_header(title='Email Template Preview', show_back=False)
 
     # Sample data for previews
     sample_employee = "John Smith"
@@ -27,13 +27,13 @@ def email_preview_page():
     sample_end = date.today() + timedelta(days=10)
     sample_days = 4.0
 
-    # Email type selector
+    # Email type selector - clear labels showing recipient
     email_types = {
-        'submitted': 'Request Submitted (to Employee)',
-        'approved': 'Request Approved (to Employee)',
-        'denied': 'Request Denied (to Employee)',
-        'pending': 'New Request Pending (to Manager)',
-        'report': 'Report Email'
+        'submitted': 'EMP: REQUEST SUBMITTED',
+        'approved': 'EMP: REQUEST APPROVED',
+        'denied': 'EMP: REQUEST DENIED',
+        'pending': 'MAN: REQUEST ARRIVED',
+        'report': 'ADMIN: REPORT EMAIL'
     }
 
     selected_type = {'value': 'approved'}
@@ -200,46 +200,39 @@ def email_preview_page():
         with preview_container:
             html_content = generate_preview(selected_type['value'])
 
-            # Show in an iframe for accurate rendering
-            with ui.card().classes('w-full p-4'):
-                ui.label('Email Preview').classes('text-lg font-bold mb-4').style('color: #C9A227')
+            # Edge-to-edge iframe preview
+            ui.html(f'''
+                <iframe
+                    srcdoc="{html_content.replace('"', '&quot;')}"
+                    style="width: 100%; height: 650px; border: none; background: #111827;"
+                ></iframe>
+            ''', sanitize=False)
 
-                # Use iframe to render the HTML properly
-                ui.html(f'''
-                    <iframe
-                        srcdoc="{html_content.replace('"', '&quot;')}"
-                        style="width: 100%; height: 600px; border: 1px solid #374151; border-radius: 8px; background: #111827;"
-                    ></iframe>
-                ''')
+    # Email type buttons - edge to edge, larger
+    with ui.row().classes('w-full gap-3 mb-4'):
+        for key, label in email_types.items():
+            def make_handler(k=key):
+                def handler():
+                    selected_type['value'] = k
+                    render_preview()
+                return handler
 
-    # Email type buttons
-    with ui.card().classes('w-full mb-4 p-4'):
-        ui.label('Select Email Type to Preview').classes('font-semibold mb-3')
-
-        with ui.row().classes('gap-2 flex-wrap'):
-            for key, label in email_types.items():
-                def make_handler(k=key):
-                    def handler():
-                        selected_type['value'] = k
-                        render_preview()
-                    return handler
-
-                # Color code the buttons
-                colors = {
-                    'submitted': '#f59e0b',
-                    'approved': '#22c55e',
-                    'denied': '#ef4444',
-                    'pending': '#f59e0b',
-                    'report': '#C9A227'
-                }
-                color = colors.get(key, '#6b7280')
-                ui.button(
-                    label,
-                    on_click=make_handler()
-                ).props('outline').style(f'border-color: {color}; color: {color};')
+            # Color code the buttons
+            colors = {
+                'submitted': '#f59e0b',
+                'approved': '#22c55e',
+                'denied': '#ef4444',
+                'pending': '#f59e0b',
+                'report': '#C9A227'
+            }
+            color = colors.get(key, '#6b7280')
+            ui.button(
+                label,
+                on_click=make_handler()
+            ).props('outline').classes('flex-1').style(f'border-color: {color}; color: {color}; font-size: 12px; padding: 10px 6px; font-weight: 600;')
 
     # Initial preview
     render_preview()
 
-    # Back button
-    ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+    # Back button - gold theme color
+    ui.button('Back to Dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4').style('border-color: #C9A227 !important; color: #C9A227 !important;')

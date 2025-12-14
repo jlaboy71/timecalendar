@@ -559,7 +559,9 @@ def dashboard_page():
                                 ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Auto Notify', icon='notifications_active', on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                            with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
@@ -575,28 +577,142 @@ def dashboard_page():
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('admin_panel_settings', color='red').classes('text-2xl')
                             ui.label('Administration Dashboard').classes('text-lg font-semibold')
-                        ui.badge('Admin', color='red').props('outline')
+                        ui.badge('Admin', color='green').props('rounded')
 
                     # Get stats
                     all_users = user_service.get_all_users()
                     all_departments = DepartmentService.get_all_departments(db)
                     active_users = [u for u in all_users if u.is_active]
 
-                    with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
-                        # Total Employees
-                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
-                            ui.label(str(len(active_users))).classes('text-3xl font-bold text-blue-600')
-                            ui.label('Active Employees').classes('text-xs opacity-60')
+                    # Get PTO this week count using direct query
+                    from datetime import timedelta
+                    from src.models.pto_request import PTORequest
+                    today = date.today()
+                    week_start = today - timedelta(days=today.weekday())
+                    week_end = week_start + timedelta(days=6)
+                    pto_this_week = db.query(PTORequest).filter(
+                        PTORequest.status == 'approved',
+                        PTORequest.start_date <= week_end,
+                        PTORequest.end_date >= week_start
+                    ).all()
+                    pto_this_week_count = len(set(r.user_id for r in pto_this_week)) if pto_this_week else 0
 
-                        # Total Departments
-                        with ui.card().classes('flex-1 min-w-32 p-3 text-center'):
-                            ui.label(str(len(all_departments))).classes('text-3xl font-bold text-indigo-600')
-                            ui.label('Departments').classes('text-xs opacity-60')
+                    with ui.row().classes('w-full gap-4 justify-center'):
+                        # Total Employees - with gradient icon
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #3b82f6, #1d4ed8);'):
+                                    ui.icon('people', color='white').classes('text-xl')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(len(active_users))).classes('text-3xl font-bold')
+                                    ui.label('Active Employees').classes('text-xs opacity-60')
 
-                        # Pending Requests (clickable)
-                        with ui.card().classes('flex-1 min-w-32 p-3 text-center cursor-pointer hover:bg-amber-50').on('click', lambda: ui.navigate.to('/admin/approvals') if pending_count > 0 else None):
-                            ui.label(str(pending_count)).classes('text-3xl font-bold text-amber-600')
-                            ui.label('Pending Requests').classes('text-xs opacity-60')
+                        # Total Departments - with gradient icon
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #8b5cf6, #6d28d9);'):
+                                    ui.icon('business', color='white').classes('text-xl')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(len(all_departments))).classes('text-3xl font-bold')
+                                    ui.label('Departments').classes('text-xs opacity-60')
+
+                        # Pending Requests - with gradient icon (clickable)
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500 cursor-pointer hover:shadow-lg transition-shadow').on('click', lambda: ui.navigate.to('/admin/approvals') if pending_count > 0 else None):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #f59e0b, #d97706);'):
+                                    ui.icon('pending_actions', color='white').classes('text-xl')
+                                with ui.column().classes('gap-0'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label(str(pending_count)).classes('text-3xl font-bold')
+                                        if pending_count > 0:
+                                            ui.badge('Action', color='amber').props('dense')
+                                    ui.label('Pending Requests').classes('text-xs opacity-60')
+
+                        # PTO This Week - NEW stat card with gradient icon
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-green-500'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #22c55e, #16a34a);'):
+                                    ui.icon('event_busy', color='white').classes('text-xl')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(str(pto_this_week_count)).classes('text-3xl font-bold')
+                                    ui.label('Out This Week').classes('text-xs opacity-60')
+
+                # ============ QUICK INSIGHTS PANEL ============
+                with ui.row().classes('w-full gap-4 mb-4'):
+                    # Upcoming Time Off card - fixed height with scroll
+                    with ui.card().classes('flex-1 p-4').style('height: 220px;'):
+                        with ui.row().classes('items-center gap-2 mb-3'):
+                            ui.icon('calendar_today', color='primary').classes('text-lg')
+                            ui.label('Upcoming Time Off').classes('font-semibold')
+
+                        # Get upcoming PTO (next 14 days, more items for scrolling)
+                        upcoming_end = week_end + timedelta(days=14)
+                        upcoming_pto = db.query(PTORequest).filter(
+                            PTORequest.status == 'approved',
+                            PTORequest.start_date <= upcoming_end,
+                            PTORequest.start_date >= today
+                        ).order_by(PTORequest.start_date).limit(10).all()
+
+                        if upcoming_pto:
+                            type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                            with ui.scroll_area().classes('w-full').style('height: 140px;'):
+                                for req in upcoming_pto:
+                                    user_obj = user_service.get_user_by_id(req.user_id)
+                                    if user_obj:
+                                        pto_color = type_colors.get(req.pto_type.lower(), 'gray')
+                                        with ui.row().classes('w-full items-center gap-3 py-2 border-b border-gray-700 last:border-0'):
+                                            with ui.element('div').classes(f'w-8 h-8 rounded-full flex items-center justify-center bg-{pto_color}-500/20'):
+                                                ui.label(user_obj.first_name[0]).classes(f'font-bold text-{pto_color}-500')
+                                            with ui.column().classes('gap-0 flex-1'):
+                                                ui.label(f'{user_obj.first_name} {user_obj.last_name}').classes('font-medium text-sm')
+                                                ui.label(f"{req.pto_type.title()} • {req.start_date.strftime('%b %d')}").classes('text-xs opacity-60')
+                        else:
+                            with ui.column().classes('w-full items-center py-4 opacity-50'):
+                                ui.icon('event_available', size='xl')
+                                ui.label('No upcoming time off').classes('text-sm')
+
+                    # Department PTO Usage card - same fixed height
+                    with ui.card().classes('flex-1 p-4').style('height: 220px;'):
+                        with ui.row().classes('items-center gap-2 mb-3'):
+                            ui.icon('bar_chart', color='secondary').classes('text-lg')
+                            ui.label('Department PTO Usage').classes('font-semibold')
+
+                        # Calculate department usage
+                        from src.models.pto_balance import PTOBalance
+                        dept_usage = []
+                        for dept in all_departments:
+                            dept_users = [u for u in active_users if u.department_id == dept.id]
+                            if dept_users:
+                                total_allocated = 0
+                                total_used = 0
+                                for u in dept_users:
+                                    bal = db.query(PTOBalance).filter(
+                                        PTOBalance.user_id == u.id,
+                                        PTOBalance.year == current_year
+                                    ).first()
+                                    if bal:
+                                        total_allocated += float(bal.vacation_total or 0)
+                                        total_used += float(bal.vacation_used or 0)
+                                if total_allocated > 0:
+                                    usage_pct = min(100, int((total_used / total_allocated) * 100))
+                                    dept_usage.append({'name': dept.name, 'pct': usage_pct})
+
+                        if dept_usage:
+                            colors = ['blue', 'green', 'purple', 'amber']
+                            with ui.column().classes('w-full gap-3'):
+                                for i, dept in enumerate(dept_usage[:4]):
+                                    color = colors[i % len(colors)]
+                                    with ui.column().classes('w-full gap-1'):
+                                        with ui.row().classes('w-full justify-between'):
+                                            ui.label(dept['name']).classes('text-sm')
+                                            ui.label(f"{dept['pct']}%").classes('text-sm font-medium')
+                                        with ui.element('div').classes('w-full h-2 rounded-full bg-gray-700'):
+                                            ui.element('div').classes(f'h-2 rounded-full bg-{color}-500').style(f"width: {dept['pct']}%")
+                            ui.label('% of vacation PTO used this year').classes('text-xs opacity-40 mt-auto')
+                        else:
+                            with ui.column().classes('w-full items-center py-4 opacity-50'):
+                                ui.icon('trending_up', size='xl')
+                                ui.label('No usage data').classes('text-sm')
 
                 # ============ PENDING APPROVALS (admins see all pending requests) ============
                 if admin_pending_requests:
@@ -690,46 +806,64 @@ def dashboard_page():
 
                 # Admin Quick Actions
                 with ui.card().classes('w-full mb-4 p-4'):
-                    ui.label('Management').classes('text-xs font-semibold uppercase opacity-60 mb-3')
-                    with ui.row().classes('w-full gap-3 flex-wrap'):
-                        ui.button('Manage Departments', icon='business',
-                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                        ui.button('Manage Employees', icon='people',
-                                  on_click=lambda: ui.navigate.to('/admin/employees')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                    # Management section with icon
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('settings', size='sm').classes('opacity-60')
+                        ui.label('Management').classes('text-xs font-semibold uppercase opacity-60')
+                    with ui.row().classes('w-full gap-3'):
                         ui.button('Add Employee', icon='person_add',
-                                  on_click=lambda: ui.navigate.to('/admin/employees/add')).props('outline color=primary').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/admin/employees/add')).props('outline color=indigo').classes('flex-1')
+                        ui.button('Manage Employees', icon='people',
+                                  on_click=lambda: ui.navigate.to('/admin/employees')).props('outline color=indigo').classes('flex-1')
+                        ui.button('Manage Departments', icon='business',
+                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('outline color=indigo').classes('flex-1')
 
                     ui.separator().classes('my-3')
 
-                    ui.label('Approvals').classes('text-xs font-semibold uppercase opacity-60 mb-3')
-                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                    # Approvals section with icon
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('task_alt', size='sm').classes('opacity-60')
+                        ui.label('Approvals').classes('text-xs font-semibold uppercase opacity-60')
+                    with ui.row().classes('w-full gap-3'):
                         ui.button('PTO Approvals', icon='pending_actions',
-                                  on_click=lambda: ui.navigate.to('/admin/approvals')).props('outline color=amber').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/admin/approvals')).props('outline color=purple').classes('flex-1')
                         ui.button('Carryover Approvals', icon='move_down',
-                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=purple').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=purple').classes('flex-1')
 
                     ui.separator().classes('my-3')
 
-                    ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60 mb-3')
-                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                    # Resources section with icon - 2 buttons per row edge to edge
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('folder_open', size='sm').classes('opacity-60')
+                        ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                    with ui.row().classes('w-full gap-3'):
                         ui.button('Calendar', icon='calendar_month',
-                                  on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                        ui.button('Manage Handbook', icon='menu_book',
-                                  on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1')
                         ui.button('Reports', icon='assessment',
-                                  on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1')
+                    with ui.row().classes('w-full gap-3 mt-2'):
                         ui.button('Analytics', icon='insights',
-                                  on_click=lambda: ui.navigate.to('/analytics')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                  on_click=lambda: ui.navigate.to('/analytics')).props('outline color=secondary').classes('flex-1')
+                        ui.button('Auto Notify', icon='notifications_active',
+                                  on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('outline color=secondary').classes('flex-1')
 
-                    ui.separator().classes('my-3')
+                    # System section - superadmin only
+                    if user_role == 'superadmin':
+                        ui.separator().classes('my-3')
 
-                    ui.label('System').classes('text-xs font-semibold uppercase opacity-60 mb-3')
-                    with ui.row().classes('w-full gap-3 flex-wrap'):
-                        ui.button('Year-End Processing', icon='event_repeat',
-                                  on_click=lambda: ui.navigate.to('/admin/year-end')).props('outline color=teal').classes('flex-1 min-w-fit')
-                        if user_role == 'superadmin':
+                        with ui.row().classes('items-center gap-2 mb-3'):
+                            ui.icon('settings_applications', size='sm').classes('opacity-60')
+                            ui.label('System').classes('text-xs font-semibold uppercase opacity-60')
+                        with ui.row().classes('w-full gap-3'):
+                            ui.button('Year-End Processing', icon='event_repeat',
+                                      on_click=lambda: ui.navigate.to('/admin/year-end')).props('outline color=amber').classes('flex-1')
+                            ui.button('Manage Handbook', icon='menu_book',
+                                      on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=amber').classes('flex-1')
+                        with ui.row().classes('w-full gap-3 mt-2'):
                             ui.button('System Admin', icon='settings_applications',
-                                      on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=warning').classes('flex-1 min-w-fit')
+                                      on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=amber').classes('flex-1')
+                            ui.button('Email Templates', icon='email',
+                                      on_click=lambda: ui.navigate.to('/admin/email-preview')).props('outline color=amber').classes('flex-1')
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:

@@ -399,7 +399,7 @@ def admin_employees_add_page():
 
         # Action Buttons
         with ui.row().classes('w-full justify-between mt-4'):
-            ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat')
+            ui.button('Cancel', on_click=lambda: ui.run_javascript('history.back()')).props('flat')
 
             def create_employee():
                 valid = True
@@ -543,15 +543,15 @@ def admin_employees_edit_page(user_id: int):
         if is_manager_editing:
             if user.department_id != current_department_id:
                 show_error_dialog('Access Denied', 'You can only edit employees in your department.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
             if user.role in ['manager', 'admin', 'superadmin']:
                 show_error_dialog('Access Denied', 'You cannot edit managers or administrators.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
             if user.id == current_user_id:
                 show_warning_dialog('Use Profile', 'Please use your profile page to edit your own information.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
 
         departments = DepartmentService.get_all_departments(db)
@@ -744,8 +744,7 @@ def admin_employees_edit_page(user_id: int):
 
             # Action Buttons
             with ui.row().classes('w-full justify-between mt-4'):
-                back_url = '/manager/team' if is_manager_editing else '/admin/employees'
-                ui.button('Cancel', on_click=lambda: ui.navigate.to(back_url)).props('flat')
+                ui.button('Cancel', on_click=lambda: ui.run_javascript('history.back()')).props('flat')
 
                 def save_changes():
                     valid = True
