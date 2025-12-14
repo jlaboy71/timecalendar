@@ -477,6 +477,16 @@ def admin_system_page():
 
                         ui.button('Send Test', icon='send', on_click=send_test_email).props('color=primary')
 
+                # Email Template Preview Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('preview', size='sm', color='purple')
+                        ui.label('Email Template Preview').classes('text-lg font-semibold')
+
+                    ui.label('Preview how emails will look to employees and managers before they are sent.').classes('text-sm opacity-70 mb-4')
+
+                    ui.button('Preview Email Templates', icon='visibility', on_click=lambda: ui.navigate.to('/admin/email-preview')).props('color=primary')
+
                 # Setup Guide Card
                 with ui.card().classes('w-full p-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
