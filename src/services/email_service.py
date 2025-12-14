@@ -4,12 +4,85 @@ Email notification service for PTO-related communications.
 import smtplib
 import os
 import logging
+import base64
+from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from datetime import date
 
 logger = logging.getLogger(__name__)
+
+
+def _get_logo_base64() -> str:
+    """Get the TJM logo as base64 string for email embedding."""
+    try:
+        logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+        with open(logo_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    except Exception:
+        return ""
+
+
+def _get_email_template(title: str, title_color: str, content: str, footer_text: str = "") -> str:
+    """
+    Generate a dark-themed email template matching the app's style.
+
+    Args:
+        title: Header title text
+        title_color: Color for the title (hex)
+        content: Main HTML content
+        footer_text: Optional footer message
+    """
+    logo_base64 = _get_logo_base64()
+    logo_html = ""
+    if logo_base64:
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="TJM Logo" style="height: 50px; width: auto; margin-bottom: 15px;">'
+
+    footer_html = ""
+    if footer_text:
+        footer_html = f'<p style="margin-top: 20px; color: #9ca3af;">{footer_text}</p>'
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #111827;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #111827;">
+            <tr>
+                <td align="center" style="padding: 20px;">
+                    <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%;">
+                        <!-- Header with Logo -->
+                        <tr>
+                            <td style="background-color: #1f2937; padding: 25px; text-align: center; border-radius: 12px 12px 0 0; border-bottom: 3px solid {title_color};">
+                                {logo_html}
+                                <h1 style="margin: 0; color: {title_color}; font-size: 24px; font-weight: 600;">{title}</h1>
+                            </td>
+                        </tr>
+                        <!-- Content -->
+                        <tr>
+                            <td style="background-color: #1f2937; padding: 30px; color: #e5e7eb;">
+                                {content}
+                                {footer_html}
+                            </td>
+                        </tr>
+                        <!-- Footer -->
+                        <tr>
+                            <td style="background-color: #374151; padding: 20px; text-align: center; border-radius: 0 0 12px 12px;">
+                                <p style="margin: 0; color: #6b7280; font-size: 12px;">TJM Time Calendar</p>
+                                <p style="margin: 5px 0 0 0; color: #4b5563; font-size: 11px;">This is an automated notification</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
 
 
 class EmailService:
@@ -80,31 +153,43 @@ class EmailService:
         total_days: float
     ) -> bool:
         """Send confirmation email when PTO request is submitted."""
-        subject = f"TJM Time Calendar: Your {pto_type.title()} Request Submitted"
+        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Submitted"
 
         date_range = start_date.strftime('%B %d, %Y')
         if start_date != end_date:
             date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">TJM Time Calendar</h1>
-            </div>
-            <div style="padding: 20px;">
-                <p>Hi {employee_name},</p>
-                <p>Your time off request has been submitted and is pending approval.</p>
-                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p><strong>Type:</strong> {pto_type.title()}</p>
-                    <p><strong>Dates:</strong> {date_range}</p>
-                    <p><strong>Total Days:</strong> {total_days}</p>
-                </div>
-                <p>You will receive another email once your request has been reviewed.</p>
-            </div>
-        </body>
-        </html>
+        # Format days nicely
+        days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {employee_name},</p>
+        <p style="margin-bottom: 25px;">Your time off request has been submitted and is <span style="color: #f59e0b; font-weight: 600;">pending approval</span>.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td>
+                </tr>
+            </table>
+        </div>
         """
+
+        html = _get_email_template(
+            title="Request Submitted",
+            title_color="#f59e0b",
+            content=content,
+            footer_text="You will receive another email once your request has been reviewed."
+        )
         return self._send_email(employee_email, subject, html)
 
     def send_pto_approved(
@@ -118,32 +203,47 @@ class EmailService:
         approver_name: str
     ) -> bool:
         """Send email when PTO request is approved."""
-        subject = f"TJM Time Calendar: Your {pto_type.title()} Request Approved"
+        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Approved"
 
         date_range = start_date.strftime('%B %d, %Y')
         if start_date != end_date:
             date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background-color: #22c55e; color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">Request Approved</h1>
-            </div>
-            <div style="padding: 20px;">
-                <p>Hi {employee_name},</p>
-                <p>Great news! Your time off request has been <strong style="color: #22c55e;">approved</strong>.</p>
-                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 5px; border-left: 4px solid #22c55e; margin: 20px 0;">
-                    <p><strong>Type:</strong> {pto_type.title()}</p>
-                    <p><strong>Dates:</strong> {date_range}</p>
-                    <p><strong>Total Days:</strong> {total_days}</p>
-                    <p><strong>Approved by:</strong> {approver_name}</p>
-                </div>
-                <p>Enjoy your time off!</p>
-            </div>
-        </body>
-        </html>
+        # Format days nicely
+        days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {employee_name},</p>
+        <p style="margin-bottom: 25px;">Great news! Your time off request has been <span style="color: #22c55e; font-weight: 600;">approved</span>.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #22c55e;">{days_display}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Approved by:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{approver_name}</td>
+                </tr>
+            </table>
+        </div>
         """
+
+        html = _get_email_template(
+            title="Request Approved",
+            title_color="#22c55e",
+            content=content,
+            footer_text="Enjoy your time off!"
+        )
         return self._send_email(employee_email, subject, html)
 
     def send_pto_denied(
@@ -158,37 +258,57 @@ class EmailService:
         reason: Optional[str] = None
     ) -> bool:
         """Send email when PTO request is denied."""
-        subject = f"TJM Time Calendar: Your {pto_type.title()} Request Denied"
+        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Denied"
 
         date_range = start_date.strftime('%B %d, %Y')
         if start_date != end_date:
             date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
-        reason_html = ""
-        if reason:
-            reason_html = f"<p><strong>Reason:</strong> {reason}</p>"
+        # Format days nicely
+        days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
 
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background-color: #ef4444; color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">Request Denied</h1>
-            </div>
-            <div style="padding: 20px;">
-                <p>Hi {employee_name},</p>
-                <p>Unfortunately, your time off request has been <strong style="color: #ef4444;">denied</strong>.</p>
-                <div style="background-color: #fef2f2; padding: 15px; border-radius: 5px; border-left: 4px solid #ef4444; margin: 20px 0;">
-                    <p><strong>Type:</strong> {pto_type.title()}</p>
-                    <p><strong>Dates:</strong> {date_range}</p>
-                    <p><strong>Total Days:</strong> {total_days}</p>
-                    <p><strong>Reviewed by:</strong> {approver_name}</p>
-                    {reason_html}
-                </div>
-                <p>If you have questions, please speak with your manager.</p>
-            </div>
-        </body>
-        </html>
+        reason_row = ""
+        if reason:
+            reason_row = f"""
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af; vertical-align: top;">Reason:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #fca5a5;">{reason}</td>
+                </tr>
+            """
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {employee_name},</p>
+        <p style="margin-bottom: 25px;">Unfortunately, your time off request has been <span style="color: #ef4444; font-weight: 600;">denied</span>.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{days_display}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Reviewed by:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{approver_name}</td>
+                </tr>
+                {reason_row}
+            </table>
+        </div>
         """
+
+        html = _get_email_template(
+            title="Request Denied",
+            title_color="#ef4444",
+            content=content,
+            footer_text="If you have questions, please speak with your manager."
+        )
         return self._send_email(employee_email, subject, html)
 
     def send_pending_request_notification(
@@ -202,32 +322,47 @@ class EmailService:
         total_days: float
     ) -> bool:
         """Send email to manager when new PTO request needs approval."""
-        subject = f"TJM Time Calendar: New {pto_type.title()} Request from {employee_name}"
+        subject = f"TJM Time Calendar: New {pto_type.replace('_', ' ').title()} Request from {employee_name}"
 
         date_range = start_date.strftime('%B %d, %Y')
         if start_date != end_date:
             date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background-color: #f59e0b; color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">New Request Pending</h1>
-            </div>
-            <div style="padding: 20px;">
-                <p>Hi {manager_name},</p>
-                <p>A new time off request requires your review.</p>
-                <div style="background-color: #fffbeb; padding: 15px; border-radius: 5px; border-left: 4px solid #f59e0b; margin: 20px 0;">
-                    <p><strong>Employee:</strong> {employee_name}</p>
-                    <p><strong>Type:</strong> {pto_type.title()}</p>
-                    <p><strong>Dates:</strong> {date_range}</p>
-                    <p><strong>Total Days:</strong> {total_days}</p>
-                </div>
-                <p>Please log in to TJM Time Calendar to approve or deny this request.</p>
-            </div>
-        </body>
-        </html>
+        # Format days nicely
+        days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {manager_name},</p>
+        <p style="margin-bottom: 25px;">A new time off request requires your review.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{employee_name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td>
+                </tr>
+            </table>
+        </div>
         """
+
+        html = _get_email_template(
+            title="New Request Pending",
+            title_color="#f59e0b",
+            content=content,
+            footer_text="Please log in to TJM Time Calendar to approve or deny this request."
+        )
         return self._send_email(manager_email, subject, html)
 
     def send_report_email(
@@ -264,28 +399,25 @@ class EmailService:
             msg['From'] = self.from_address
             msg['To'] = to_email
 
-            # Build email body
+            # Build email body with dark theme
             message_html = ""
             if message:
                 message_html = f"""
-                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                    <p style="margin: 0; color: #666;"><em>{message}</em></p>
+                <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid #C9A227; margin-bottom: 20px;">
+                    <p style="margin: 0; color: #e5e7eb; font-style: italic;">{message}</p>
                 </div>
                 """
 
-            body_html = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-                <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
-                    <h1 style="margin: 0;">TJM Time Calendar Report</h1>
-                </div>
-                <div style="padding: 20px;">
-                    {message_html}
-                    <p>Please find the attached report.</p>
-                </div>
-            </body>
-            </html>
+            content = f"""
+            <p style="font-size: 16px; margin-bottom: 20px; color: #e5e7eb;">Please find the attached report.</p>
+            {message_html}
             """
+
+            body_html = _get_email_template(
+                title="Report",
+                title_color="#C9A227",
+                content=content
+            )
 
             # Attach body
             msg.attach(MIMEText(body_html, 'html'))
@@ -308,21 +440,19 @@ class EmailService:
                 msg.attach(part)
             else:
                 # No attachment - include report in body
-                full_html = f"""
-                <html>
-                <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-                    <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
-                        <h1 style="margin: 0;">TJM Time Calendar Report</h1>
-                    </div>
-                    <div style="padding: 20px;">
-                        {message_html}
-                        <p>Please find the report below:</p>
-                        <hr style="border: 1px solid #ddd; margin: 20px 0;">
-                        {html_content}
-                    </div>
-                </body>
-                </html>
+                content_with_report = f"""
+                <p style="font-size: 16px; margin-bottom: 20px; color: #e5e7eb;">Please find the report below:</p>
+                {message_html}
+                <div style="background-color: #374151; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                    {html_content}
+                </div>
                 """
+
+                full_html = _get_email_template(
+                    title="Report",
+                    title_color="#C9A227",
+                    content=content_with_report
+                )
                 msg = MIMEMultipart('alternative')
                 msg['Subject'] = subject
                 msg['From'] = self.from_address
