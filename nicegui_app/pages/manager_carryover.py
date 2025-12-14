@@ -122,7 +122,7 @@ def manager_carryover_page():
                                             location = f'{employee.location_city}, {employee.location_state}' if employee.location_city else employee.location_state or 'Not set'
                                             ui.label(f'Location: {location}').classes('text-sm opacity-60')
 
-                                        ui.label(f'Submitted: {req.created_at.strftime("%m/%d/%Y")}').classes('text-sm opacity-60')
+                                        ui.label(f'Submitted: {req.created_at.strftime("%A, %B %d, %Y")}').classes('text-sm opacity-60')
 
                                     # Policy context
                                     with ui.row().classes('w-full gap-4 mb-4'):
@@ -217,7 +217,7 @@ def manager_carryover_page():
                                     'requested': f'{req.hours_requested:.1f}',
                                     'approved': f'{req.hours_approved:.1f}' if req.hours_approved else '-',
                                     'status': status_display,
-                                    'date': req.approved_at.strftime('%m/%d/%Y') if req.approved_at else '-'
+                                    'date': req.approved_at.strftime('%A, %B %d, %Y') if req.approved_at else '-'
                                 })
 
                             ui.table(columns=columns, rows=rows).classes('w-full')

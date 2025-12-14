@@ -1,9 +1,22 @@
 """Manager settings page for notification preferences."""
+from datetime import date, timedelta
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog, show_success_dialog
 from src.services.notification_service import NotificationService
+
+
+def format_hour_12h(hour: int) -> str:
+    """Convert 24-hour to 12-hour AM/PM format."""
+    if hour == 0:
+        return '12:00 AM'
+    elif hour < 12:
+        return f'{hour}:00 AM'
+    elif hour == 12:
+        return '12:00 PM'
+    else:
+        return f'{hour - 12}:00 PM'
 
 
 def manager_settings_page():
@@ -76,13 +89,13 @@ def manager_settings_page():
                             ui.label('Delivery Schedule').classes('font-semibold mb-3')
 
                             with ui.row().classes('w-full gap-4'):
-                                # Hour selector
-                                hour_options = {h: f"{h:02d}:00 {'AM' if h < 12 else 'PM'}" for h in range(24)}
+                                # Hour selector with proper 12-hour AM/PM format
+                                hour_options = {h: format_hour_12h(h) for h in range(24)}
                                 nonlocal hour_select
                                 hour_select = ui.select(
                                     options=hour_options,
                                     value=current_hour,
-                                    label='Preferred Hour'
+                                    label='Preferred Time'
                                 ).classes('flex-1').props('outlined')
 
                                 # Day selector (only for weekly)
@@ -140,7 +153,7 @@ def manager_settings_page():
                             preferred_day=day_select.value if day_select else current_day,
                             export_format=format_select.value
                         )
-                        show_info_dialog('Success', 'Your notification preferences have been saved.')
+                        show_success_dialog('Success', 'Your notification preferences have been saved.')
                     except Exception as e:
                         show_error_dialog('Error', f'Failed to save preferences: {str(e)}')
                     finally:
@@ -178,7 +191,7 @@ def manager_settings_page():
                         notification_service = NotificationService(db)
                         sent_count = notification_service.force_send_digest(user_id)
                         if sent_count > 0:
-                            show_info_dialog('Digest Sent', f'Your digest email has been sent with {sent_count} notification(s).')
+                            show_success_dialog('Digest Sent', f'Your digest email has been sent with {sent_count} notification(s).')
                         else:
                             show_info_dialog('No Pending', 'There are no pending notifications to send.')
                     except Exception as e:
@@ -190,6 +203,170 @@ def manager_settings_page():
                 send_btn = ui.button('Send Digest Now', icon='send', on_click=send_now).props('outline')
             else:
                 ui.label('No pending notifications. All caught up!').classes('text-sm opacity-60')
+
+        # On-Demand Report Generation Card
+        with ui.card().classes('w-full p-6 mb-4'):
+            with ui.row().classes('items-center gap-3 mb-4'):
+                ui.icon('assessment', size='md').style('color: #c9a227')
+                ui.label('Generate Report On-Demand').classes('text-lg font-semibold')
+
+            ui.label('Preview or download a PTO report for your team without waiting for the scheduled digest.').classes('text-sm opacity-60 mb-4')
+
+            # Date range presets
+            today = date.today()
+            preset_options = {
+                'last_7': 'Last 7 Days',
+                'last_30': 'Last 30 Days',
+                'this_month': 'This Month',
+                'last_month': 'Last Month',
+                'custom': 'Custom Date Range'
+            }
+            preset_select = ui.select(
+                options=preset_options,
+                value='last_30',
+                label='Time Period'
+            ).classes('w-full mb-4').props('outlined')
+
+            # Custom date range container (shown/hidden based on preset)
+            custom_dates_container = ui.column().classes('w-full')
+
+            report_start_date = None
+            report_end_date = None
+
+            def update_date_visibility():
+                nonlocal report_start_date, report_end_date
+                custom_dates_container.clear()
+
+                if preset_select.value == 'custom':
+                    with custom_dates_container:
+                        with ui.row().classes('w-full gap-4 mb-4'):
+                            report_start_date = ui.date(value=today - timedelta(days=30)).props('outlined label="Start Date"').classes('flex-1')
+                            report_end_date = ui.date(value=today).props('outlined label="End Date"').classes('flex-1')
+
+            update_date_visibility()
+            preset_select.on('update:model-value', lambda e: update_date_visibility())
+
+            # Format selection for download
+            report_format_options = {
+                'pdf': 'PDF',
+                'csv': 'CSV',
+                'html': 'HTML'
+            }
+            report_format_select = ui.select(
+                options=report_format_options,
+                value=current_format,
+                label='Download Format'
+            ).classes('w-full mb-4').props('outlined')
+
+            # Preview container
+            preview_container = ui.column().classes('w-full')
+
+            def get_date_range():
+                """Get start and end dates based on preset selection."""
+                preset = preset_select.value
+                if preset == 'last_7':
+                    return today - timedelta(days=7), today
+                elif preset == 'last_30':
+                    return today - timedelta(days=30), today
+                elif preset == 'this_month':
+                    return today.replace(day=1), today
+                elif preset == 'last_month':
+                    first_of_this_month = today.replace(day=1)
+                    last_month_end = first_of_this_month - timedelta(days=1)
+                    last_month_start = last_month_end.replace(day=1)
+                    return last_month_start, last_month_end
+                else:  # custom
+                    start = report_start_date.value if report_start_date else today - timedelta(days=30)
+                    end = report_end_date.value if report_end_date else today
+                    # Handle string dates from date picker
+                    if isinstance(start, str):
+                        start = date.fromisoformat(start)
+                    if isinstance(end, str):
+                        end = date.fromisoformat(end)
+                    return start, end
+
+            def generate_preview():
+                preview_btn.props('loading disabled')
+                preview_container.clear()
+
+                start_date, end_date = get_date_range()
+
+                db = next(get_db())
+                try:
+                    from sqlalchemy import select, and_
+                    from src.models.pto_request import PTORequest
+                    from src.models.user import User
+                    from src.models.department import Department
+
+                    # Get manager's department
+                    manager = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+                    if not manager or not manager.department_id:
+                        show_error_dialog('Error', 'Unable to determine your department.')
+                        return
+
+                    # Get team members in manager's department
+                    team_stmt = select(User.id).where(User.department_id == manager.department_id)
+                    team_ids = [r[0] for r in db.execute(team_stmt).fetchall()]
+
+                    # Get PTO requests in date range for team
+                    requests_stmt = select(PTORequest).where(
+                        and_(
+                            PTORequest.user_id.in_(team_ids),
+                            PTORequest.start_date >= start_date,
+                            PTORequest.end_date <= end_date
+                        )
+                    ).order_by(PTORequest.start_date.desc())
+
+                    requests = db.execute(requests_stmt).scalars().all()
+
+                    with preview_container:
+                        with ui.card().classes('w-full p-4').style('border: 1px solid #c9a227'):
+                            ui.label(f'Report Preview: {start_date.strftime("%b %d, %Y")} - {end_date.strftime("%b %d, %Y")}').classes('font-semibold mb-3')
+
+                            if not requests:
+                                ui.label('No PTO requests found in this date range.').classes('text-sm opacity-60')
+                            else:
+                                ui.label(f'{len(requests)} request(s) found').classes('text-sm opacity-60 mb-3')
+
+                                # Summary table
+                                columns = [
+                                    {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'align': 'left'},
+                                    {'name': 'type', 'label': 'Type', 'field': 'type', 'align': 'left'},
+                                    {'name': 'dates', 'label': 'Dates', 'field': 'dates', 'align': 'left'},
+                                    {'name': 'days', 'label': 'Days', 'field': 'days', 'align': 'center'},
+                                    {'name': 'status', 'label': 'Status', 'field': 'status', 'align': 'center'},
+                                ]
+                                rows = []
+                                for req in requests:
+                                    trusted_badge = '✓ ' if req.user.is_trusted else ''
+                                    rows.append({
+                                        'employee': f'{trusted_badge}{req.user.full_name}',
+                                        'type': req.pto_type.title(),
+                                        'dates': f'{req.start_date.strftime("%m/%d")} - {req.end_date.strftime("%m/%d")}',
+                                        'days': float(req.total_days),
+                                        'status': req.status.title()
+                                    })
+
+                                ui.table(columns=columns, rows=rows, row_key='employee').classes('w-full').props('dense flat')
+
+                except Exception as e:
+                    show_error_dialog('Error', f'Failed to generate preview: {str(e)}')
+                finally:
+                    db.close()
+                    preview_btn.props(remove='loading disabled')
+
+            def download_report():
+                download_btn.props('loading disabled')
+                start_date, end_date = get_date_range()
+                export_format = report_format_select.value
+
+                # Redirect to export endpoint
+                ui.navigate.to(f'/api/reports/team-pto?start={start_date.isoformat()}&end={end_date.isoformat()}&format={export_format}', new_tab=True)
+                download_btn.props(remove='loading disabled')
+
+            with ui.row().classes('w-full gap-4'):
+                preview_btn = ui.button('Preview Report', icon='visibility', on_click=generate_preview).props('outline')
+                download_btn = ui.button('Download Report', icon='download', on_click=download_report).props('color=primary')
 
         # Help Card
         with ui.card().classes('w-full p-6').style('border-left: 4px solid #5a6a72'):

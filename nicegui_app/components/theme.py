@@ -133,7 +133,7 @@ def apply_dark_mode():
     ''')
 
     dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', False)
+    is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
     if is_dark:
         dark_mode.enable()
     return dark_mode
@@ -313,3 +313,17 @@ def show_warning_dialog(title: str, message: str):
 def show_info_dialog(title: str, message: str):
     """Show an info dialog with blue styling."""
     show_validation_dialog(title, message, icon='info', icon_color='blue')
+
+
+def show_success_dialog(title: str, message: str):
+    """Show a success dialog with TJM gold/amber styling."""
+    # Use custom styling for TJM brand gold (#c9a227)
+    with ui.dialog() as dialog, ui.card().classes('p-0 max-w-sm'):
+        with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #c9a227'):
+            ui.icon('check_circle', size='md').classes('mr-2')
+            ui.label(title).classes('text-lg font-bold')
+        with ui.column().classes('p-4 gap-3'):
+            ui.label(message).classes('text-base')
+            with ui.row().classes('w-full justify-end mt-2'):
+                ui.button('OK', on_click=dialog.close).props('color=primary')
+    dialog.open()

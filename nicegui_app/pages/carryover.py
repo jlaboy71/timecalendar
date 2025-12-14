@@ -192,7 +192,7 @@ def carryover_page():
                         with ui.row().classes('items-center gap-2'):
                             ui.icon(status_icon, color=status_color)
                             ui.label(f'{hrs:.0f} hrs ({fmt_days(hrs/8)} days)')
-                        ui.label(req.created_at.strftime('%m/%d/%Y')).classes('text-sm opacity-60')
+                        ui.label(req.created_at.strftime('%A, %B %d, %Y')).classes('text-sm opacity-60')
 
                     if req.status == 'denied' and req.manager_notes:
                         ui.label(f'Denied: {req.manager_notes}').classes('text-sm text-red-500 mt-2')

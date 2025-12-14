@@ -89,7 +89,7 @@ def manager_team_page():
                                         ui.label(f'@{member.username}').classes('text-sm opacity-60')
                                         ui.label(f'• {member.email}').classes('text-sm opacity-60')
                                     if member.hire_date:
-                                        ui.label(f'Hired: {member.hire_date.strftime("%b %d, %Y")}').classes('text-xs opacity-50')
+                                        ui.label(f'Hired: {member.hire_date.strftime("%A, %B %d, %Y")}').classes('text-xs opacity-50')
 
                                 # Actions
                                 with ui.row().classes('gap-2'):

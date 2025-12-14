@@ -102,11 +102,11 @@ def manager_request_detail_page(request_id: int):
             with ui.card().classes('w-full p-4 mb-4'):
                 ui.label('Request Details').classes('text-xl font-bold mb-2')
                 ui.label(f"Type: {request.pto_type.title()}")
-                ui.label(f"Start Date: {request.start_date.strftime('%Y-%m-%d')}")
-                ui.label(f"End Date: {request.end_date.strftime('%Y-%m-%d')}")
+                ui.label(f"Start Date: {request.start_date.strftime('%A, %B %d, %Y')}")
+                ui.label(f"End Date: {request.end_date.strftime('%A, %B %d, %Y')}")
                 ui.label(f"Total Days: {fmt_days(float(request.total_days))}")
                 ui.label(f"Status: {request.status.title()}")
-                ui.label(f"Submitted: {request.submitted_at.strftime('%Y-%m-%d %H:%M')}")
+                ui.label(f"Submitted: {request.submitted_at.strftime('%A, %B %d, %Y at %I:%M %p')}")
                 if request.notes:
                     ui.label(f"Notes: {request.notes}")
 
@@ -144,9 +144,9 @@ def manager_request_detail_page(request_id: int):
                                             ui.label(f"{conflict['pto_type'].title()} - {conflict['total_days']} day(s)").classes('text-sm opacity-70')
                                     with ui.column().classes('text-right gap-0'):
                                         if conflict['start_date'] == conflict['end_date']:
-                                            ui.label(conflict['start_date'].strftime('%b %d, %Y')).classes('text-sm')
+                                            ui.label(conflict['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm')
                                         else:
-                                            ui.label(f"{conflict['start_date'].strftime('%b %d')} - {conflict['end_date'].strftime('%b %d, %Y')}").classes('text-sm')
+                                            ui.label(f"{conflict['start_date'].strftime('%A, %B %d')} - {conflict['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm')
                                         ui.badge(conflict['status'].title(), color=status_color)
 
                     ui.label(

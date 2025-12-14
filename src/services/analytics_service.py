@@ -78,9 +78,9 @@ class AnalyticsService:
             'denied': denied,
             'pending': pending,
             'cancelled': cancelled,
-            'total_days_taken': round(total_days, 1),
+            'total_days_taken': int(round(total_days)),  # Whole days only
             'active_employees': active_employees,
-            'avg_days_per_employee': round(avg_days, 1),
+            'avg_days_per_employee': int(round(avg_days)),  # Whole days only
             'approval_rate': round((approved / total * 100) if total > 0 else 0, 1)
         }
 
@@ -178,7 +178,7 @@ class AnalyticsService:
             result.append({
                 'type': pto_type.title(),
                 'count': data['count'],
-                'days': round(data['days'], 1),
+                'days': int(round(data['days'])),  # Whole days only
                 'percentage': round((data['days'] / total_days * 100) if total_days > 0 else 0, 1)
             })
 
@@ -233,8 +233,8 @@ class AnalyticsService:
                 'department_name': dept.name,
                 'employee_count': len(users),
                 'total_requests': len(requests),
-                'total_days': round(total_days, 1),
-                'avg_days_per_employee': round(avg_days, 1)
+                'total_days': int(round(total_days)),  # Whole days only
+                'avg_days_per_employee': int(round(avg_days))  # Whole days only
             })
 
         # Sort by average days descending
@@ -291,7 +291,7 @@ class AnalyticsService:
                     'user_id': user_id,
                     'name': f"{user.first_name} {user.last_name}",
                     'department': dept_name,
-                    'days_taken': round(days, 1)
+                    'days_taken': int(round(days))  # Whole days only
                 })
 
         return result
@@ -444,8 +444,8 @@ class AnalyticsService:
 
         return {
             'year': year,
-            'total_allocated_days': round(total_allocated / 8, 1),  # Convert hours to days
-            'total_used_days': round(total_used / 8, 1),  # Convert hours to days
+            'total_allocated_days': int(round(total_allocated / 8)),  # Convert hours to days (whole numbers)
+            'total_used_days': int(round(total_used / 8)),  # Convert hours to days (whole numbers)
             'utilization_rate': round(utilization_rate, 1),
             'employees_tracked': users_with_balance
         }
@@ -566,8 +566,8 @@ class AnalyticsService:
                     'user_id': user.id,
                     'name': f"{user.first_name} {user.last_name}",
                     'department': dept_name,
-                    'vacation_remaining': round(vacation_remaining, 1),
-                    'vacation_total': round(vacation_total, 1),
+                    'vacation_remaining': int(round(vacation_remaining)),  # Whole days only
+                    'vacation_total': int(round(vacation_total)),  # Whole days only
                     'pct_remaining': round(pct_remaining, 1),
                     'days_until_expiry': days_until_expiry,
                     'risk_level': risk_level
@@ -651,7 +651,7 @@ class AnalyticsService:
 
         # Calculate weekly average (divide by ~52 weeks)
         weeks_in_year = 52
-        return {day: round(patterns[day] / weeks_in_year, 1) for day in days}
+        return {day: int(round(patterns[day] / weeks_in_year)) for day in days}  # Whole numbers only
 
     def get_monthly_pto_by_type(self, year: int, department_id: Optional[int] = None) -> List[Dict]:
         """
@@ -687,11 +687,11 @@ class AnalyticsService:
             results.append({
                 'month': month,
                 'month_name': date(year, month, 1).strftime('%B'),
-                'vacation_days': round(vacation_days, 1),
-                'sick_days': round(sick_days, 1),
-                'personal_days': round(personal_days, 1),
-                'other_days': round(other_days, 1),
-                'total_days': round(vacation_days + sick_days + personal_days + other_days, 1)
+                'vacation_days': int(round(vacation_days)),  # Whole days only
+                'sick_days': int(round(sick_days)),  # Whole days only
+                'personal_days': int(round(personal_days)),  # Whole days only
+                'other_days': int(round(other_days)),  # Whole days only
+                'total_days': int(round(vacation_days + sick_days + personal_days + other_days))  # Whole days only
             })
 
         return results
@@ -735,8 +735,8 @@ class AnalyticsService:
                 'department_id': dept.id,
                 'department_name': dept.name,
                 'employee_count': len(users),
-                'total_allocated': round(total_allocated, 1),
-                'total_used': round(total_used, 1),
+                'total_allocated': int(round(total_allocated / 8)),  # Convert hours to days
+                'total_used': int(round(total_used / 8)),  # Convert hours to days
                 'utilization_rate': round(utilization_rate, 1)
             })
 
@@ -798,3 +798,85 @@ class AnalyticsService:
             })
 
         return recommendations
+
+    def get_department_employee_pto_details(self, department_id: int, year: int) -> List[Dict]:
+        """
+        Get detailed PTO breakdown for all employees in a department.
+
+        Args:
+            department_id: Department to get employees for
+            year: Year for PTO balances
+
+        Returns:
+            List of employee dicts with PTO details
+        """
+        from src.models.pto_balance import PTOBalance
+        from src.models.user import User
+
+        # Get active employees in department
+        employees = self.db.query(User).filter(
+            User.department_id == department_id,
+            User.is_active == True
+        ).order_by(User.last_name, User.first_name).all()
+
+        results = []
+        for emp in employees:
+            # Get balance for year
+            balance = self.db.query(PTOBalance).filter(
+                PTOBalance.user_id == emp.id,
+                PTOBalance.year == year
+            ).first()
+
+            if balance:
+                # Convert hours to days (divide by 8)
+                vacation_total = int(round(float(balance.vacation_total) / 8))
+                vacation_used = int(round(float(balance.vacation_used) / 8))
+                vacation_pending = int(round(float(balance.vacation_pending) / 8))
+                vacation_remaining = vacation_total - vacation_used - vacation_pending
+
+                sick_total = int(round(float(balance.sick_total) / 8))
+                sick_used = int(round(float(balance.sick_used) / 8))
+                sick_remaining = sick_total - sick_used
+
+                personal_total = int(round(float(balance.personal_total) / 8))
+                personal_used = int(round(float(balance.personal_used) / 8))
+                personal_remaining = personal_total - personal_used
+
+                total_allocated = vacation_total + sick_total + personal_total
+                total_used = vacation_used + sick_used + personal_used
+                total_remaining = total_allocated - total_used - vacation_pending
+            else:
+                vacation_total = vacation_used = vacation_pending = vacation_remaining = 0
+                sick_total = sick_used = sick_remaining = 0
+                personal_total = personal_used = personal_remaining = 0
+                total_allocated = total_used = total_remaining = 0
+
+            results.append({
+                'user_id': emp.id,
+                'name': f"{emp.first_name} {emp.last_name}",
+                'email': emp.email,
+                'hire_date': emp.hire_date,
+                'vacation': {
+                    'total': vacation_total,
+                    'used': vacation_used,
+                    'pending': vacation_pending,
+                    'remaining': vacation_remaining
+                },
+                'sick': {
+                    'total': sick_total,
+                    'used': sick_used,
+                    'remaining': sick_remaining
+                },
+                'personal': {
+                    'total': personal_total,
+                    'used': personal_used,
+                    'remaining': personal_remaining
+                },
+                'totals': {
+                    'allocated': total_allocated,
+                    'used': total_used,
+                    'remaining': total_remaining
+                }
+            })
+
+        return results

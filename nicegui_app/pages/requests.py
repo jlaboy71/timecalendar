@@ -396,8 +396,10 @@ def requests_page():
                     else:
                         with ui.card().classes('w-full'):
                             for req in requests_to_show:
+                                # Color code: Vacation=Blue, Sick=Green, Personal=Purple, WFH=Red
                                 type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
                                 type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
+                                type_display = {'vacation': 'Vacation', 'sick': 'Sick', 'personal': 'Personal', 'work_from_home': 'WFH'}
 
                                 pto_type_lower = req.pto_type.lower()
                                 type_color = type_colors.get(pto_type_lower, 'gray')
@@ -410,16 +412,16 @@ def requests_page():
                                         with ui.column().classes('gap-1'):
                                             with ui.row().classes('gap-2 items-center'):
                                                 with ui.element('div').classes(f'bg-{type_color}-100 text-{type_color}-700 px-2 py-0.5 rounded'):
-                                                    ui.label(req.pto_type.title()).classes('font-semibold text-sm')
+                                                    ui.label(type_display.get(pto_type_lower, req.pto_type.title())).classes('font-semibold text-sm')
                                                 # Show status badge for employees (they have pending/denied)
                                                 if not is_manager_or_admin:
                                                     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
                                                     ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey'))
 
                                             if req.start_date == req.end_date:
-                                                ui.label(req.start_date.strftime('%B %d, %Y')).classes('text-sm')
+                                                ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm')
                                             else:
-                                                ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-sm')
+                                                ui.label(f"{req.start_date.strftime('%a, %b %d')} - {req.end_date.strftime('%a, %b %d, %Y')}").classes('text-sm')
 
                                             with ui.row().classes('gap-3 text-xs opacity-60'):
                                                 days = round(float(req.total_days), 1)
@@ -450,15 +452,8 @@ def requests_page():
                                         ui.button('Details', icon='info', on_click=create_detail_handler(req)).props('flat size=sm')
 
             def apply_type_filter(pto_type):
-                """Apply type filter and update button styles."""
+                """Apply type filter and render filtered list."""
                 type_filter['value'] = pto_type
-                # Update button styles - primary types use their own color
-                type_btn_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple'}
-                for btn_type, btn in type_filter_buttons.items():
-                    if pto_type and btn_type == pto_type:
-                        btn.props(f'color={type_btn_colors.get(btn_type, "primary")}', remove='flat')
-                    else:
-                        btn.props('flat', remove='color')
                 # Clear other dropdown if not selecting other
                 if other_dropdown_ref['select'] and pto_type not in other_types:
                     other_dropdown_ref['select'].value = None
@@ -469,6 +464,9 @@ def requests_page():
                     render_requests_by_type(sick_approved, 'Sick')
                 elif pto_type == 'personal':
                     render_requests_by_type(personal_approved, 'Personal')
+                elif pto_type == 'work_from_home':
+                    wfh_filtered = [r for r in approved_requests if r.pto_type.lower() == 'work_from_home']
+                    render_requests_by_type(wfh_filtered, 'WFH')
                 elif pto_type in other_types:
                     filtered = [r for r in approved_requests if r.pto_type.lower() == pto_type]
                     render_requests_by_type(filtered, pto_type.replace('_', ' ').title())
@@ -500,65 +498,80 @@ def requests_page():
                 # Refresh by navigating to same page
                 ui.navigate.to('/requests')
 
-            # Summary card with total and type breakdown
-            with ui.card().classes('w-full mb-4 p-4'):
-                with ui.row().classes('w-full justify-between items-center mb-3'):
-                    with ui.row().classes('items-center gap-2'):
-                        ui.icon('event_available', color='green').classes('text-xl')
-                        ui.label(f'{len(approved_requests)} Total Approved ({year_filter["value"]})').classes('text-lg font-semibold text-green-600')
+            # Summary header with total
+            total_days = sum(float(r.total_days or 0) for r in approved_requests)
+            with ui.element('div').classes('w-full mb-4 p-4 rounded-lg').style('background-color: #1f2937; border-left: 4px solid #22c55e'):
+                with ui.row().classes('w-full justify-between items-center'):
+                    with ui.row().classes('items-center gap-3'):
+                        ui.icon('check_circle', size='lg').style('color: #22c55e')
+                        with ui.column().classes('gap-0'):
+                            ui.label(f'{len(approved_requests)} Total Approved').classes('text-2xl font-bold').style('color: #22c55e')
+                            ui.label(f'{year_filter["value"]}').classes('text-sm opacity-70')
+                    with ui.column().classes('items-end gap-0'):
+                        ui.label(f'{total_days:.1f}').classes('text-2xl font-bold').style('color: #86efac')
+                        ui.label('days taken').classes('text-xs opacity-60')
 
-                # Type breakdown with color-coded filter buttons
-                with ui.row().classes('w-full gap-2 flex-wrap items-center'):
-                    # Vacation (blue)
-                    btn_vacation = ui.button(
-                        f'Vacation ({len(vacation_approved)})',
-                        icon='beach_access',
-                        on_click=lambda: apply_type_filter('vacation')
-                    ).props('flat dense color=blue')
-                    type_filter_buttons['vacation'] = btn_vacation
+            # PTO type tiles - 4 separate colored cards
+            wfh_approved = [r for r in approved_requests if r.pto_type.lower() == 'work_from_home']
 
-                    # Sick (green)
-                    btn_sick = ui.button(
-                        f'Sick ({len(sick_approved)})',
-                        icon='medical_services',
-                        on_click=lambda: apply_type_filter('sick')
-                    ).props('flat dense color=green')
-                    type_filter_buttons['sick'] = btn_sick
+            # Define tile data with colors matching the rest of the app
+            # Color code: Vacation=Blue, Sick=Green, Personal=Purple, WFH=Red
+            tile_data = [
+                {'type': 'vacation', 'label': 'Vacation', 'icon': 'beach_access', 'count': len(vacation_approved),
+                 'days': sum(float(r.total_days or 0) for r in vacation_approved),
+                 'bg': '#1e3a5f', 'border': '#3b82f6', 'text': '#3b82f6'},
+                {'type': 'sick', 'label': 'Sick', 'icon': 'medical_services', 'count': len(sick_approved),
+                 'days': sum(float(r.total_days or 0) for r in sick_approved),
+                 'bg': '#14532d', 'border': '#22c55e', 'text': '#22c55e'},
+                {'type': 'personal', 'label': 'Personal', 'icon': 'person', 'count': len(personal_approved),
+                 'days': sum(float(r.total_days or 0) for r in personal_approved),
+                 'bg': '#581c87', 'border': '#a855f7', 'text': '#a855f7'},
+                {'type': 'work_from_home', 'label': 'WFH', 'icon': 'home_work', 'count': len(wfh_approved),
+                 'days': sum(float(r.total_days or 0) for r in wfh_approved),
+                 'bg': '#7f1d1d', 'border': '#ef4444', 'text': '#ef4444'},
+            ]
 
-                    # Personal (purple)
-                    btn_personal = ui.button(
-                        f'Personal ({len(personal_approved)})',
-                        icon='person',
-                        on_click=lambda: apply_type_filter('personal')
-                    ).props('flat dense color=purple')
-                    type_filter_buttons['personal'] = btn_personal
+            with ui.row().classes('w-full gap-4 mb-4'):
+                for tile in tile_data:
+                    def make_click_handler(t=tile['type']):
+                        return lambda: apply_type_filter(t)
 
-                    # Other types dropdown (if any exist)
-                    if other_approved:
-                        other_options = {
-                            'bereavement': 'Bereavement',
-                            'fmla': 'FMLA',
-                            'jury_duty': 'Jury Duty',
-                            'voting': 'Voting',
-                            'military': 'Military'
-                        }
-                        # Only show types that have approved requests
-                        available_other = {k: v for k, v in other_options.items()
-                                           if any(r.pto_type.lower() == k for r in other_approved)}
+                    with ui.element('div').classes('flex-1 p-4 rounded-lg cursor-pointer').style(
+                        f"background-color: {tile['bg']}; border-top: 4px solid {tile['border']};"
+                    ).on('click', make_click_handler()):
+                        with ui.row().classes('items-center gap-2 mb-2'):
+                            ui.icon(tile['icon']).style(f"color: {tile['text']}")
+                            ui.label(tile['label']).classes('font-semibold').style(f"color: {tile['text']}")
+                        ui.label(f'{tile["count"]} request{"s" if tile["count"] != 1 else ""}').classes('text-sm opacity-70')
+                        ui.label(f'{tile["days"]:.1f} days').classes('text-xl font-bold')
 
-                        def on_other_change(e):
-                            if e.value:
-                                # Clear primary button selections
-                                for btn in type_filter_buttons.values():
-                                    btn.props('flat')
-                                apply_type_filter(e.value)
+                    # Store reference for button styling (for highlighting selected)
+                    type_filter_buttons[tile['type']] = None  # Tiles don't need style updates
 
-                        other_select = ui.select(
-                            options=available_other,
-                            label=f'Other ({len(other_approved)})',
-                            on_change=on_other_change
-                        ).props('dense outlined').classes('min-w-[120px]')
-                        other_dropdown_ref['select'] = other_select
+            # Other types dropdown (if any exist)
+            if other_approved:
+                with ui.row().classes('w-full mb-4'):
+                    other_options = {
+                        'bereavement': 'Bereavement',
+                        'fmla': 'FMLA',
+                        'jury_duty': 'Jury Duty',
+                        'voting': 'Voting',
+                        'military': 'Military'
+                    }
+                    # Only show types that have approved requests
+                    available_other = {k: v for k, v in other_options.items()
+                                       if any(r.pto_type.lower() == k for r in other_approved)}
+
+                    def on_other_change(e):
+                        if e.value:
+                            apply_type_filter(e.value)
+
+                    other_select = ui.select(
+                        options=available_other,
+                        label=f'Other Types ({len(other_approved)})',
+                        on_change=on_other_change
+                    ).props('dense outlined').classes('min-w-[150px]')
+                    other_dropdown_ref['select'] = other_select
 
             # For employees: show approved/pending/denied status cards
             if not is_manager_or_admin:

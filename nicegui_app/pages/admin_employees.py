@@ -50,6 +50,8 @@ def admin_employees_list_page():
                 'hire_date': user.hire_date.strftime('%m-%d-%Y') if user.hire_date else 'Not Set',
                 'active': 'Yes' if user.is_active else 'No',
                 'is_active': user.is_active,
+                'trusted': '✓' if user.is_trusted else '',
+                'is_trusted': user.is_trusted,
             })
 
         # Build autocomplete options from employee names
@@ -128,6 +130,7 @@ def admin_employees_list_page():
             {'name': 'role', 'label': 'Role', 'field': 'role', 'align': 'left', 'sortable': True},
             {'name': 'hire_date', 'label': 'Hire Date', 'field': 'hire_date', 'align': 'left', 'sortable': True},
             {'name': 'active', 'label': 'Active', 'field': 'active', 'align': 'center', 'sortable': True},
+            {'name': 'trusted', 'label': 'Trusted', 'field': 'trusted', 'align': 'center', 'sortable': True},
         ]
 
         def has_any_filter():
@@ -345,7 +348,14 @@ def admin_employees_add_page():
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
                 role_select = ui.select(role_options, label='Role', value='employee').props('outlined').classes('flex-1')
-                is_active_check = ui.checkbox('Active Employee', value=True).classes('flex-1 self-center')
+                is_active_check = ui.checkbox('Active Employee', value=True).classes('self-center')
+                is_trusted_check = ui.checkbox('Trusted Employee', value=False).classes('self-center')
+
+                # Add tooltip for trusted employee
+                with ui.element('div').classes('self-center'):
+                    with ui.tooltip():
+                        ui.label('Auto-approves Vacation, Sick, Personal PTO').classes('text-xs')
+                    ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
 
         # Work Location Section
         with ui.card().classes('w-full p-6 mb-4'):
@@ -474,7 +484,15 @@ def admin_employees_add_page():
                     balance_service = BalanceService(db)
                     balance_service.allocate_standard_balance(new_user.id)
 
+                    # Set trusted status if checkbox was checked (only for employees)
                     current_user = app.storage.general.get('user')
+                    if is_trusted_check.value and role_select.value == 'employee':
+                        trust_update = UserUpdate(
+                            is_trusted=True,
+                            trusted_by_id=current_user.get('id'),
+                            trusted_at=datetime.now()
+                        )
+                        user_service.update_user(new_user.id, trust_update)
                     AuditService.log_user_create(
                         db, current_user.get('id'),
                         f"{current_user.get('first_name')} {current_user.get('last_name')}",
@@ -621,59 +639,62 @@ def admin_employees_edit_page(user_id: int):
                             department_select = ui.select(dept_options, label='Department', value=user.department_id).props('outlined').classes('w-full')
 
                 role_select = None
+                is_trusted_check = None
                 with ui.row().classes('w-full gap-4 mt-2'):
                     if not is_manager_editing:
                         role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
                         role_select = ui.select(role_options, label='Role', value=user.role).props('outlined').classes('flex-1')
 
-                    is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('flex-1 self-center')
+                    is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('self-center')
 
-            # Trusted Employee Section - only for admins/superadmins editing regular employees
-            is_trusted_check = None
-            if not is_manager_editing and user.role == 'employee':
-                with ui.card().classes('w-full p-6 mb-4').style('border-left: 4px solid #c9a227'):
-                    with ui.row().classes('w-full items-center gap-3'):
-                        ui.icon('verified_user', size='md').style('color: #c9a227')
-                        ui.label('Trusted Employee').classes('text-lg font-semibold').style('color: #5a6a72')
+                    # Trusted Employee checkbox - only for admins editing employees
+                    if not is_manager_editing and user.role == 'employee':
+                        is_trusted_check = ui.checkbox('Trusted Employee', value=user.is_trusted).classes('self-center')
 
-                    ui.label('Trusted employees have their standard PTO requests auto-approved').classes('text-sm opacity-60 mt-2 mb-3')
-
-                    with ui.row().classes('w-full items-center gap-4'):
-                        is_trusted_check = ui.checkbox('Enable auto-approve for this employee', value=user.is_trusted)
-
-                        with ui.element('div').classes('ml-auto'):
+                        # Add tooltip for trusted employee
+                        with ui.element('div').classes('self-center'):
                             with ui.tooltip():
-                                ui.html('''
-                                    <div style="max-width: 280px; padding: 8px;">
-                                        <p style="font-weight: bold; margin-bottom: 8px;">Auto-approve applies to:</p>
-                                        <p style="color: #22c55e;">✓ Vacation</p>
-                                        <p style="color: #22c55e;">✓ Sick</p>
-                                        <p style="color: #22c55e;">✓ Personal</p>
-                                        <p style="font-weight: bold; margin: 8px 0;">Still requires approval:</p>
-                                        <p style="color: #ef4444;">✗ Bereavement, FMLA</p>
-                                        <p style="color: #ef4444;">✗ Jury Duty, Voting, Military</p>
-                                        <p style="color: #ef4444;">✗ Work From Home</p>
-                                        <p style="margin-top: 8px; font-style: italic; opacity: 0.8;">Manager still receives email notifications for ALL requests.</p>
-                                    </div>
-                                ''')
-                            ui.icon('help_outline', size='sm').classes('cursor-pointer opacity-60')
+                                ui.label('Auto-approves Vacation, Sick, Personal PTO').classes('text-xs')
+                            ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
 
-                    # Show trust history if currently trusted
-                    if user.is_trusted and user.trusted_at:
-                        trusted_date = user.trusted_at.strftime('%B %d, %Y')
-                        trusted_by_name = 'Unknown'
-                        if user.trusted_by_id:
-                            trust_db = next(get_db())
-                            try:
-                                trusted_by_user = UserService(trust_db).get_user_by_id(user.trusted_by_id)
-                                if trusted_by_user:
-                                    trusted_by_name = f'{trusted_by_user.first_name} {trusted_by_user.last_name}'
-                            finally:
-                                trust_db.close()
+                    # Delete button - only for admins (not managers editing their own employees)
+                    if not is_manager_editing:
+                        def confirm_delete_employee():
+                            with ui.dialog() as dialog, ui.card().classes('p-0 max-w-md'):
+                                with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #ef4444'):
+                                    ui.icon('warning', size='md').classes('mr-2')
+                                    ui.label('Delete Employee').classes('text-lg font-bold')
+                                with ui.column().classes('p-4 gap-3'):
+                                    ui.label(f'Are you sure you want to delete {user.first_name} {user.last_name}?').classes('text-base')
+                                    ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm opacity-70')
+                                    ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600')
+                                    with ui.row().classes('w-full justify-end gap-3 mt-2'):
+                                        ui.button('Cancel', on_click=dialog.close).props('flat')
 
-                        with ui.row().classes('w-full items-center gap-2 mt-3 p-2 rounded').style('background: rgba(201, 162, 39, 0.1)'):
-                            ui.icon('history', size='xs').classes('opacity-60')
-                            ui.label(f'Trusted since {trusted_date} by {trusted_by_name}').classes('text-xs opacity-70')
+                                        async def do_delete_employee():
+                                            db = next(get_db())
+                                            try:
+                                                user_service = UserService(db)
+                                                if user_service.delete_user(user_id):
+                                                    current_user = app.storage.general.get('user')
+                                                    AuditService.log(
+                                                        db, action='user_delete',
+                                                        user_id=current_user.get('id'),
+                                                        username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                        entity_type='user', entity_id=user_id,
+                                                        details={'deleted_user': user.username}
+                                                    )
+                                                    dialog.close()
+                                                    ui.navigate.to('/admin/employees')
+                                                else:
+                                                    show_error_dialog('Deletion Failed', 'There was an error deleting the employee.')
+                                            finally:
+                                                db.close()
+
+                                        ui.button('Delete Permanently', on_click=do_delete_employee).props('color=red')
+                            dialog.open()
+
+                        ui.button('Delete', on_click=confirm_delete_employee, icon='delete').props('color=red outline')
 
             # Work Location Section - only for admins
             location_state_select = None
@@ -831,74 +852,6 @@ def admin_employees_edit_page(user_id: int):
                     save_changes()
 
                 save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
-
-            # Danger Zone section - only for admins
-            if not is_manager_editing:
-                with ui.card().classes('w-full p-6 mt-6').style('border: 1px solid #ef4444'):
-                    ui.label('Danger Zone').classes('text-lg font-semibold text-red-600 mb-4')
-
-                    with ui.row().classes('gap-4'):
-                        if user.is_active:
-                            def confirm_deactivate():
-                                with ui.dialog() as dialog, ui.card().classes('p-6'):
-                                    ui.label(f'Deactivate {user.first_name} {user.last_name}?').classes('text-lg font-bold mb-2')
-                                    ui.label('This will set the employee as inactive but preserve their records.').classes('text-sm opacity-70 mb-4')
-                                    with ui.row().classes('gap-4 justify-end'):
-                                        ui.button('Cancel', on_click=dialog.close).props('flat')
-                                        async def do_deactivate():
-                                            db = next(get_db())
-                                            try:
-                                                user_service = UserService(db)
-                                                if user_service.deactivate_user(user_id):
-                                                    current_user = app.storage.general.get('user')
-                                                    AuditService.log_user_deactivate(
-                                                        db, current_user.get('id'),
-                                                        f"{current_user.get('first_name')} {current_user.get('last_name')}",
-                                                        user_id, user.username
-                                                    )
-                                                    ui.notify('Employee deactivated', type='positive')
-                                                    dialog.close()
-                                                    ui.navigate.to('/admin/employees')
-                                                else:
-                                                    show_error_dialog('Deactivation Failed', 'There was an error deactivating the employee. Please try again.')
-                                            finally:
-                                                db.close()
-                                        ui.button('Deactivate', on_click=do_deactivate, color='orange')
-                                dialog.open()
-
-                            ui.button('Deactivate', on_click=confirm_deactivate, color='orange', icon='person_off')
-
-                        def confirm_delete():
-                            with ui.dialog() as dialog, ui.card().classes('p-6'):
-                                ui.label(f'Delete {user.first_name} {user.last_name}?').classes('text-lg font-bold text-red-600 mb-2')
-                                ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm text-red-500 mb-2')
-                                ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600 mb-4')
-                                with ui.row().classes('gap-4 justify-end'):
-                                    ui.button('Cancel', on_click=dialog.close).props('flat')
-                                    async def do_delete():
-                                        db = next(get_db())
-                                        try:
-                                            user_service = UserService(db)
-                                            if user_service.delete_user(user_id):
-                                                current_user = app.storage.general.get('user')
-                                                AuditService.log(
-                                                    db, action='user_delete',
-                                                    user_id=current_user.get('id'),
-                                                    username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
-                                                    entity_type='user', entity_id=user_id,
-                                                    details={'deleted_user': user.username}
-                                                )
-                                                ui.notify('Employee deleted', type='positive')
-                                                dialog.close()
-                                                ui.navigate.to('/admin/employees')
-                                            else:
-                                                show_error_dialog('Deletion Failed', 'There was an error deleting the employee. Please try again.')
-                                        finally:
-                                            db.close()
-                                    ui.button('Delete Permanently', on_click=do_delete, color='red')
-                            dialog.open()
-
-                        ui.button('Delete', on_click=confirm_delete, color='red', icon='delete_forever')
 
             ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
 

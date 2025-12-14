@@ -215,9 +215,9 @@ def admin_approvals_page():
                                                 ui.label(req['pto_type'].title()).classes('text-sm')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 if req['start_date'] == req['end_date']:
-                                                    ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                    ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                                 else:
-                                                    ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                    ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 days = float(req['total_days'])
                                                 ui.label(f'{fmt_days(days)} days').classes('text-sm font-medium')

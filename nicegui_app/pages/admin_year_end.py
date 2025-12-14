@@ -78,6 +78,18 @@ It runs **once per year**, triggered by the first user login after January 1st.
 - **No action required**: This is fully automatic - you don't need to do anything
 ''').classes('text-sm')
 
+        # Helper function for help dialogs
+        def show_help_dialog(title: str, message: str):
+            """Show a dark-themed help dialog with OK button."""
+            with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px'):
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.icon('help', color='amber', size='md')
+                    ui.label(title).classes('text-lg font-bold')
+                ui.label(message).classes('text-sm opacity-80')
+                with ui.row().classes('w-full justify-end mt-4'):
+                    ui.button('OK', on_click=dialog.close).props('color=primary')
+            dialog.open()
+
         # Status cards container
         status_container = ui.column().classes('w-full gap-4')
 
@@ -97,9 +109,17 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
                 with status_container:
                     # ========== CURRENT YEAR STATUS ==========
-                    with ui.card().classes('w-full p-4'):
+                    with ui.card().classes('w-full p-6'):
                         with ui.row().classes('w-full justify-between items-center mb-4'):
-                            ui.label(f'{current_year} Status').classes('text-xl font-bold')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.label(f'{current_year} Status').classes('text-xl font-bold').style('color: #C9A227')
+                                ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
+                                    f'{current_year} Status',
+                                    'This section shows whether year-end processing has completed for the current year. '
+                                    'When complete, you\'ll see when it ran and what was created: PTO balances for employees, '
+                                    'carryover hours applied from approved requests, and market holidays generated. '
+                                    'If pending, processing will run automatically on the first login of the new year.'
+                                )).props('flat dense round size=sm').style('color: #f59e0b')
                             if processing_record and processing_record.processed:
                                 ui.badge('COMPLETE', color='green').classes('text-sm')
                             else:
@@ -107,59 +127,77 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
                         if processing_record and processing_record.processed:
                             # Show when it was processed
-                            with ui.row().classes('items-center gap-2 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg'):
-                                ui.icon('check_circle', color='green').classes('text-2xl')
-                                with ui.column().classes('gap-0'):
-                                    ui.label('Year-End Processing Complete').classes('font-semibold text-green-700 dark:text-green-300')
-                                    ui.label(f"Processed on {processing_record.processed_at.strftime('%B %d, %Y at %I:%M %p')}").classes('text-sm opacity-70')
+                            with ui.element('div').classes('w-full mb-4 p-4 rounded-lg').style('background-color: #14532d; border-left: 4px solid #22c55e'):
+                                with ui.row().classes('items-center gap-3'):
+                                    ui.icon('check_circle', color='green').classes('text-2xl')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label('Year-End Processing Complete').classes('font-semibold').style('color: #22c55e')
+                                        ui.label(f"Processed on {processing_record.processed_at.strftime('%B %d, %Y at %I:%M %p')}").classes('text-sm opacity-70')
 
-                            # Processing results
-                            with ui.row().classes('gap-6 flex-wrap'):
-                                with ui.card().classes('p-4 text-center min-w-32'):
-                                    ui.label(str(processing_record.balances_created)).classes('text-3xl font-bold text-blue-600')
+                            # Processing results - edge to edge
+                            with ui.element('div').classes('w-full grid grid-cols-3 gap-4 mb-4'):
+                                with ui.element('div').classes('p-4 text-center rounded-lg').style('background-color: #1e3a5f; border-top: 3px solid #3b82f6'):
+                                    ui.label(str(processing_record.balances_created)).classes('text-3xl font-bold').style('color: #3b82f6')
                                     ui.label('PTO Balances').classes('text-sm opacity-70')
                                     ui.label('Created').classes('text-xs opacity-50')
 
-                                with ui.card().classes('p-4 text-center min-w-32'):
-                                    ui.label(str(processing_record.carryovers_applied)).classes('text-3xl font-bold text-purple-600')
+                                with ui.element('div').classes('p-4 text-center rounded-lg').style('background-color: #4c1d4c; border-top: 3px solid #a855f7'):
+                                    ui.label(str(processing_record.carryovers_applied)).classes('text-3xl font-bold').style('color: #a855f7')
                                     ui.label('Carryovers').classes('text-sm opacity-70')
                                     ui.label('Applied').classes('text-xs opacity-50')
 
-                                with ui.card().classes('p-4 text-center min-w-32'):
-                                    ui.label(str(processing_record.holidays_created)).classes('text-3xl font-bold text-teal-600')
+                                with ui.element('div').classes('p-4 text-center rounded-lg').style('background-color: #134e4a; border-top: 3px solid #14b8a6'):
+                                    ui.label(str(processing_record.holidays_created)).classes('text-3xl font-bold').style('color: #14b8a6')
                                     ui.label('Holidays').classes('text-sm opacity-70')
                                     ui.label('Generated').classes('text-xs opacity-50')
                         else:
-                            with ui.row().classes('items-center gap-2 mb-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg'):
-                                ui.icon('schedule', color='orange').classes('text-2xl')
-                                with ui.column().classes('gap-0'):
-                                    ui.label('Awaiting Processing').classes('font-semibold text-orange-700 dark:text-orange-300')
-                                    ui.label('Will run automatically on the first login of the new year.').classes('text-sm opacity-70')
+                            with ui.element('div').classes('w-full mb-4 p-4 rounded-lg').style('background-color: #78350f; border-left: 4px solid #f59e0b'):
+                                with ui.row().classes('items-center gap-3'):
+                                    ui.icon('schedule', color='amber').classes('text-2xl')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label('Awaiting Processing').classes('font-semibold').style('color: #f59e0b')
+                                        ui.label('Will run automatically on the first login of the new year.').classes('text-sm opacity-70')
 
-                        # Current year details
+                        # Current year details - edge to edge
                         ui.separator().classes('my-4')
-                        ui.label('Current Data').classes('font-semibold mb-2')
+                        with ui.row().classes('items-center gap-2 mb-3'):
+                            ui.label('Current Data').classes('font-semibold')
+                            ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
+                                'Current Data',
+                                'Active Employees: Number of employees currently in the system. '
+                                'PTO Balances: How many employees have PTO balance records for this year. '
+                                'Pending Carryovers: Carryover requests awaiting approval (shown in amber if any). '
+                                'Holidays: Number of market holidays generated for this year (NYSE, CME, CBOE, Federal).'
+                            )).props('flat dense round size=sm').style('color: #f59e0b')
 
-                        with ui.row().classes('gap-8 flex-wrap'):
-                            with ui.column().classes('gap-1'):
-                                ui.label('Active Employees').classes('text-xs opacity-60 uppercase')
-                                ui.label(str(current_status['active_users'])).classes('text-xl font-semibold')
-                            with ui.column().classes('gap-1'):
-                                ui.label('PTO Balances').classes('text-xs opacity-60 uppercase')
-                                ui.label(str(current_status['balances_created'])).classes('text-xl font-semibold')
-                            with ui.column().classes('gap-1'):
-                                ui.label('Pending Carryovers').classes('text-xs opacity-60 uppercase')
+                        with ui.element('div').classes('w-full grid grid-cols-4 gap-4'):
+                            with ui.element('div').classes('p-3 rounded-lg text-center').style('background-color: #374151'):
+                                ui.label('ACTIVE EMPLOYEES').classes('text-xs opacity-60 mb-1')
+                                ui.label(str(current_status['active_users'])).classes('text-2xl font-bold')
+                            with ui.element('div').classes('p-3 rounded-lg text-center').style('background-color: #374151'):
+                                ui.label('PTO BALANCES').classes('text-xs opacity-60 mb-1')
+                                ui.label(str(current_status['balances_created'])).classes('text-2xl font-bold')
+                            with ui.element('div').classes('p-3 rounded-lg text-center').style('background-color: #374151'):
+                                ui.label('PENDING CARRYOVERS').classes('text-xs opacity-60 mb-1')
                                 pending = current_status['pending_carryovers']
-                                color = 'text-amber-600' if pending > 0 else ''
-                                ui.label(str(pending)).classes(f'text-xl font-semibold {color}')
-                            with ui.column().classes('gap-1'):
-                                ui.label('Holidays').classes('text-xs opacity-60 uppercase')
-                                ui.label(str(current_status['holidays_created'])).classes('text-xl font-semibold')
+                                color = '#f59e0b' if pending > 0 else ''
+                                ui.label(str(pending)).classes('text-2xl font-bold').style(f'color: {color}' if color else '')
+                            with ui.element('div').classes('p-3 rounded-lg text-center').style('background-color: #374151'):
+                                ui.label('HOLIDAYS').classes('text-xs opacity-60 mb-1')
+                                ui.label(str(current_status['holidays_created'])).classes('text-2xl font-bold')
 
                     # ========== NEXT YEAR PREVIEW ==========
-                    with ui.card().classes('w-full p-4'):
+                    with ui.card().classes('w-full p-6'):
                         with ui.row().classes('w-full justify-between items-center mb-4'):
-                            ui.label(f'{next_year} Preview').classes('text-xl font-bold')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.label(f'{next_year} Preview').classes('text-xl font-bold').style('color: #C9A227')
+                                ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
+                                    f'{next_year} Preview',
+                                    'This section shows the readiness status for next year\'s processing. '
+                                    'The countdown shows days until January 1st when processing will trigger. '
+                                    'On first login of the new year, the system will automatically create PTO balances, '
+                                    'apply approved carryover requests, and generate market holidays for the new year.'
+                                )).props('flat dense round size=sm').style('color: #f59e0b')
                             if next_record and next_record.processed:
                                 ui.badge('ALREADY PROCESSED', color='green').classes('text-sm')
                             else:
@@ -172,42 +210,59 @@ It runs **once per year**, triggered by the first user login after January 1st.
                                     ui.badge('Ready to process on next login', color='blue').classes('text-sm')
 
                         if next_record and next_record.processed:
-                            with ui.row().classes('items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg'):
-                                ui.icon('check_circle', color='green')
-                                ui.label(f'{next_year} has already been processed. No action needed.').classes('text-sm')
+                            with ui.element('div').classes('w-full p-4 rounded-lg').style('background-color: #14532d; border-left: 4px solid #22c55e'):
+                                with ui.row().classes('items-center gap-3'):
+                                    ui.icon('check_circle', color='green')
+                                    ui.label(f'{next_year} has already been processed. No action needed.').classes('text-sm')
                         else:
-                            with ui.row().classes('items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg'):
-                                ui.icon('info', color='blue')
-                                with ui.column().classes('gap-1'):
-                                    ui.label(f'On the first login of {next_year}, the system will automatically:').classes('text-sm font-medium')
-                                    ui.label(f'• Create PTO balances for {next_status["active_users"]} active employees').classes('text-xs opacity-70')
-                                    ui.label('• Apply any approved carryover requests').classes('text-xs opacity-70')
-                                    ui.label('• Generate federal and market holidays').classes('text-xs opacity-70')
+                            with ui.element('div').classes('w-full p-4 rounded-lg').style('background-color: #1e3a5f; border-left: 4px solid #3b82f6'):
+                                with ui.row().classes('items-start gap-3'):
+                                    ui.icon('info', color='blue').classes('mt-1')
+                                    with ui.column().classes('gap-1'):
+                                        ui.label(f'On the first login of {next_year}, the system will automatically:').classes('text-sm font-medium')
+                                        ui.label(f'• Create PTO balances for {next_status["active_users"]} active employees').classes('text-xs opacity-70')
+                                        ui.label('• Apply any approved carryover requests').classes('text-xs opacity-70')
+                                        ui.label('• Generate federal and market holidays').classes('text-xs opacity-70')
 
-                        # Show what's ready vs what will be created
+                        # Show what's ready vs what will be created - edge to edge
                         ui.separator().classes('my-4')
-                        ui.label('Preparation Status').classes('font-semibold mb-2')
+                        with ui.row().classes('items-center gap-2 mb-3'):
+                            ui.label('Preparation Status').classes('font-semibold')
+                            ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
+                                'Preparation Status',
+                                'Shows what\'s ready for next year. Green check = already set up, Blue pending = will be created. '
+                                'PTO Balances: Shows how many employees have balances ready vs how many need them. '
+                                'Market Holidays: Shows if holidays have been generated (typically ~48 holidays covering NYSE, CME, CBOE, and Federal).'
+                            )).props('flat dense round size=sm').style('color: #f59e0b')
 
-                        with ui.row().classes('gap-4 flex-wrap'):
+                        with ui.element('div').classes('w-full grid grid-cols-2 gap-4'):
                             # Balances
                             balances_ready = next_status['balances_created']
                             balances_needed = next_status['active_users']
-                            with ui.card().classes('p-3 flex-1 min-w-48'):
+                            is_ready = balances_ready >= balances_needed
+                            bg_color = '#14532d' if is_ready else '#1e3a5f'
+                            border_color = '#22c55e' if is_ready else '#3b82f6'
+
+                            with ui.element('div').classes('p-4 rounded-lg').style(f'background-color: {bg_color}; border-top: 3px solid {border_color}'):
                                 with ui.row().classes('items-center gap-2 mb-2'):
-                                    if balances_ready >= balances_needed:
+                                    if is_ready:
                                         ui.icon('check_circle', color='green')
                                     else:
                                         ui.icon('pending', color='blue')
                                     ui.label('PTO Balances').classes('font-medium')
                                 ui.label(f'{balances_ready} / {balances_needed} employees').classes('text-sm opacity-70')
                                 if balances_ready < balances_needed:
-                                    ui.label(f'{balances_needed - balances_ready} will be created').classes('text-xs text-blue-600')
+                                    ui.label(f'{balances_needed - balances_ready} will be created').classes('text-xs').style('color: #3b82f6')
 
                             # Holidays
                             holidays_ready = next_status['holidays_created']
-                            with ui.card().classes('p-3 flex-1 min-w-48'):
+                            is_holiday_ready = holidays_ready > 0
+                            bg_color = '#14532d' if is_holiday_ready else '#1e3a5f'
+                            border_color = '#22c55e' if is_holiday_ready else '#3b82f6'
+
+                            with ui.element('div').classes('p-4 rounded-lg').style(f'background-color: {bg_color}; border-top: 3px solid {border_color}'):
                                 with ui.row().classes('items-center gap-2 mb-2'):
-                                    if holidays_ready > 0:
+                                    if is_holiday_ready:
                                         ui.icon('check_circle', color='green')
                                     else:
                                         ui.icon('pending', color='blue')
@@ -216,15 +271,15 @@ It runs **once per year**, triggered by the first user login after January 1st.
                                     ui.label(f'{holidays_ready} holidays ready').classes('text-sm opacity-70')
                                 else:
                                     ui.label('Will be generated automatically').classes('text-sm opacity-70')
-                                    ui.label('~48 holidays (NYSE, CME, CBOE, Federal)').classes('text-xs text-blue-600')
+                                    ui.label('~48 holidays (NYSE, CME, CBOE, Federal)').classes('text-xs').style('color: #3b82f6')
 
                     # ========== WARNINGS ==========
                     if current_status['pending_carryovers'] > 0:
-                        with ui.card().classes('w-full p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-900/20'):
+                        with ui.element('div').classes('w-full p-4 rounded-lg').style('background-color: #78350f; border-left: 4px solid #f59e0b'):
                             with ui.row().classes('items-start gap-3'):
                                 ui.icon('warning', color='amber').classes('text-2xl')
                                 with ui.column().classes('flex-1 gap-2'):
-                                    ui.label(f'Action Required: {current_status["pending_carryovers"]} Pending Carryover Requests').classes('font-semibold text-amber-700 dark:text-amber-300')
+                                    ui.label(f'Action Required: {current_status["pending_carryovers"]} Pending Carryover Requests').classes('font-semibold').style('color: #f59e0b')
                                     ui.label('These carryover requests need to be approved or denied before the new year. '
                                              'Only approved requests will be applied to next year\'s balances.').classes('text-sm opacity-80')
                                     ui.button('Review Carryover Requests', icon='approval',

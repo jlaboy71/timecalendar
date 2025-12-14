@@ -10,7 +10,7 @@ from src.models.pto_request import PTORequest
 from src.models.audit_log import AuditLog
 from src.services.report_service import ReportService
 from src.services.export_service import ExportService
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import StringIO
 import csv
 from nicegui_app.components.header import page_header
@@ -37,43 +37,64 @@ def reports_page():
     is_manager_only = is_department_restricted  # Keep backward compatibility
 
     # Get user's department if applicable (for manager/admin)
+    # Also load Technology department as default for superadmins
     manager_department_id = None
     manager_team_members = []
-    if is_department_restricted:
-        db = next(get_db())
-        try:
-            from src.services.user_service import UserService
-            user_service = UserService(db)
+    default_department_id = None  # For superadmins
+    all_departments = []
+
+    db = next(get_db())
+    try:
+        from src.services.user_service import UserService
+        user_service = UserService(db)
+
+        if is_department_restricted:
             current_user = user_service.get_user_by_id(user_id)
             if current_user and current_user.department_id:
                 manager_department_id = current_user.department_id
                 # Get team members for individual reports
                 team_members = user_service.get_users_by_department(manager_department_id)
                 manager_team_members = [m for m in team_members if m.id != user_id and m.is_active]
-        finally:
-            db.close()
+
+        # Load all departments and find Technology as default for superadmins
+        all_departments = db.query(Department).filter(Department.is_active == True).order_by(Department.name).all()
+        for dept in all_departments:
+            if 'technology' in dept.name.lower():
+                default_department_id = dept.id
+                break
+    finally:
+        db.close()
 
     # State for filters
     current_year = date.today().year
     is_admin_only = user_role in ['admin', 'superadmin']
     filter_state = {
         'year': current_year,
-        # Managers auto-filter to their department
-        'department_id': manager_department_id,
+        # Managers auto-filter to their department, superadmins default to Technology
+        'department_id': manager_department_id if is_department_restricted else default_department_id,
         # Admins don't have personal PTO, so default to team reports
-        'report_type': 'team_balance' if is_admin_only else 'my_history',
-        'status_filter': 'all',  # 'all', 'approved', 'pending', 'denied'
+        'report_type': 'team_balance' if is_admin_only else 'my_pto',
+        'status_filter': 'all',  # 'all', 'approved', 'pending', 'cancelled'
         'pto_type_filter': 'all',  # 'all', 'vacation', 'sick', 'personal', etc.
+        # My PTO dashboard filters (single-select)
+        'selected_pto_type': None,  # None = all types, or one type selected
+        # Calendar view type filters (checkboxes for main types)
+        'calendar_types': ['vacation', 'sick', 'personal', 'work_from_home'],  # Default: all main types selected
+        'calendar_other_type': None,  # Selected "other" type for calendar
         # Audit log filters
         'audit_action': 'all',  # filter by action type
         'audit_date_from': None,  # date range start
         'audit_date_to': None,  # date range end
+        'audit_search': '',  # text search across user, entity, details
+        'audit_user': 'all',  # filter by specific user
+        'audit_preset': 'last_30',  # date preset: today, last_7, last_30, this_month, custom
         # Individual employee filter (for managers)
         'employee_id': None,
     }
 
     # Report name mapping for display
     report_names = {
+        'my_pto': 'My PTO',
         'my_history': 'My PTO History',
         'my_balance': 'My Balance Summary',
         'my_calendar': 'My Year at a Glance',
@@ -93,29 +114,26 @@ def reports_page():
         # ===== REPORT INDICATOR =====
         report_indicator = ui.row().classes('w-full mb-2 items-center gap-2')
 
-        # Report type selector
-        with ui.card().classes('w-full mb-4 p-4'):
-            ui.label('Choose Report').classes('text-lg font-semibold mb-3')
-
-            with ui.column().classes('gap-3'):
-                # Personal Reports Section (NOT for admin/superadmin - they don't have PTO)
-                if not is_admin_only:
-                    ui.label('My Reports').classes('text-sm font-semibold uppercase opacity-60')
-                    with ui.row().classes('gap-2 flex-wrap'):
-                        my_history_btn = ui.button('My PTO History', on_click=lambda: switch_report('my_history')).props('color=primary')
-                        my_balance_btn = ui.button('My Balance Summary', on_click=lambda: switch_report('my_balance')).props('outline')
-                        my_calendar_btn = ui.button('My Year at a Glance', on_click=lambda: switch_report('my_calendar')).props('outline')
-
-                # Team Reports Section (managers/admins only)
-                if is_manager_or_admin:
+        # Report type selector (only shown for managers/admins who have multiple report options)
+        my_pto_btn = None  # Will be set for managers only
+        if is_manager_or_admin:
+            with ui.card().classes('w-full mb-4 p-4'):
+                with ui.row().classes('w-full gap-6 flex-wrap'):
+                    # My PTO section (managers only - admins don't have PTO)
                     if not is_admin_only:
-                        ui.separator().classes('my-2')
-                    ui.label('Team Reports').classes('text-sm font-semibold uppercase opacity-60')
-                    with ui.row().classes('gap-2 flex-wrap'):
-                        # For admins, default team_balance is selected
-                        team_balance_btn = ui.button('Team Balance Summary', on_click=lambda: switch_report('team_balance')).props('color=primary' if is_admin_only else 'outline')
-                        team_usage_btn = ui.button('Team Usage Report', on_click=lambda: switch_report('team_usage')).props('outline')
-                        audit_btn = ui.button('Audit Log', on_click=lambda: switch_report('audit')).props('outline')
+                        with ui.column().classes('gap-2'):
+                            ui.label('My Reports').classes('text-sm font-semibold uppercase opacity-60')
+                            with ui.row().classes('gap-2'):
+                                my_pto_btn = ui.button('My PTO', icon='person', on_click=lambda: switch_report('my_pto')).props('color=primary')
+
+                    # Team Reports section
+                    with ui.column().classes('gap-2'):
+                        ui.label('Team Reports').classes('text-sm font-semibold uppercase opacity-60')
+                        with ui.row().classes('gap-2 flex-wrap'):
+                            # For admins, default team_balance is selected
+                            team_balance_btn = ui.button('Team Balance', on_click=lambda: switch_report('team_balance')).props('color=primary' if is_admin_only else 'outline')
+                            team_usage_btn = ui.button('Team Usage', on_click=lambda: switch_report('team_usage')).props('outline')
+                            audit_btn = ui.button('Audit Log', on_click=lambda: switch_report('audit')).props('outline')
 
         # Filters section
         filters_card = ui.card().classes('w-full mb-4 p-4')
@@ -123,20 +141,16 @@ def reports_page():
         # Report content area
         report_container = ui.column().classes('w-full')
 
-        # Button references for styling
+        # Button references for styling (only for managers/admins with multiple reports)
         all_buttons = {}
-        if not is_admin_only:
-            all_buttons.update({
-                'my_history': my_history_btn,
-                'my_balance': my_balance_btn,
-                'my_calendar': my_calendar_btn,
-            })
         if is_manager_or_admin:
             all_buttons.update({
                 'team_balance': team_balance_btn,
                 'team_usage': team_usage_btn,
                 'audit': audit_btn,
             })
+            if my_pto_btn:
+                all_buttons['my_pto'] = my_pto_btn
 
         def switch_report(report_type):
             filter_state['report_type'] = report_type
@@ -219,8 +233,8 @@ def reports_page():
                             on_change=lambda e: update_filter('status_filter', e.value)
                         ).classes('w-36')
 
-                    # PTO type filter for history/usage/calendar reports
-                    if filter_state['report_type'] in ['my_history', 'my_calendar', 'team_usage']:
+                    # PTO type filter for history/usage reports (dropdown)
+                    if filter_state['report_type'] in ['my_history', 'team_usage']:
                         pto_type_options = {
                             'all': 'All Types',
                             'vacation': 'Vacation',
@@ -240,6 +254,76 @@ def reports_page():
                             on_change=lambda e: update_filter('pto_type_filter', e.value)
                         ).classes('w-44')
 
+                    # PTO type checkboxes for my_calendar view only
+                    if filter_state['report_type'] == 'my_calendar':
+                        # Color code: Vacation=Blue, Sick=Green, Personal=Purple, WFH=Red
+                        main_types = [
+                            ('vacation', 'Vacation', '#3b82f6'),
+                            ('sick', 'Sick', '#22c55e'),
+                            ('personal', 'Personal', '#a855f7'),
+                            ('work_from_home', 'Work From Home', '#ef4444'),
+                        ]
+
+                        def toggle_calendar_type(type_code):
+                            if type_code in filter_state['calendar_types']:
+                                filter_state['calendar_types'].remove(type_code)
+                            else:
+                                filter_state['calendar_types'].append(type_code)
+                            render_report()
+
+                        with ui.row().classes('items-center gap-4'):
+                            for type_code, label, color in main_types:
+                                is_checked = type_code in filter_state['calendar_types']
+                                with ui.element('div').classes('flex items-center gap-1 cursor-pointer').on(
+                                    'click', lambda tc=type_code: toggle_calendar_type(tc)
+                                ):
+                                    ui.checkbox(value=is_checked).props('dense').on(
+                                        'update:model-value', lambda e, tc=type_code: toggle_calendar_type(tc)
+                                    )
+                                    ui.element('div').classes('w-3 h-3 rounded-full').style(f'background-color: {color}')
+                                    ui.label(label).classes('text-sm')
+
+                            # Other types dropdown
+                            other_options = {
+                                None: 'Other Types',
+                                'bereavement': 'Bereavement',
+                                'fmla': 'FMLA',
+                                'jury_duty': 'Jury Duty',
+                                'voting': 'Voting',
+                                'military': 'Military'
+                            }
+
+                            def on_other_change(e):
+                                filter_state['calendar_other_type'] = e.value
+                                render_report()
+
+                            ui.select(
+                                other_options,
+                                value=filter_state['calendar_other_type'],
+                                on_change=on_other_change
+                            ).props('dense outlined').classes('w-36')
+
+                    # Other types dropdown for my_pto view (balance tiles handle main types)
+                    if filter_state['report_type'] == 'my_pto':
+                        other_options = {
+                            None: 'Other Types',
+                            'bereavement': 'Bereavement',
+                            'fmla': 'FMLA',
+                            'jury_duty': 'Jury Duty',
+                            'voting': 'Voting',
+                            'military': 'Military'
+                        }
+
+                        def on_other_change(e):
+                            filter_state['calendar_other_type'] = e.value
+                            render_report()
+
+                        ui.select(
+                            other_options,
+                            value=filter_state['calendar_other_type'],
+                            on_change=on_other_change
+                        ).props('dense outlined').classes('w-36')
+
                     # Department filter (team reports only)
                     if filter_state['report_type'] in ['team_balance', 'team_usage', 'audit']:
                         db = next(get_db())
@@ -250,16 +334,48 @@ def reports_page():
                                 if dept:
                                     ui.label(f'Department: {dept.name}').classes('self-center text-sm font-medium px-3 py-2 rounded').style('background: rgba(0,128,128,0.1)')
                             else:
-                                # Admins can select any department
-                                departments = db.query(Department).filter(Department.is_active == True).all()
+                                # Admins/Superadmins can select any department
                                 dept_options = {None: 'All Departments'}
-                                dept_options.update({d.id: d.name for d in departments})
+                                dept_options.update({d.id: d.name for d in all_departments})
+
+                                def on_dept_change(e):
+                                    filter_state['department_id'] = e.value
+                                    filter_state['employee_id'] = None  # Reset employee when dept changes
+                                    render_filters()  # Re-render to update employee list
+                                    render_report()
+
                                 ui.select(
                                     dept_options,
                                     label='Department',
                                     value=filter_state['department_id'],
-                                    on_change=lambda e: update_filter('department_id', e.value)
+                                    on_change=on_dept_change
                                 ).classes('w-48')
+
+                            # Employee filter for superadmins (when a department is selected)
+                            if not is_manager_only and filter_state['report_type'] in ['team_balance', 'team_usage']:
+                                employee_options = {None: 'All Employees'}
+                                # Load employees for selected department
+                                if filter_state['department_id']:
+                                    dept_employees = db.query(User).filter(
+                                        User.department_id == filter_state['department_id'],
+                                        User.is_active == True
+                                    ).order_by(User.last_name, User.first_name).all()
+                                else:
+                                    dept_employees = db.query(User).filter(
+                                        User.is_active == True
+                                    ).order_by(User.last_name, User.first_name).all()
+
+                                employee_options.update({
+                                    emp.id: f"{emp.first_name} {emp.last_name}"
+                                    for emp in dept_employees
+                                })
+                                ui.select(
+                                    employee_options,
+                                    label='Employee',
+                                    value=filter_state['employee_id'],
+                                    on_change=lambda e: update_filter('employee_id', e.value),
+                                    with_input=True
+                                ).props('dense outlined use-input').classes('w-56')
                         finally:
                             db.close()
 
@@ -276,7 +392,7 @@ def reports_page():
                             value=filter_state['employee_id'],
                             on_change=lambda e: update_filter('employee_id', e.value),
                             with_input=True
-                        ).props('dense outlined use-input clearable').classes('w-56')
+                        ).props('dense outlined use-input').classes('w-56')
 
         def update_filter(key, value):
             filter_state[key] = value
@@ -288,7 +404,9 @@ def reports_page():
             report_container.clear()
             with report_container:
                 report_type = filter_state['report_type']
-                if report_type == 'my_history':
+                if report_type == 'my_pto':
+                    render_my_pto()
+                elif report_type == 'my_history':
                     render_my_history()
                 elif report_type == 'my_balance':
                     render_my_balance()
@@ -328,20 +446,66 @@ def reports_page():
                             ui.label('No PTO requests found for this period.').classes('opacity-60')
                         return
 
-                    # Summary stats
-                    total_days = sum(float(r.total_days or 0) for r in requests if r.status == 'approved')
-                    pending_days = sum(float(r.total_days or 0) for r in requests if r.status == 'pending')
+                    # Summary stats - count from ALL requests (not filtered)
+                    all_requests = db.query(PTORequest).filter(
+                        PTORequest.user_id == user_id,
+                        PTORequest.start_date >= date(filter_state['year'], 1, 1),
+                        PTORequest.end_date <= date(filter_state['year'], 12, 31)
+                    ).all()
+                    approved_days = sum(float(r.total_days or 0) for r in all_requests if r.status == 'approved')
+                    pending_days = sum(float(r.total_days or 0) for r in all_requests if r.status == 'pending')
+                    cancelled_days = sum(float(r.total_days or 0) for r in all_requests if r.status == 'cancelled')
+                    approved_count = len([r for r in all_requests if r.status == 'approved'])
+                    pending_count = len([r for r in all_requests if r.status == 'pending'])
+                    cancelled_count = len([r for r in all_requests if r.status == 'cancelled'])
 
-                    with ui.row().classes('w-full gap-4 mb-4 flex-wrap'):
-                        with ui.card().classes('p-3 border-l-4 border-green-500'):
-                            ui.label('Approved').classes('text-sm opacity-70')
-                            ui.label(f'{fmt_days(total_days)} days').classes('text-xl font-bold text-green-600')
-                        with ui.card().classes('p-3 border-l-4 border-amber-500'):
-                            ui.label('Pending').classes('text-sm opacity-70')
-                            ui.label(f'{fmt_days(pending_days)} days').classes('text-xl font-bold text-amber-600')
-                        with ui.card().classes('p-3 border-l-4 border-blue-500'):
-                            ui.label('Total Requests').classes('text-sm opacity-70')
-                            ui.label(f'{len(requests)}').classes('text-xl font-bold text-blue-600')
+                    def filter_by_status(status, count):
+                        # Only filter if there are requests for this status, or if returning to 'all'
+                        if status == 'all' or count > 0:
+                            filter_state['status_filter'] = 'all' if filter_state['status_filter'] == status else status
+                            render_report()
+
+                    # Edge-to-edge clickable summary grid
+                    current_filter = filter_state['status_filter']
+                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4 mb-4'):
+                        # Approved tile
+                        is_active = current_filter == 'approved'
+                        can_click = approved_count > 0
+                        with ui.element('div').classes(f'p-4 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else ""}').style(
+                            f"background-color: {'#14532d' if is_active else '#374151'}; border-top: 4px solid #22c55e;"
+                        ).on('click', lambda s='approved', c=approved_count: filter_by_status(s, c)):
+                            ui.label('Approved').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(f'{fmt_days(approved_days)} days').classes('text-xl font-bold').style('color: #22c55e')
+                            ui.label(f'{approved_count} request{"s" if approved_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Pending tile
+                        is_active = current_filter == 'pending'
+                        can_click = pending_count > 0
+                        with ui.element('div').classes(f'p-4 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else ""}').style(
+                            f"background-color: {'#78350f' if is_active else '#374151'}; border-top: 4px solid #f59e0b;"
+                        ).on('click', lambda s='pending', c=pending_count: filter_by_status(s, c)):
+                            ui.label('Pending').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(f'{fmt_days(pending_days)} days').classes('text-xl font-bold').style('color: #f59e0b')
+                            ui.label(f'{pending_count} request{"s" if pending_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Cancelled tile
+                        is_active = current_filter == 'cancelled'
+                        can_click = cancelled_count > 0
+                        with ui.element('div').classes(f'p-4 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else ""}').style(
+                            f"background-color: {'#7f1d1d' if is_active else '#374151'}; border-top: 4px solid #ef4444;"
+                        ).on('click', lambda s='cancelled', c=cancelled_count: filter_by_status(s, c)):
+                            ui.label('Cancelled').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(f'{fmt_days(cancelled_days)} days').classes('text-xl font-bold').style('color: #ef4444')
+                            ui.label(f'{cancelled_count} request{"s" if cancelled_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Total tile (always clickable)
+                        is_active = current_filter == 'all'
+                        with ui.element('div').classes('p-4 rounded-lg cursor-pointer hover:opacity-80').style(
+                            f"background-color: {'#1e3a5f' if is_active else '#374151'}; border-top: 4px solid #3b82f6;"
+                        ).on('click', lambda: filter_by_status('all', 1)):
+                            ui.label('Total').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(f'{len(all_requests)}').classes('text-xl font-bold').style('color: #3b82f6')
+                            ui.label('requests').classes('text-xs opacity-50')
 
                     # Detailed list with descriptions
                     for req in requests:
@@ -372,9 +536,9 @@ def reports_page():
 
                                     # Dates
                                     if req.start_date == req.end_date:
-                                        date_str = req.start_date.strftime('%B %d, %Y')
+                                        date_str = req.start_date.strftime('%A, %B %d, %Y')
                                     else:
-                                        date_str = f'{req.start_date.strftime("%b %d")} - {req.end_date.strftime("%b %d, %Y")}'
+                                        date_str = f'{req.start_date.strftime("%A, %B %d")} - {req.end_date.strftime("%A, %B %d, %Y")}'
                                     ui.label(date_str).classes('text-sm')
 
                                     # Notes (personal)
@@ -477,8 +641,15 @@ def reports_page():
                     PTORequest.end_date <= date(filter_state['year'], 12, 31)
                 )
 
-                if filter_state['pto_type_filter'] != 'all':
-                    query = query.filter(PTORequest.pto_type == filter_state['pto_type_filter'])
+                # Build list of selected types from checkboxes + other dropdown
+                selected_types = list(filter_state['calendar_types'])
+                if filter_state['calendar_other_type']:
+                    selected_types.append(filter_state['calendar_other_type'])
+
+                # Filter by selected types (if any selected)
+                if selected_types:
+                    from sqlalchemy import func
+                    query = query.filter(func.lower(PTORequest.pto_type).in_([t.lower() for t in selected_types]))
 
                 requests = query.order_by(PTORequest.start_date).all()
 
@@ -507,10 +678,18 @@ def reports_page():
                                     'personal': 'purple',
                                     'work_from_home': 'red'
                                 }
-                                color = type_colors.get(req.pto_type.lower(), 'grey')
+                                type_display = {
+                                    'vacation': 'Vacation',
+                                    'sick': 'Sick',
+                                    'personal': 'Personal',
+                                    'work_from_home': 'WFH'
+                                }
+                                pto_lower = req.pto_type.lower()
+                                color = type_colors.get(pto_lower, 'grey')
+                                display_name = type_display.get(pto_lower, req.pto_type.replace('_', ' ').title())
 
                                 with ui.row().classes('w-full p-2 items-center gap-3 border-b'):
-                                    ui.badge(req.pto_type.title(), color=color)
+                                    ui.badge(display_name, color=color)
                                     if req.start_date == req.end_date:
                                         ui.label(req.start_date.strftime('%d')).classes('font-medium')
                                     else:
@@ -522,11 +701,308 @@ def reports_page():
             finally:
                 db.close()
 
+        def render_my_pto():
+            """Render combined My PTO dashboard with balance, status tiles, and history."""
+            db = next(get_db())
+            try:
+                # Get balance data
+                balance = db.query(PTOBalance).filter(
+                    PTOBalance.user_id == user_id,
+                    PTOBalance.year == filter_state['year']
+                ).first()
+
+                # Get all requests for the year
+                all_requests = db.query(PTORequest).filter(
+                    PTORequest.user_id == user_id,
+                    PTORequest.start_date >= date(filter_state['year'], 1, 1),
+                    PTORequest.end_date <= date(filter_state['year'], 12, 31)
+                ).all()
+
+                # Group requests by type for counting
+                requests_by_type = {
+                    'vacation': [r for r in all_requests if r.pto_type.lower() == 'vacation'],
+                    'sick': [r for r in all_requests if r.pto_type.lower() == 'sick'],
+                    'personal': [r for r in all_requests if r.pto_type.lower() == 'personal'],
+                    'work_from_home': [r for r in all_requests if r.pto_type.lower() == 'work_from_home'],
+                }
+
+                # Apply filters to get display requests
+                filtered_requests = all_requests
+
+                # Apply PTO type filter (single-select)
+                if filter_state['selected_pto_type']:
+                    from sqlalchemy import func
+                    filtered_requests = [r for r in filtered_requests if r.pto_type.lower() == filter_state['selected_pto_type'].lower()]
+
+                # Apply status filter
+                if filter_state['status_filter'] != 'all':
+                    filtered_requests = [r for r in filtered_requests if r.status == filter_state['status_filter']]
+
+                # Sort by date descending
+                filtered_requests = sorted(filtered_requests, key=lambda r: r.start_date, reverse=True)
+
+                # Calculate stats based on current PTO type filter (for status tiles)
+                if filter_state['selected_pto_type']:
+                    type_requests = requests_by_type.get(filter_state['selected_pto_type'], [])
+                else:
+                    type_requests = all_requests
+
+                approved_days = sum(float(r.total_days or 0) for r in type_requests if r.status == 'approved')
+                pending_days = sum(float(r.total_days or 0) for r in type_requests if r.status == 'pending')
+                cancelled_days = sum(float(r.total_days or 0) for r in type_requests if r.status == 'cancelled')
+                approved_count = len([r for r in type_requests if r.status == 'approved'])
+                pending_count = len([r for r in type_requests if r.status == 'pending'])
+                cancelled_count = len([r for r in type_requests if r.status == 'cancelled'])
+
+                # Info dialog helper
+                def show_info_dialog(title: str, message: str):
+                    with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 350px; max-width: 450px'):
+                        with ui.row().classes('items-center gap-2 mb-4'):
+                            ui.icon('info', color='blue', size='md')
+                            ui.label(title).classes('text-lg font-bold')
+                        ui.label(message).classes('text-sm opacity-80')
+                        with ui.row().classes('w-full justify-end mt-4'):
+                            ui.button('OK', on_click=dialog.close).props('color=primary')
+                    dialog.open()
+
+                with ui.card().classes('w-full'):
+                    ui.label(f'My PTO Dashboard - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
+
+                    # === BALANCE TILES (Clickable - Single Select) ===
+                    def hours_to_days(hours):
+                        return fmt_days(hours / 8)
+
+                    def select_pto_type(type_code, type_label, request_count):
+                        """Select PTO type - click to select, click again to deselect."""
+                        if request_count == 0:
+                            show_info_dialog(
+                                f'No {type_label} Requests',
+                                f'You have no {type_label.lower()} requests for {filter_state["year"]}. Submit a request to see it here.'
+                            )
+                            return
+                        # Toggle: if already selected, deselect; otherwise select
+                        if filter_state['selected_pto_type'] == type_code:
+                            filter_state['selected_pto_type'] = None
+                        else:
+                            filter_state['selected_pto_type'] = type_code
+                        # Reset status filter when changing PTO type
+                        filter_state['status_filter'] = 'all'
+                        render_report()
+
+                    # Balance data for tiles
+                    if balance:
+                        vac_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
+                        vac_used = float(balance.vacation_used or 0)
+                        vac_pending = float(balance.vacation_pending or 0)
+                        vac_avail = vac_total - vac_used - vac_pending
+
+                        sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                        sick_used = float(balance.sick_used or 0)
+                        sick_avail = sick_total - sick_used
+
+                        personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                        personal_used = float(balance.personal_used or 0)
+                        personal_avail = personal_total - personal_used
+                    else:
+                        vac_avail = sick_avail = personal_avail = vac_pending = 0
+
+                    # WFH stats
+                    wfh_requests = requests_by_type['work_from_home']
+                    wfh_days = sum(float(r.total_days or 0) for r in wfh_requests)
+                    wfh_count = len(wfh_requests)
+
+                    # Tile data: type_code, label, value, sub_label, color, bg_active, pending_hours, request_count
+                    tiles = [
+                        ('vacation', 'Vacation', hours_to_days(vac_avail), 'days left', '#3b82f6', '#1e3a5f', vac_pending, len(requests_by_type['vacation'])),
+                        ('sick', 'Sick', hours_to_days(sick_avail), 'days left', '#22c55e', '#14532d', 0, len(requests_by_type['sick'])),
+                        ('personal', 'Personal', hours_to_days(personal_avail), 'days left', '#a855f7', '#581c87', 0, len(requests_by_type['personal'])),
+                        ('work_from_home', 'WFH', f'{fmt_days(wfh_days)}', f'{wfh_count} request{"s" if wfh_count != 1 else ""}', '#ef4444', '#7f1d1d', 0, wfh_count),
+                    ]
+
+                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4 mb-4'):
+                        for type_code, label, value, sub_label, color, bg_active, pending_hours, req_count in tiles:
+                            is_selected = filter_state['selected_pto_type'] == type_code
+                            has_requests = req_count > 0
+                            # Selected = active bg, has requests but not selected = default bg, no requests = slightly dimmed
+                            bg_color = bg_active if is_selected else '#374151'
+
+                            with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if has_requests else "cursor-pointer"}').style(
+                                f'background-color: {bg_color}; border-left: 4px solid {color};'
+                            ).on('click', lambda tc=type_code, lbl=label, cnt=req_count: select_pto_type(tc, lbl, cnt)):
+                                ui.label(label).classes('text-sm font-semibold').style(f'color: {color}')
+                                with ui.row().classes('items-baseline gap-2'):
+                                    ui.label(value).classes('text-2xl font-bold')
+                                    ui.label(sub_label).classes('text-xs opacity-60')
+                                if pending_hours > 0:
+                                    ui.label(f'({hours_to_days(pending_hours)} pending)').classes('text-xs text-amber-500')
+
+                    # === STATUS TILES (Clickable - filter within selected PTO type) ===
+                    def filter_by_status(status, count):
+                        if count == 0 and status != 'all':
+                            type_label = filter_state['selected_pto_type'].replace('_', ' ').title() if filter_state['selected_pto_type'] else 'PTO'
+                            show_info_dialog(
+                                f'No {status.title()} Requests',
+                                f'You have no {status} {type_label.lower()} requests for {filter_state["year"]}.'
+                            )
+                            return
+                        # Toggle: if already selected, go back to all; otherwise select
+                        filter_state['status_filter'] = 'all' if filter_state['status_filter'] == status else status
+                        render_report()
+
+                    current_status_filter = filter_state['status_filter']
+                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4 mb-4'):
+                        # Approved tile
+                        is_active = current_status_filter == 'approved'
+                        can_click = approved_count > 0
+                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
+                            f"background-color: {'#14532d' if is_active else '#374151'}; border-top: 3px solid #22c55e;"
+                        ).on('click', lambda s='approved', c=approved_count: filter_by_status(s, c)):
+                            ui.label('Approved').classes('text-xs opacity-60 uppercase')
+                            ui.label(f'{fmt_days(approved_days)} days').classes('text-lg font-bold').style('color: #22c55e')
+                            ui.label(f'{approved_count} request{"s" if approved_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Pending tile
+                        is_active = current_status_filter == 'pending'
+                        can_click = pending_count > 0
+                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
+                            f"background-color: {'#78350f' if is_active else '#374151'}; border-top: 3px solid #f59e0b;"
+                        ).on('click', lambda s='pending', c=pending_count: filter_by_status(s, c)):
+                            ui.label('Pending').classes('text-xs opacity-60 uppercase')
+                            ui.label(f'{fmt_days(pending_days)} days').classes('text-lg font-bold').style('color: #f59e0b')
+                            ui.label(f'{pending_count} request{"s" if pending_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Cancelled tile
+                        is_active = current_status_filter == 'cancelled'
+                        can_click = cancelled_count > 0
+                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
+                            f"background-color: {'#7f1d1d' if is_active else '#374151'}; border-top: 3px solid #ef4444;"
+                        ).on('click', lambda s='cancelled', c=cancelled_count: filter_by_status(s, c)):
+                            ui.label('Cancelled').classes('text-xs opacity-60 uppercase')
+                            ui.label(f'{fmt_days(cancelled_days)} days').classes('text-lg font-bold').style('color: #ef4444')
+                            ui.label(f'{cancelled_count} request{"s" if cancelled_count != 1 else ""}').classes('text-xs opacity-50')
+
+                        # Total/All tile
+                        is_active = current_status_filter == 'all'
+                        total_count = len(type_requests)
+                        with ui.element('div').classes('p-3 rounded-lg cursor-pointer hover:opacity-80').style(
+                            f"background-color: {'#1e3a5f' if is_active else '#374151'}; border-top: 3px solid #3b82f6;"
+                        ).on('click', lambda: filter_by_status('all', 1)):
+                            ui.label('Total').classes('text-xs opacity-60 uppercase')
+                            ui.label(f'{total_count}').classes('text-lg font-bold').style('color: #3b82f6')
+                            ui.label('requests').classes('text-xs opacity-50')
+
+                    # === REQUEST LIST ===
+                    if not filtered_requests:
+                        with ui.column().classes('w-full items-center py-8'):
+                            ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
+                            ui.label('No PTO requests found for the current filters.').classes('opacity-60')
+                    else:
+                        for req in filtered_requests:
+                            type_colors = {
+                                'vacation': 'border-blue-500',
+                                'sick': 'border-green-500',
+                                'personal': 'border-purple-500',
+                                'work_from_home': 'border-red-500'
+                            }
+                            status_icons = {
+                                'approved': 'check_circle',
+                                'pending': 'schedule',
+                                'denied': 'cancel',
+                                'cancelled': 'block'
+                            }
+                            border_color = type_colors.get(req.pto_type.lower(), 'border-gray-300')
+
+                            with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {border_color}'):
+                                with ui.row().classes('w-full justify-between items-start'):
+                                    with ui.column().classes('gap-1'):
+                                        with ui.row().classes('items-center gap-2'):
+                                            ui.icon(status_icons.get(req.status, 'event')).classes('text-lg')
+                                            ui.label(req.pto_type.replace('_', ' ').title()).classes('font-semibold')
+                                            ui.badge(req.status.upper()).props(
+                                                f'color={"green" if req.status == "approved" else "amber" if req.status == "pending" else "red"}'
+                                            )
+
+                                        if req.start_date == req.end_date:
+                                            date_str = req.start_date.strftime('%A, %B %d, %Y')
+                                        else:
+                                            date_str = f'{req.start_date.strftime("%A, %B %d")} - {req.end_date.strftime("%A, %B %d, %Y")}'
+                                        ui.label(date_str).classes('text-sm')
+
+                                        if req.notes:
+                                            with ui.row().classes('items-start gap-2 mt-2 p-2 rounded').style('background: rgba(0,0,0,0.05)'):
+                                                ui.icon('notes', color='grey').classes('text-sm')
+                                                ui.label(req.notes).classes('text-sm italic')
+
+                                    with ui.column().classes('items-end'):
+                                        ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('font-bold')
+
+            finally:
+                db.close()
+
         def render_team_balance():
             """Render team balance summary (managers/admins only)."""
             if not is_manager_or_admin:
                 ui.label('Access denied').classes('text-red-500')
                 return
+
+            # Store employee data for detail lookup
+            employee_lookup = {}
+
+            def show_employee_balance_detail(employee_id):
+                """Show a detail dialog for an employee's balance."""
+                data = employee_lookup.get(employee_id)
+                if not data:
+                    return
+
+                with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 550px;'):
+                    # Header
+                    with ui.row().classes('w-full justify-between items-center mb-4'):
+                        ui.label('Balance Details').classes('text-lg font-bold')
+                        ui.badge(str(filter_state['year']), color='primary')
+
+                    # Employee info
+                    with ui.row().classes('w-full items-center gap-3 mb-4 pb-4').style('border-bottom: 1px solid #374151'):
+                        ui.icon('person', size='md').style('color: #3b82f6')
+                        with ui.column().classes('gap-0'):
+                            ui.label(data['name']).classes('font-semibold')
+                            ui.label(data['department']).classes('text-sm opacity-60')
+
+                    # Balance breakdown by type
+                    balance_types = [
+                        {'name': 'Vacation', 'color': '#3b82f6', 'total': data['vac_total'], 'used': data['vac_used'], 'pending': data['vac_pending'], 'avail': data['vac_avail']},
+                        {'name': 'Sick', 'color': '#22c55e', 'total': data['sick_total'], 'used': data['sick_used'], 'pending': 0, 'avail': data['sick_total'] - data['sick_used']},
+                        {'name': 'Personal', 'color': '#a855f7', 'total': data['personal_total'], 'used': data['personal_used'], 'pending': 0, 'avail': data['personal_total'] - data['personal_used']},
+                        {'name': 'WFH', 'color': '#ef4444', 'total': None, 'used': data.get('wfh_used', 0), 'pending': 0, 'avail': None},
+                    ]
+
+                    for bt in balance_types:
+                        with ui.element('div').classes('w-full mb-3 p-3 rounded').style(f'background-color: #374151; border-left: 4px solid {bt["color"]}'):
+                            with ui.row().classes('w-full justify-between items-center mb-2'):
+                                ui.label(bt['name']).classes('font-semibold').style(f'color: {bt["color"]}')
+                            with ui.row().classes('w-full gap-4'):
+                                # WFH has no Total/Available - just show Used
+                                if bt['total'] is not None:
+                                    with ui.column().classes('gap-0 flex-1 text-center'):
+                                        ui.label('Total').classes('text-xs opacity-60')
+                                        ui.label(f'{fmt_days(bt["total"])}d').classes('font-medium')
+                                with ui.column().classes('gap-0 flex-1 text-center'):
+                                    ui.label('Used').classes('text-xs opacity-60')
+                                    ui.label(f'{fmt_days(bt["used"])}d').classes('font-medium')
+                                if bt['name'] == 'Vacation' and bt['pending'] > 0:
+                                    with ui.column().classes('gap-0 flex-1 text-center'):
+                                        ui.label('Pending').classes('text-xs opacity-60')
+                                        ui.label(f'{fmt_days(bt["pending"])}d').classes('font-medium').style('color: #f59e0b')
+                                if bt['avail'] is not None:
+                                    with ui.column().classes('gap-0 flex-1 text-center'):
+                                        ui.label('Available').classes('text-xs opacity-60')
+                                        avail_color = '#22c55e' if bt['avail'] > 0 else '#ef4444'
+                                        ui.label(f'{fmt_days(bt["avail"])}d').classes('font-bold').style(f'color: {avail_color}')
+
+                    # OK button
+                    with ui.row().classes('w-full justify-end mt-4'):
+                        ui.button('OK', on_click=dialog.close).props('color=primary')
+
+                dialog.open()
 
             db = next(get_db())
             try:
@@ -569,15 +1045,41 @@ def reports_page():
                     def h2d(hours):
                         return fmt_days(hours / 8)
 
+                    # Get WFH days used per employee for the year
+                    from sqlalchemy import func
+                    wfh_query = db.query(
+                        PTORequest.user_id,
+                        func.sum(PTORequest.total_days).label('wfh_days')
+                    ).filter(
+                        PTORequest.pto_type == 'work_from_home',
+                        PTORequest.status == 'approved',
+                        PTORequest.start_date >= date(filter_state['year'], 1, 1),
+                        PTORequest.end_date <= date(filter_state['year'], 12, 31)
+                    ).group_by(PTORequest.user_id).all()
+                    wfh_by_user = {uid: float(days or 0) for uid, days in wfh_query}
+
+                    # Colored section header labels
+                    with ui.row().classes('w-full mb-2 gap-0'):
+                        ui.element('div').classes('flex-none').style('width: 200px;')  # Employee column spacer
+                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #3b82f620; border-bottom: 2px solid #3b82f6;'):
+                            ui.label('VACATION').classes('text-xs font-bold').style('color: #3b82f6;')
+                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #22c55e20; border-bottom: 2px solid #22c55e;'):
+                            ui.label('SICK').classes('text-xs font-bold').style('color: #22c55e;')
+                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #a855f720; border-bottom: 2px solid #a855f7;'):
+                            ui.label('PERSONAL').classes('text-xs font-bold').style('color: #a855f7;')
+                        with ui.element('div').classes('text-center py-1 rounded-t').style('width: 80px; background-color: #ef444420; border-bottom: 2px solid #ef4444;'):
+                            ui.label('WFH').classes('text-xs font-bold').style('color: #ef4444;')
+
                     columns = [
                         {'name': 'name', 'label': 'Employee', 'field': 'name', 'sortable': True, 'align': 'left'},
-                        {'name': 'vacation_total', 'label': 'Vac Total', 'field': 'vacation_total', 'sortable': True},
-                        {'name': 'vacation_used', 'label': 'Vac Used', 'field': 'vacation_used', 'sortable': True},
-                        {'name': 'vacation_available', 'label': 'Vac Avail', 'field': 'vacation_available', 'sortable': True},
-                        {'name': 'sick_total', 'label': 'Sick Total', 'field': 'sick_total', 'sortable': True},
-                        {'name': 'sick_used', 'label': 'Sick Used', 'field': 'sick_used', 'sortable': True},
-                        {'name': 'personal_total', 'label': 'Pers Total', 'field': 'personal_total', 'sortable': True},
-                        {'name': 'personal_used', 'label': 'Pers Used', 'field': 'personal_used', 'sortable': True},
+                        {'name': 'vacation_total', 'label': 'Total', 'field': 'vacation_total', 'sortable': True},
+                        {'name': 'vacation_used', 'label': 'Used', 'field': 'vacation_used', 'sortable': True},
+                        {'name': 'vacation_available', 'label': 'Avail', 'field': 'vacation_available', 'sortable': True},
+                        {'name': 'sick_total', 'label': 'Total', 'field': 'sick_total', 'sortable': True},
+                        {'name': 'sick_used', 'label': 'Used', 'field': 'sick_used', 'sortable': True},
+                        {'name': 'personal_total', 'label': 'Total', 'field': 'personal_total', 'sortable': True},
+                        {'name': 'personal_used', 'label': 'Used', 'field': 'personal_used', 'sortable': True},
+                        {'name': 'wfh_used', 'label': 'Used', 'field': 'wfh_used', 'sortable': True},
                     ]
 
                     rows = []
@@ -592,7 +1094,24 @@ def reports_page():
                             personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
                             personal_used = float(balance.personal_used or 0)
                         else:
-                            vac_total = vac_used = vac_avail = sick_total = sick_used = personal_total = personal_used = 0
+                            vac_total = vac_used = vac_avail = vac_pending = sick_total = sick_used = personal_total = personal_used = 0
+
+                        wfh_used = wfh_by_user.get(user_obj.id, 0)
+
+                        # Store plain data for detail lookup (db session will be closed)
+                        employee_lookup[user_obj.id] = {
+                            'name': f'{user_obj.first_name} {user_obj.last_name}',
+                            'department': user_obj.department.name if user_obj.department else 'No Department',
+                            'vac_total': vac_total / 8,  # Convert hours to days
+                            'vac_used': vac_used / 8,
+                            'vac_pending': vac_pending / 8,
+                            'vac_avail': vac_avail / 8,
+                            'sick_total': sick_total / 8,
+                            'sick_used': sick_used / 8,
+                            'personal_total': personal_total / 8,
+                            'personal_used': personal_used / 8,
+                            'wfh_used': wfh_used,
+                        }
 
                         rows.append({
                             'id': user_obj.id,
@@ -604,11 +1123,20 @@ def reports_page():
                             'sick_used': f'{h2d(sick_used)}d',
                             'personal_total': f'{h2d(personal_total)}d',
                             'personal_used': f'{h2d(personal_used)}d',
+                            'wfh_used': f'{fmt_days(wfh_used)}d',
                         })
 
-                    ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+                    def on_row_click(e):
+                        """Handle row click to show detail dialog."""
+                        row = e.args[1]  # Second arg is the row data
+                        if row and 'id' in row:
+                            show_employee_balance_detail(row['id'])
+
+                    table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full cursor-pointer')
+                    table.on('row-click', on_row_click)
+
                     with ui.row().classes('w-full justify-between items-center mt-2'):
-                        ui.label(f'Total: {len(rows)} employees').classes('opacity-60')
+                        ui.label(f'Total: {len(rows)} employees (click row for details)').classes('opacity-60')
                         ui.label('* Values shown in days (1 day = 8 hours)').classes('text-xs opacity-50')
 
             finally:
@@ -620,176 +1148,537 @@ def reports_page():
                 ui.label('Access denied').classes('text-red-500')
                 return
 
+            # Local filter state for tile selection
+            tile_filter = {'selected': None}  # None = all, or 'VACATION', 'SICK', etc.
+
+            # Store request data for detail lookup (plain dicts, not ORM objects)
+            request_lookup = {}
+
+            def show_request_detail(request_id):
+                """Show a detail dialog for a request."""
+                data = request_lookup.get(request_id)
+                if not data:
+                    return
+
+                # Type color for styling
+                type_colors = {
+                    'vacation': '#3b82f6', 'sick': '#22c55e',
+                    'personal': '#a855f7', 'work_from_home': '#ef4444'
+                }
+                type_color = type_colors.get(data['pto_type'].lower(), '#6b7280')
+
+                with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+                    # Header with type badge
+                    with ui.row().classes('w-full justify-between items-center mb-4'):
+                        ui.label('Request Details').classes('text-lg font-bold')
+                        ui.badge(data['pto_type'].replace('_', ' ').title(), color='primary').style(f'background-color: {type_color}')
+
+                    # Employee info
+                    with ui.row().classes('w-full items-center gap-3 mb-4 pb-4').style('border-bottom: 1px solid #374151'):
+                        ui.icon('person', size='md').style(f'color: {type_color}')
+                        with ui.column().classes('gap-0'):
+                            ui.label(data['employee_name']).classes('font-semibold')
+                            ui.label(data['department']).classes('text-sm opacity-60')
+
+                    # Date range
+                    with ui.row().classes('w-full gap-8 mb-4'):
+                        with ui.column().classes('gap-1'):
+                            ui.label('Start Date').classes('text-xs opacity-60 uppercase')
+                            ui.label(data['start_date']).classes('font-medium')
+                        with ui.column().classes('gap-1'):
+                            ui.label('End Date').classes('text-xs opacity-60 uppercase')
+                            ui.label(data['end_date']).classes('font-medium')
+
+                    # Days and status
+                    with ui.row().classes('w-full gap-8 mb-4'):
+                        with ui.column().classes('gap-1'):
+                            ui.label('Total Days').classes('text-xs opacity-60 uppercase')
+                            ui.label(data['days']).classes('font-medium text-lg').style(f'color: {type_color}')
+                        with ui.column().classes('gap-1'):
+                            ui.label('Status').classes('text-xs opacity-60 uppercase')
+                            status_colors = {'approved': '#22c55e', 'pending': '#f59e0b', 'denied': '#ef4444', 'cancelled': '#6b7280'}
+                            ui.label(data['status'].title()).classes('font-medium').style(f'color: {status_colors.get(data["status"], "#6b7280")}')
+
+                    # Notes if present
+                    if data.get('notes'):
+                        with ui.column().classes('w-full mb-4 p-3 rounded').style('background-color: #374151'):
+                            ui.label('Notes').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(data['notes']).classes('text-sm')
+
+                    # Approval info if approved/denied
+                    if data['status'] in ['approved', 'denied'] and data.get('approved_by'):
+                        with ui.column().classes('w-full mb-4'):
+                            ui.label('Approved By' if data['status'] == 'approved' else 'Denied By').classes('text-xs opacity-60 uppercase mb-1')
+                            ui.label(data['approved_by']).classes('text-sm')
+                            if data.get('approved_at'):
+                                ui.label(data['approved_at']).classes('text-xs opacity-60')
+
+                    # OK button
+                    with ui.row().classes('w-full justify-end mt-4'):
+                        ui.button('OK', on_click=dialog.close).props('color=primary')
+
+                dialog.open()
+
             db = next(get_db())
             try:
-                query = db.query(PTORequest, User).join(
+                # Base query for approved requests
+                base_query = db.query(PTORequest, User).join(
                     User, PTORequest.user_id == User.id
                 ).filter(
                     PTORequest.start_date >= date(filter_state['year'], 1, 1),
-                    PTORequest.end_date <= date(filter_state['year'], 12, 31)
+                    PTORequest.end_date <= date(filter_state['year'], 12, 31),
+                    PTORequest.status == 'approved'
                 )
 
-                if filter_state['status_filter'] != 'all':
-                    query = query.filter(PTORequest.status == filter_state['status_filter'])
-                else:
-                    query = query.filter(PTORequest.status == 'approved')
-
-                if filter_state['pto_type_filter'] != 'all':
-                    query = query.filter(PTORequest.pto_type == filter_state['pto_type_filter'])
-
                 if filter_state['department_id']:
-                    query = query.filter(User.department_id == filter_state['department_id'])
+                    base_query = base_query.filter(User.department_id == filter_state['department_id'])
 
-                # Filter by specific employee (for managers)
                 if filter_state.get('employee_id'):
-                    query = query.filter(User.id == filter_state['employee_id'])
+                    base_query = base_query.filter(User.id == filter_state['employee_id'])
 
-                results = query.order_by(PTORequest.start_date.desc()).all()
+                all_results = base_query.order_by(PTORequest.start_date.desc()).all()
+
+                # Get team balances for available calculation
+                balance_query = db.query(PTOBalance).join(User).filter(
+                    PTOBalance.year == filter_state['year'],
+                    User.is_active == True
+                )
+                if filter_state['department_id']:
+                    balance_query = balance_query.filter(User.department_id == filter_state['department_id'])
+                if filter_state.get('employee_id'):
+                    balance_query = balance_query.filter(User.id == filter_state['employee_id'])
+                balances = balance_query.all()
+
+                # Calculate team totals for available balance
+                team_available = {
+                    'VACATION': sum(float(b.vacation_total or 0) - float(b.vacation_used or 0) for b in balances) / 8,
+                    'SICK': sum(float(b.sick_total or 0) - float(b.sick_used or 0) for b in balances) / 8,
+                    'PERSONAL': sum(float(b.personal_total or 0) - float(b.personal_used or 0) for b in balances) / 8,
+                    'WORK_FROM_HOME': 0,  # WFH has no balance limit
+                }
 
                 with ui.card().classes('w-full'):
                     ui.label(f'Team Usage Report - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
-                    if not results:
+                    if not all_results:
                         with ui.column().classes('w-full items-center py-8'):
                             ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
                             ui.label('No requests found for this period.').classes('opacity-60')
                         return
 
-                    # Summary by type
+                    # Summary by type - track full days vs half days
                     type_summary = {}
-                    for request, user_obj in results:
+                    for request, user_obj in all_results:
                         pto_type = request.pto_type.upper()
                         if pto_type not in type_summary:
-                            type_summary[pto_type] = {'count': 0, 'days': 0}
+                            type_summary[pto_type] = {'count': 0, 'days': 0, 'full_days': 0, 'half_days': 0}
                         type_summary[pto_type]['count'] += 1
-                        type_summary[pto_type]['days'] += float(request.total_days or 0)
+                        total_days = float(request.total_days or 0)
+                        type_summary[pto_type]['days'] += total_days
+                        if total_days >= 1:
+                            type_summary[pto_type]['full_days'] += 1
+                        else:
+                            type_summary[pto_type]['half_days'] += 1
 
-                    with ui.row().classes('w-full gap-4 mb-4 flex-wrap'):
-                        for pto_type, stats in sorted(type_summary.items()):
-                            with ui.card().classes('p-3'):
-                                ui.label(pto_type.title()).classes('font-semibold')
-                                ui.label(f'{stats["count"]} requests').classes('text-sm opacity-70')
-                                ui.label(f'{fmt_days(stats["days"])} days').classes('text-lg font-bold')
+                    # Color coding: Vacation=Blue, Sick=Green, Personal=Purple, WFH=Red
+                    type_colors = {
+                        'VACATION': '#3b82f6',
+                        'SICK': '#22c55e',
+                        'PERSONAL': '#a855f7',
+                        'WORK_FROM_HOME': '#ef4444',
+                    }
 
-                    columns = [
-                        {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'sortable': True, 'align': 'left'},
-                        {'name': 'type', 'label': 'Type', 'field': 'type', 'sortable': True, 'align': 'left'},
-                        {'name': 'start_date', 'label': 'Start', 'field': 'start_date', 'sortable': True},
-                        {'name': 'end_date', 'label': 'End', 'field': 'end_date', 'sortable': True},
-                        {'name': 'days', 'label': 'Days', 'field': 'days', 'sortable': True},
-                        {'name': 'status', 'label': 'Status', 'field': 'status', 'sortable': True},
-                    ]
+                    type_display_names = {
+                        'VACATION': 'Vacation',
+                        'SICK': 'Sick',
+                        'PERSONAL': 'Personal',
+                        'WORK_FROM_HOME': 'WFH',
+                    }
 
-                    rows = []
-                    for request, user_obj in results:
-                        rows.append({
-                            'id': request.id,
-                            'employee': f'{user_obj.first_name} {user_obj.last_name}',
-                            'type': request.pto_type.title(),
-                            'start_date': request.start_date.strftime('%Y-%m-%d'),
-                            'end_date': request.end_date.strftime('%Y-%m-%d'),
-                            'days': fmt_days(float(request.total_days or 0)),
-                            'status': request.status.title(),
-                        })
+                    # Tile references for styling
+                    tile_refs = {}
 
-                    ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                    ui.label(f'Total: {len(rows)} requests').classes('mt-2 opacity-60')
+                    # Table container placeholder (created later, after tiles)
+                    table_container_ref = {'container': None}
+
+                    def render_table(filter_type=None):
+                        """Render the requests table, optionally filtered by PTO type."""
+                        if not table_container_ref['container']:
+                            return
+                        table_container_ref['container'].clear()
+
+                        if filter_type:
+                            filtered_results = [(r, u) for r, u in all_results if r.pto_type.upper() == filter_type]
+                            filter_label = type_display_names.get(filter_type, filter_type.title())
+                        else:
+                            filtered_results = all_results
+                            filter_label = None
+
+                        with table_container_ref['container']:
+                            if not filtered_results:
+                                with ui.column().classes('w-full items-center py-8'):
+                                    ui.icon('event_busy', size='2rem').classes('opacity-30 mb-2')
+                                    ui.label(f'No {filter_label.lower() if filter_label else ""} requests found.').classes('opacity-60')
+                                return
+
+                            columns = [
+                                {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'sortable': True, 'align': 'left'},
+                                {'name': 'type', 'label': 'Type', 'field': 'type', 'sortable': True, 'align': 'left'},
+                                {'name': 'start_date', 'label': 'Start', 'field': 'start_date', 'sortable': True},
+                                {'name': 'end_date', 'label': 'End', 'field': 'end_date', 'sortable': True},
+                                {'name': 'days', 'label': 'Days', 'field': 'days', 'sortable': True},
+                                {'name': 'status', 'label': 'Status', 'field': 'status', 'sortable': True},
+                            ]
+
+                            rows = []
+                            for request, user_obj in filtered_results:
+                                # Store plain data for detail lookup (db session will be closed)
+                                request_lookup[request.id] = {
+                                    'pto_type': request.pto_type,
+                                    'employee_name': f'{user_obj.first_name} {user_obj.last_name}',
+                                    'department': user_obj.department.name if user_obj.department else 'No Department',
+                                    'start_date': request.start_date.strftime('%A, %B %d, %Y'),
+                                    'end_date': request.end_date.strftime('%A, %B %d, %Y'),
+                                    'days': fmt_days(float(request.total_days or 0)),
+                                    'status': request.status,
+                                    'notes': request.notes,
+                                    'approved_by': request.approved_by,
+                                    'approved_at': request.approved_at.strftime('%B %d, %Y at %I:%M %p') if request.approved_at else None,
+                                }
+                                # Get color for this PTO type
+                                pto_color = type_colors.get(request.pto_type.upper(), '#6b7280')
+                                rows.append({
+                                    'id': request.id,
+                                    'employee': f'{user_obj.first_name} {user_obj.last_name}',
+                                    'type': request.pto_type.title(),
+                                    'start_date': request.start_date.strftime('%A, %B %d, %Y'),
+                                    'end_date': request.end_date.strftime('%A, %B %d, %Y'),
+                                    'days': fmt_days(float(request.total_days or 0)),
+                                    'status': request.status.title(),
+                                    'row_color': pto_color,
+                                })
+
+                            table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+
+                            # Add colored left border to rows and handle click
+                            table.add_slot('body', '''
+                                <q-tr :props="props" style="cursor: pointer;"
+                                      @click="$parent.$emit('row-click', $event, props.row)">
+                                    <q-td v-for="(col, index) in props.cols" :key="col.name" :props="props"
+                                          :style="index === 0 ? 'border-left: 4px solid ' + props.row.row_color + ';' : ''">
+                                        {{ col.value }}
+                                    </q-td>
+                                </q-tr>
+                            ''')
+
+                            def on_row_click(e):
+                                """Handle row click to show detail dialog."""
+                                row = e.args[1]  # Second arg is the row data
+                                if row and 'id' in row:
+                                    show_request_detail(row['id'])
+
+                            table.on('row-click', on_row_click)
+
+                            total_label = f'Showing: {len(rows)} {filter_label.lower() if filter_label else ""} requests'
+                            ui.label(total_label.strip() + ' (click row for details)').classes('mt-2 opacity-60')
+
+                    def on_tile_click(pto_type):
+                        """Handle tile click - toggle filter."""
+                        if tile_filter['selected'] == pto_type:
+                            # Deselect - show all
+                            tile_filter['selected'] = None
+                            render_table(None)
+                        else:
+                            # Select this type
+                            tile_filter['selected'] = pto_type
+                            render_table(pto_type)
+
+                        # Update tile styling
+                        for t, ref in tile_refs.items():
+                            color = type_colors.get(t, '#6b7280')
+                            if tile_filter['selected'] == t:
+                                ref.style(f'background-color: rgba(255,255,255,0.1); border-left: 4px solid {color};')
+                            else:
+                                ref.style(f'background-color: transparent; border-left: 4px solid {color};')
+
+                    # Summary tiles - transparent with left border, clickable (BEFORE table)
+                    with ui.row().classes('w-full gap-4 mb-4'):
+                        for pto_type in ['VACATION', 'SICK', 'PERSONAL', 'WORK_FROM_HOME']:
+                            stats = type_summary.get(pto_type, {'count': 0, 'days': 0, 'full_days': 0, 'half_days': 0})
+                            color = type_colors.get(pto_type, '#6b7280')
+                            display_name = type_display_names.get(pto_type, pto_type.replace('_', ' ').title())
+                            available = team_available.get(pto_type, 0)
+
+                            def make_handler(t=pto_type):
+                                return lambda: on_tile_click(t)
+
+                            tile = ui.element('div').classes('flex-1 p-4 rounded-lg cursor-pointer hover:bg-white/5').style(
+                                f'background-color: transparent; border-left: 4px solid {color};'
+                            ).on('click', make_handler())
+                            tile_refs[pto_type] = tile
+
+                            with tile:
+                                ui.label(display_name).classes('font-semibold text-base').style(f'color: {color}')
+                                # Show breakdown
+                                full_days = stats['full_days']
+                                half_days = stats['half_days']
+                                if half_days > 0 and full_days > 0:
+                                    breakdown = f'{full_days} full + {half_days} half day'
+                                elif half_days > 0:
+                                    breakdown = f'{half_days} half day request{"s" if half_days > 1 else ""}'
+                                else:
+                                    breakdown = f'{stats["count"]} request{"s" if stats["count"] > 1 else ""}'
+                                ui.label(breakdown).classes('text-sm opacity-70')
+
+                                # Show "X days used with Y available"
+                                used_days = stats['days']
+                                if pto_type == 'WORK_FROM_HOME':
+                                    ui.label(f'{fmt_days(used_days)} days').classes('text-xl font-bold')
+                                else:
+                                    ui.label(f'{fmt_days(used_days)} used with {fmt_days(available)} avail').classes('text-lg font-bold')
+
+                    # Table container (AFTER tiles)
+                    table_container_ref['container'] = ui.column().classes('w-full')
+
+                    # Initial table render
+                    render_table(None)
 
             finally:
                 db.close()
 
         def render_audit_report():
-            """Render audit log with filters (managers/admins only)."""
+            """Render enhanced audit log with modern filters (managers/admins only)."""
             if not is_manager_or_admin:
                 ui.label('Access denied').classes('text-red-500')
                 return
 
+            # Action color mapping for badges
+            action_colors = {
+                'login': '#22c55e',  # green
+                'logout': '#22c55e',  # green
+                'pto_approve': '#22c55e',  # green
+                'carryover_approve': '#22c55e',  # green
+                'pto_deny': '#ef4444',  # red
+                'carryover_deny': '#ef4444',  # red
+                'pto_cancel': '#f59e0b',  # amber
+                'pto_request': '#3b82f6',  # blue
+                'carryover_request': '#3b82f6',  # blue
+                'user_create': '#8b5cf6',  # purple
+                'user_update': '#8b5cf6',  # purple
+                'user_delete': '#ef4444',  # red
+                'balance_update': '#06b6d4',  # cyan
+            }
+            default_color = '#6b7280'  # gray
+
+            # Quick action filter categories
+            action_categories = {
+                'all': {'label': 'All', 'actions': None, 'icon': 'list'},
+                'logins': {'label': 'Logins', 'actions': ['login', 'logout'], 'icon': 'login'},
+                'approvals': {'label': 'Approvals', 'actions': ['pto_approve', 'carryover_approve'], 'icon': 'check_circle'},
+                'denials': {'label': 'Denials', 'actions': ['pto_deny', 'carryover_deny'], 'icon': 'cancel'},
+                'requests': {'label': 'Requests', 'actions': ['pto_request', 'carryover_request'], 'icon': 'add_circle'},
+                'user_changes': {'label': 'User Changes', 'actions': ['user_create', 'user_update', 'user_delete', 'balance_update'], 'icon': 'person'},
+            }
+
+            # Date presets
+            today = date.today()
+            date_presets = {
+                'today': {'label': 'Today', 'from': today, 'to': today},
+                'last_7': {'label': 'Last 7 Days', 'from': today - timedelta(days=7), 'to': today},
+                'last_30': {'label': 'Last 30 Days', 'from': today - timedelta(days=30), 'to': today},
+                'this_month': {'label': 'This Month', 'from': today.replace(day=1), 'to': today},
+                'custom': {'label': 'Custom', 'from': None, 'to': None},
+            }
+
             db = next(get_db())
             try:
-                # Get distinct action types for filter dropdown
-                action_types = db.query(AuditLog.action).distinct().all()
-                action_options = {'all': 'All Actions'}
-                for (action,) in action_types:
-                    action_options[action] = action.replace('_', ' ').title()
+                # Get distinct users for filter dropdown
+                user_list = db.query(AuditLog.user_id, AuditLog.username).distinct().filter(AuditLog.user_id.isnot(None)).all()
+                user_options = {'all': 'All Users'}
+                for uid, uname in user_list:
+                    if uid:
+                        user_options[str(uid)] = uname or f'User #{uid}'
 
                 with ui.card().classes('w-full'):
                     ui.label('System Audit Log').classes('text-lg font-semibold mb-4')
 
-                    # Audit-specific filters
+                    # Quick action filter chips
+                    chip_refs = {}
+                    with ui.row().classes('w-full gap-2 mb-4 flex-wrap'):
+                        for key, cat in action_categories.items():
+                            is_selected = filter_state['audit_action'] == key
+
+                            def make_chip_handler(k):
+                                def handler():
+                                    filter_state['audit_action'] = k
+                                    render_report()
+                                return handler
+
+                            chip = ui.button(cat['label'], icon=cat['icon'], on_click=make_chip_handler(key)).props(
+                                f'{"" if is_selected else "outline"} dense rounded'
+                            ).classes('text-sm')
+                            if is_selected:
+                                chip.props('color=primary')
+                            chip_refs[key] = chip
+
+                    # Search and filters row
                     with ui.row().classes('w-full gap-4 items-end flex-wrap mb-4'):
-                        def on_action_change(e):
-                            filter_state['audit_action'] = e.value
+                        # Text search
+                        def on_search_change(e):
+                            filter_state['audit_search'] = e.value or ''
                             render_report()
 
-                        def on_date_from_change(e):
-                            filter_state['audit_date_from'] = e.value
-                            render_report()
+                        ui.input(
+                            placeholder='Search user, entity, details...',
+                            value=filter_state['audit_search'],
+                            on_change=on_search_change
+                        ).props('dense outlined clearable').classes('w-64').style('min-width: 200px;')
 
-                        def on_date_to_change(e):
-                            filter_state['audit_date_to'] = e.value
+                        # User filter
+                        def on_user_change(e):
+                            filter_state['audit_user'] = e.value
                             render_report()
 
                         ui.select(
-                            action_options,
-                            label='Action Type',
-                            value=filter_state['audit_action'],
-                            on_change=on_action_change
-                        ).classes('w-40')
+                            user_options,
+                            label='User',
+                            value=filter_state['audit_user'],
+                            on_change=on_user_change
+                        ).props('dense outlined').classes('w-40')
 
-                        with ui.input('From Date').classes('w-40') as date_from:
-                            date_from.value = filter_state['audit_date_from'] or ''
-                            with date_from.add_slot('append'):
-                                ui.icon('event').on('click', lambda: menu_from.open()).classes('cursor-pointer')
-                            with ui.menu() as menu_from:
-                                ui.date(on_change=lambda e: (setattr(date_from, 'value', e.value), on_date_from_change(e), menu_from.close()))
+                        # Date preset buttons
+                        with ui.row().classes('gap-1'):
+                            for preset_key, preset in date_presets.items():
+                                if preset_key == 'custom':
+                                    continue  # Handle custom separately
+                                is_active = filter_state['audit_preset'] == preset_key
 
-                        with ui.input('To Date').classes('w-40') as date_to:
-                            date_to.value = filter_state['audit_date_to'] or ''
-                            with date_to.add_slot('append'):
-                                ui.icon('event').on('click', lambda: menu_to.open()).classes('cursor-pointer')
-                            with ui.menu() as menu_to:
-                                ui.date(on_change=lambda e: (setattr(date_to, 'value', e.value), on_date_to_change(e), menu_to.close()))
+                                def make_preset_handler(pk, pv):
+                                    def handler():
+                                        filter_state['audit_preset'] = pk
+                                        filter_state['audit_date_from'] = pv['from'].strftime('%Y-%m-%d') if pv['from'] else None
+                                        filter_state['audit_date_to'] = pv['to'].strftime('%Y-%m-%d') if pv['to'] else None
+                                        render_report()
+                                    return handler
 
+                                btn = ui.button(preset['label'], on_click=make_preset_handler(preset_key, preset)).props(
+                                    f'dense flat {"color=primary" if is_active else ""}'
+                                ).classes('text-xs')
+
+                        # Custom date range
+                        with ui.row().classes('gap-2 items-center'):
+                            def on_date_from_change(e):
+                                filter_state['audit_date_from'] = e.value
+                                filter_state['audit_preset'] = 'custom'
+                                render_report()
+
+                            def on_date_to_change(e):
+                                filter_state['audit_date_to'] = e.value
+                                filter_state['audit_preset'] = 'custom'
+                                render_report()
+
+                            with ui.input('From').props('dense outlined').classes('w-32') as date_from:
+                                date_from.value = filter_state['audit_date_from'] or ''
+                                with date_from.add_slot('append'):
+                                    ui.icon('event').on('click', lambda: menu_from.open()).classes('cursor-pointer')
+                                with ui.menu() as menu_from:
+                                    ui.date(on_change=lambda e: (setattr(date_from, 'value', e.value), on_date_from_change(e), menu_from.close()))
+
+                            with ui.input('To').props('dense outlined').classes('w-32') as date_to:
+                                date_to.value = filter_state['audit_date_to'] or ''
+                                with date_to.add_slot('append'):
+                                    ui.icon('event').on('click', lambda: menu_to.open()).classes('cursor-pointer')
+                                with ui.menu() as menu_to:
+                                    ui.date(on_change=lambda e: (setattr(date_to, 'value', e.value), on_date_to_change(e), menu_to.close()))
+
+                        # Clear all filters
                         def clear_filters():
                             filter_state['audit_action'] = 'all'
                             filter_state['audit_date_from'] = None
                             filter_state['audit_date_to'] = None
+                            filter_state['audit_search'] = ''
+                            filter_state['audit_user'] = 'all'
+                            filter_state['audit_preset'] = 'last_30'
                             render_report()
 
-                        ui.button('Clear', icon='clear', on_click=clear_filters).props('flat dense')
+                        ui.button('Clear All', icon='clear', on_click=clear_filters).props('flat dense')
 
                     # Build query with filters
                     query = db.query(AuditLog)
 
-                    # Year filter (default)
-                    year_start = date(filter_state['year'], 1, 1)
-                    year_end = date(filter_state['year'], 12, 31)
+                    # Date range filters based on preset or custom
+                    if filter_state['audit_preset'] != 'custom' and filter_state['audit_preset'] in date_presets:
+                        preset = date_presets[filter_state['audit_preset']]
+                        if preset['from']:
+                            query = query.filter(AuditLog.created_at >= datetime.combine(preset['from'], datetime.min.time()))
+                        if preset['to']:
+                            query = query.filter(AuditLog.created_at <= datetime.combine(preset['to'], datetime.max.time()))
+                    else:
+                        # Custom date range
+                        if filter_state['audit_date_from']:
+                            try:
+                                from_date = datetime.strptime(filter_state['audit_date_from'], '%Y-%m-%d')
+                                query = query.filter(AuditLog.created_at >= from_date)
+                            except ValueError:
+                                pass
 
-                    # Date range filters
-                    if filter_state['audit_date_from']:
+                        if filter_state['audit_date_to']:
+                            try:
+                                to_date = datetime.strptime(filter_state['audit_date_to'], '%Y-%m-%d')
+                                to_date = to_date.replace(hour=23, minute=59, second=59)
+                                query = query.filter(AuditLog.created_at <= to_date)
+                            except ValueError:
+                                pass
+
+                    # Action category filter
+                    if filter_state['audit_action'] != 'all' and filter_state['audit_action'] in action_categories:
+                        actions = action_categories[filter_state['audit_action']]['actions']
+                        if actions:
+                            query = query.filter(AuditLog.action.in_(actions))
+
+                    # User filter
+                    if filter_state['audit_user'] != 'all':
                         try:
-                            from_date = datetime.strptime(filter_state['audit_date_from'], '%Y-%m-%d')
-                            query = query.filter(AuditLog.created_at >= from_date)
+                            uid = int(filter_state['audit_user'])
+                            query = query.filter(AuditLog.user_id == uid)
                         except ValueError:
                             pass
-                    else:
-                        query = query.filter(AuditLog.created_at >= year_start)
 
-                    if filter_state['audit_date_to']:
-                        try:
-                            to_date = datetime.strptime(filter_state['audit_date_to'], '%Y-%m-%d')
-                            to_date = to_date.replace(hour=23, minute=59, second=59)
-                            query = query.filter(AuditLog.created_at <= to_date)
-                        except ValueError:
-                            pass
-                    else:
-                        query = query.filter(AuditLog.created_at <= year_end)
+                    results = query.order_by(AuditLog.created_at.desc()).limit(500).all()
 
-                    # Action type filter
-                    if filter_state['audit_action'] != 'all':
-                        query = query.filter(AuditLog.action == filter_state['audit_action'])
+                    # Apply text search filter (client-side for flexibility)
+                    search_term = filter_state['audit_search'].lower().strip()
+                    if search_term:
+                        filtered_results = []
+                        for log in results:
+                            searchable = ' '.join([
+                                log.username or '',
+                                log.entity_type or '',
+                                str(log.entity_id) if log.entity_id else '',
+                                log.details or '',
+                                log.action or ''
+                            ]).lower()
+                            if search_term in searchable:
+                                filtered_results.append(log)
+                        results = filtered_results
 
-                    results = query.order_by(AuditLog.created_at.desc()).limit(200).all()
+                    # Summary stats row
+                    if results:
+                        stats = {}
+                        for log in results:
+                            action = log.action
+                            stats[action] = stats.get(action, 0) + 1
+
+                        with ui.row().classes('w-full gap-3 mb-4 flex-wrap'):
+                            # Show top action counts
+                            sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:6]
+                            for action, count in sorted_stats:
+                                color = action_colors.get(action, default_color)
+                                with ui.element('div').classes('flex items-center gap-2 px-3 py-1 rounded-full').style(
+                                    f'background-color: {color}20; border: 1px solid {color};'
+                                ):
+                                    ui.label(action.replace('_', ' ').title()).classes('text-xs font-medium').style(f'color: {color};')
+                                    ui.label(str(count)).classes('text-xs font-bold').style(f'color: {color};')
 
                     if not results:
                         with ui.column().classes('w-full items-center py-8'):
@@ -818,17 +1707,45 @@ def reports_page():
                             except (json.JSONDecodeError, TypeError):
                                 detail_str = str(log.details)[:50]
 
+                        # Get color for action badge
+                        action_color = action_colors.get(log.action, default_color)
+
                         rows.append({
                             'id': log.id,
                             'date': log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '-',
                             'user': log.username or f'User #{log.user_id}' if log.user_id else 'System',
                             'action': log.action.replace('_', ' ').title(),
+                            'action_raw': log.action,
+                            'action_color': action_color,
                             'entity': f'{log.entity_type or ""} #{log.entity_id}' if log.entity_id else log.entity_type or '-',
                             'details': detail_str[:100] if detail_str else '-',
+                            'details_full': detail_str,
                         })
 
-                    ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
-                    ui.label(f'Showing {len(rows)} records (max 200)').classes('mt-2 opacity-60')
+                    # Custom table with color-coded action badges
+                    table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full')
+
+                    # Add custom body slot for action column with colored badges
+                    table.add_slot('body-cell-action', '''
+                        <q-td :props="props">
+                            <q-badge :style="'background-color: ' + props.row.action_color">
+                                {{ props.row.action }}
+                            </q-badge>
+                        </q-td>
+                    ''')
+
+                    # Add expandable details on row click
+                    table.add_slot('body-cell-details', '''
+                        <q-td :props="props">
+                            <div class="cursor-pointer" @click="props.expand = !props.expand">
+                                {{ props.row.details }}
+                                <q-icon v-if="props.row.details_full && props.row.details_full.length > 50"
+                                        :name="props.expand ? 'expand_less' : 'expand_more'" size="xs" />
+                            </div>
+                        </q-td>
+                    ''')
+
+                    ui.label(f'Showing {len(rows)} records (max 500)').classes('mt-2 opacity-60')
 
             finally:
                 db.close()
@@ -841,7 +1758,47 @@ def reports_page():
                 writer = csv.writer(output)
                 report_type = filter_state['report_type']
 
-                if report_type == 'my_history':
+                if report_type == 'my_pto':
+                    # Combined PTO export with balance and history
+                    writer.writerow(['=== Balance Summary ==='])
+                    writer.writerow(['Type', 'Total', 'Used', 'Pending', 'Available'])
+                    balance = db.query(PTOBalance).filter(
+                        PTOBalance.user_id == user_id,
+                        PTOBalance.year == filter_state['year']
+                    ).first()
+                    if balance:
+                        vac_total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
+                        vac_used = float(balance.vacation_used or 0)
+                        vac_pending = float(balance.vacation_pending or 0)
+                        writer.writerow(['Vacation', f'{vac_total:.1f}', f'{vac_used:.1f}', f'{vac_pending:.1f}', f'{vac_total - vac_used - vac_pending:.1f}'])
+                        sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                        sick_used = float(balance.sick_used or 0)
+                        writer.writerow(['Sick', f'{sick_total:.1f}', f'{sick_used:.1f}', '0.0', f'{sick_total - sick_used:.1f}'])
+                        personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                        personal_used = float(balance.personal_used or 0)
+                        writer.writerow(['Personal', f'{personal_total:.1f}', f'{personal_used:.1f}', '0.0', f'{personal_total - personal_used:.1f}'])
+                    writer.writerow([])
+                    writer.writerow(['=== PTO History ==='])
+                    writer.writerow(['Type', 'Start Date', 'End Date', 'Days', 'Status', 'Notes/Reason'])
+                    query = db.query(PTORequest).filter(
+                        PTORequest.user_id == user_id,
+                        PTORequest.start_date >= date(filter_state['year'], 1, 1),
+                        PTORequest.end_date <= date(filter_state['year'], 12, 31)
+                    )
+                    if filter_state['status_filter'] != 'all':
+                        query = query.filter(PTORequest.status == filter_state['status_filter'])
+                    for req in query.order_by(PTORequest.start_date.desc()).all():
+                        writer.writerow([
+                            req.pto_type.title(),
+                            req.start_date.strftime('%Y-%m-%d'),
+                            req.end_date.strftime('%Y-%m-%d'),
+                            f'{float(req.total_days or 0):.1f}',
+                            req.status.title(),
+                            req.notes or ''
+                        ])
+                    filename = f'my_pto_{filter_state["year"]}.csv'
+
+                elif report_type == 'my_history':
                     # Personal history with notes
                     writer.writerow(['Type', 'Start Date', 'End Date', 'Days', 'Status', 'Notes/Reason'])
 
@@ -1044,7 +2001,15 @@ def reports_page():
                 report_type = filter_state['report_type']
                 year = filter_state['year']
 
-                if report_type == 'my_history':
+                if report_type == 'my_pto':
+                    # Combined report: balance + history
+                    balance_html = report_service.generate_balance_report_html(user_id, year)
+                    history_html = report_service.generate_history_report_html(
+                        user_id, year, filter_state['status_filter']
+                    )
+                    # Combine the two reports (strip closing tags from balance and opening from history)
+                    return balance_html.replace('</body></html>', '<hr style="margin: 30px 0;">') + history_html.split('<body')[1].split('>', 1)[1]
+                elif report_type == 'my_history':
                     return report_service.generate_history_report_html(
                         user_id, year, filter_state['status_filter']
                     )

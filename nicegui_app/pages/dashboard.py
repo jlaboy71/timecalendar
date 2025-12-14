@@ -91,7 +91,7 @@ def dashboard_page():
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
 
             # Header with logo, greeting and logout
-            is_dark = app.storage.general.get('dark_mode', False)
+            is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
             greeting_color = '#C9A227' if is_dark else '#5a6a72'
             with ui.row().classes('w-full justify-between items-start mb-6'):
                 with ui.column().classes('gap-1'):
@@ -109,8 +109,8 @@ def dashboard_page():
                         dark_mode = ui.dark_mode()
 
                         def toggle_dark_mode():
-                            # Get current state from storage, default to False (light mode)
-                            current = app.storage.general.get('dark_mode', False)
+                            # Get current state from storage, default to True (dark mode)
+                            current = app.storage.general.get('dark_mode', True)
                             new_state = not current
                             app.storage.general['dark_mode'] = new_state
                             if new_state:
@@ -120,7 +120,7 @@ def dashboard_page():
                             dark_toggle.props(f'icon={"light_mode" if new_state else "dark_mode"}')
 
                         # Initialize based on stored preference
-                        is_dark = app.storage.general.get('dark_mode', False)
+                        is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
                         if is_dark:
                             dark_mode.enable()
 
@@ -339,9 +339,9 @@ def dashboard_page():
                                         ui.label(req.pto_type.title()).classes('font-medium')
                                         ui.badge('Pending', color='amber').props('outline')
                                     if req.start_date == req.end_date:
-                                        ui.label(req.start_date.strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                        ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                     else:
-                                        ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                        ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
                                 with ui.row().classes('items-center gap-2'):
                                     days_display = float(req.total_days)
@@ -414,9 +414,9 @@ def dashboard_page():
                                             ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
                                             ui.label('•').classes('text-xs opacity-50')
                                             if req['start_date'] == req['end_date']:
-                                                ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                             else:
-                                                ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
                                 with ui.row().classes('items-center gap-3'):
                                     days = float(req['total_days'])
@@ -459,9 +459,9 @@ def dashboard_page():
                                             ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
                                             ui.label('•').classes('text-xs opacity-50')
                                             if req['start_date'] == req['end_date']:
-                                                ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                             else:
-                                                ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
                                         if req.get('cancellation_reason'):
                                             ui.label(f"Reason: {req['cancellation_reason']}").classes('text-xs opacity-60 italic')
 
@@ -652,9 +652,9 @@ def dashboard_page():
                                                 ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 if req['start_date'] == req['end_date']:
-                                                    ui.label(req['start_date'].strftime('%b %d, %Y')).classes('text-sm opacity-70')
+                                                    ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                                 else:
-                                                    ui.label(f"{req['start_date'].strftime('%b %d')} - {req['end_date'].strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                    ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
                                     with ui.row().classes('items-center gap-3'):
                                         days = float(req['total_days'])
@@ -763,9 +763,9 @@ def dashboard_page():
                                     with ui.column().classes('gap-0'):
                                         ui.label(req.pto_type.title()).classes('font-medium')
                                         if req.start_date == req.end_date:
-                                            ui.label(req.start_date.strftime('%b %d, %Y')).classes('text-xs opacity-60')
+                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
                                         else:
-                                            ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-xs opacity-60')
+                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-xs opacity-60')
 
                                 with ui.row().classes('gap-3 items-center'):
                                     days_display = float(req.total_days)
@@ -1068,9 +1068,9 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                                     ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey')).props('dense')
 
                                                 if req.start_date == req.end_date:
-                                                    ui.label(req.start_date.strftime('%B %d, %Y')).classes('text-sm opacity-70')
+                                                    ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                                 else:
-                                                    ui.label(f"{req.start_date.strftime('%b %d')} - {req.end_date.strftime('%b %d, %Y')}").classes('text-sm opacity-70')
+                                                    ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
                                         with ui.row().classes('gap-2 items-center'):
                                             days = float(req.total_days)
@@ -1346,7 +1346,7 @@ def show_user_profile_dialog(user, _db=None):
         location_text = 'Not Set'
 
     # Use app theme color for header
-    is_dark = app.storage.general.get('dark_mode', False)
+    is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
     header_color = '#C9A227' if is_dark else '#5a6a72'
 
     with ui.dialog() as profile_dialog, ui.card().classes('w-full max-w-md p-0'):

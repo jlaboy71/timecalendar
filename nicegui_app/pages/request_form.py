@@ -619,11 +619,11 @@ def request_form_page():
                     with ui.column().classes('items-center'):
                         ui.icon('event', color=icon_color).classes('text-2xl')
                         if state['start_date'] == state['end_date']:
-                            ui.label(state['start_date'].strftime('%b %d, %Y')).classes('font-medium')
+                            ui.label(state['start_date'].strftime('%A, %B %d, %Y')).classes('font-medium')
                             if state['is_half_day']:
                                 ui.label('Half Day').classes('text-xs opacity-60')
                         else:
-                            ui.label(f"{state['start_date'].strftime('%b %d')} - {state['end_date'].strftime('%b %d, %Y')}").classes('font-medium')
+                            ui.label(f"{state['start_date'].strftime('%A, %B %d')} - {state['end_date'].strftime('%A, %B %d, %Y')}").classes('font-medium')
 
                     ui.icon('arrow_forward').classes('opacity-40')
 

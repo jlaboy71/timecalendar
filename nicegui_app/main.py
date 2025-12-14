@@ -313,6 +313,187 @@ def export_calendar(
 
 
 # ============================================================
+# TEAM PTO REPORT EXPORT ENDPOINT
+# ============================================================
+@app.get('/api/reports/team-pto')
+def export_team_pto_report(
+    start: str = None,
+    end: str = None,
+    format: str = 'pdf'
+):
+    """
+    Export team PTO report for managers.
+
+    Args:
+        start: Start date (ISO format)
+        end: End date (ISO format)
+        format: Export format ('pdf', 'csv', 'html')
+    """
+    from datetime import date, datetime, timedelta
+    from sqlalchemy import select, and_
+    from src.models.pto_request import PTORequest
+    from src.models.user import User
+    from src.services.export_service import ExportService
+    import csv
+    from io import StringIO
+
+    # Get current user from session
+    user = app.storage.general.get('user')
+    if not user:
+        return Response(content="Unauthorized", status_code=401)
+
+    user_id = user.get('id')
+    user_role = user.get('role')
+
+    if user_role not in ['manager', 'admin', 'superadmin']:
+        return Response(content="Forbidden", status_code=403)
+
+    # Parse dates
+    today = date.today()
+    try:
+        start_date = date.fromisoformat(start) if start else today - timedelta(days=30)
+        end_date = date.fromisoformat(end) if end else today
+    except ValueError:
+        return Response(content="Invalid date format", status_code=400)
+
+    db = next(get_db())
+    try:
+        # Get manager's department
+        manager = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+        if not manager:
+            return Response(content="User not found", status_code=404)
+
+        # Get team members (for managers, their department; for admins, all)
+        if user_role == 'manager':
+            if not manager.department_id:
+                return Response(content="No department assigned", status_code=400)
+            team_stmt = select(User.id).where(User.department_id == manager.department_id)
+        else:
+            team_stmt = select(User.id)
+
+        team_ids = [r[0] for r in db.execute(team_stmt).fetchall()]
+
+        # Get PTO requests in date range
+        requests_stmt = select(PTORequest).where(
+            and_(
+                PTORequest.user_id.in_(team_ids),
+                PTORequest.start_date >= start_date,
+                PTORequest.end_date <= end_date
+            )
+        ).order_by(PTORequest.start_date.desc())
+
+        requests = db.execute(requests_stmt).scalars().all()
+
+        # Generate report based on format
+        if format == 'csv':
+            output = StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['Employee', 'Type', 'Start Date', 'End Date', 'Days', 'Status', 'Trusted'])
+            for req in requests:
+                writer.writerow([
+                    req.user.full_name,
+                    req.pto_type.title(),
+                    req.start_date.isoformat(),
+                    req.end_date.isoformat(),
+                    float(req.total_days),
+                    req.status.title(),
+                    'Yes' if req.user.is_trusted else 'No'
+                ])
+            content = output.getvalue()
+            filename = f"team_pto_report_{start_date}_{end_date}.csv"
+            media_type = "text/csv"
+
+        elif format == 'html':
+            rows = ""
+            for req in requests:
+                trusted_badge = '<span style="color: #22c55e;">✓</span> ' if req.user.is_trusted else ''
+                status_color = '#22c55e' if req.status == 'approved' else '#f59e0b' if req.status == 'pending' else '#ef4444'
+                rows += f"""
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{trusted_badge}{req.user.full_name}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.pto_type.title()}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.start_date.strftime('%b %d, %Y')}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.end_date.strftime('%b %d, %Y')}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{req.total_days}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; color: {status_color};">{req.status.title()}</td>
+                </tr>
+                """
+            content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Team PTO Report</title></head>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0;">Team PTO Report</h1>
+                </div>
+                <div style="padding: 20px;">
+                    <p><strong>Period:</strong> {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}</p>
+                    <p><strong>Total Requests:</strong> {len(requests)}</p>
+                    <table style="border-collapse: collapse; width: 100%; margin-top: 15px;">
+                        <tr style="background-color: #c9a227; color: white;">
+                            <th style="padding: 10px; text-align: left;">Employee</th>
+                            <th style="padding: 10px; text-align: left;">Type</th>
+                            <th style="padding: 10px; text-align: left;">Start</th>
+                            <th style="padding: 10px; text-align: left;">End</th>
+                            <th style="padding: 10px; text-align: center;">Days</th>
+                            <th style="padding: 10px; text-align: left;">Status</th>
+                        </tr>
+                        {rows}
+                    </table>
+                </div>
+            </body>
+            </html>
+            """
+            filename = f"team_pto_report_{start_date}_{end_date}.html"
+            media_type = "text/html"
+
+        else:  # PDF
+            # Generate HTML first, then convert to PDF
+            rows = ""
+            for req in requests:
+                trusted_badge = '✓ ' if req.user.is_trusted else ''
+                rows += f"""
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{trusted_badge}{req.user.full_name}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.pto_type.title()}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.start_date.strftime('%b %d')}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.end_date.strftime('%b %d')}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{req.total_days}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{req.status.title()}</td>
+                </tr>
+                """
+            html_content = f"""
+            <h2>Team PTO Report</h2>
+            <p><strong>Period:</strong> {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}</p>
+            <p><strong>Total Requests:</strong> {len(requests)}</p>
+            <table style="border-collapse: collapse; width: 100%;">
+                <tr style="background-color: #c9a227; color: white;">
+                    <th style="padding: 8px;">Employee</th>
+                    <th style="padding: 8px;">Type</th>
+                    <th style="padding: 8px;">Start</th>
+                    <th style="padding: 8px;">End</th>
+                    <th style="padding: 8px;">Days</th>
+                    <th style="padding: 8px;">Status</th>
+                </tr>
+                {rows}
+            </table>
+            """
+            content = ExportService.generate_report_pdf(html_content, "Team PTO Report")
+            filename = f"team_pto_report_{start_date}_{end_date}.pdf"
+            media_type = "application/pdf"
+
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    finally:
+        db.close()
+
+
+# ============================================================
 # NOTIFICATION DIGEST SCHEDULER
 # ============================================================
 import os
