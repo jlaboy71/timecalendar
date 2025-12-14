@@ -37,17 +37,50 @@ class User(Base):
     
     # Department and role
     department_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
-        ForeignKey("departments.id"), 
-        nullable=True
+        Integer,
+        ForeignKey("departments.id"),
+        nullable=True,
+        index=True
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="employee")
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="employee", index=True)
     
     # Employment information
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
     anniversary_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     remote_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+
+    # Location information (for state-specific leave policies)
+    location_state: Mapped[Optional[str]] = mapped_column(
+        String(2),
+        nullable=True,
+        index=True,
+        comment="State code: IL, NY, CT, FL"
+    )
+    location_city: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="City name (e.g., Chicago for IL-specific rules)"
+    )
+
+    # Trusted employee designation (auto-approve standard PTO)
+    is_trusted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="If true, vacation/sick/personal auto-approve"
+    )
+    trusted_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        comment="Manager who granted trust"
+    )
+    trusted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="When trust was granted"
+    )
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

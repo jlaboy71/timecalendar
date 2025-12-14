@@ -250,23 +250,54 @@ class BalanceService:
     def remove_pending(self, balance_id: int, days: Decimal) -> PTOBalance:
         """
         Remove days from pending (when request is denied).
-        
+
         Args:
             balance_id: ID of the balance
             days: Number of days to remove from pending
-            
+
         Returns:
             PTOBalance: Updated balance
-            
+
         Raises:
             ValueError: If balance not found
         """
         balance = self.get_balance_by_id(balance_id)
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
-        
+
         balance.vacation_pending -= days
-        
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def allocate_standard_balance(self, user_id: int, year: int = None) -> PTOBalance:
+        """
+        Create or update balance with standard PTO allocation for new employees.
+
+        Standard allocation:
+        - Vacation: 160 hours (20 days)
+        - Sick: 40 hours (5 days)
+        - Personal: 16 hours (2 days)
+
+        Args:
+            user_id: ID of the user
+            year: Year for the balance (defaults to current year)
+
+        Returns:
+            PTOBalance: The balance with standard allocation
+        """
+        if year is None:
+            year = datetime.now().year
+
+        # Get or create the balance record
+        balance = self.get_or_create_balance(user_id, year)
+
+        # Set standard allocation values
+        balance.vacation_total = Decimal('160.00')
+        balance.sick_total = Decimal('40.00')
+        balance.personal_total = Decimal('16.00')
+
         self.db.commit()
         self.db.refresh(balance)
         return balance

@@ -80,3 +80,19 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# NiceGUI storage (session data)
+.nicegui/
+
+# Database backups
+backups/
+
+# Log files
+logs/
+*.log
+
+# SSL certificates (never commit private keys)
+certs/
+*.pem
+*.key
+*.crt

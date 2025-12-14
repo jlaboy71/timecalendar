@@ -8,6 +8,7 @@ from sqlalchemy import String, Integer, Boolean, Date, DateTime, Numeric, Text, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+from sqlalchemy import Index
 
 if TYPE_CHECKING:
     from .user import User
@@ -47,14 +48,22 @@ class PTORequest(Base):
     
     # Status and approval
     status: Mapped[str] = mapped_column(
-        String(20), 
-        default="pending", 
+        String(20),
+        default="pending",
         nullable=False,
         index=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
+    # Privacy - when True, request is hidden from department/team calendar views
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Cancellation request tracking (for employee-requested cancellations)
+    cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancellation_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Timestamps
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -86,6 +95,12 @@ class PTORequest(Base):
         foreign_keys=[approved_by]
     )
     
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('ix_pto_requests_user_status', 'user_id', 'status'),
+        Index('ix_pto_requests_status_dates', 'status', 'start_date', 'end_date'),
+    )
+
     def __repr__(self) -> str:
         """String representation of the PTORequest model."""
         return (f"<PTORequest(id={self.id}, user_id={self.user_id}, "
