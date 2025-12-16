@@ -3,33 +3,33 @@ from src.services.balance_service import BalanceService
 from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
 from src.services.user_service import UserService
+from src.services.policy_change_service import PolicyChangeService
+from nicegui_app.components.policy_change_indicator import whats_new_section
 from src.services.department_service import DepartmentService
 from src.models.carryover_request import CarryoverRequest
+from src.models.system_setting import SystemSetting
 from src.database import get_db
 from datetime import datetime, date
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
-from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog
+from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog, show_success_dialog
 from nicegui_app.components.formatting import format_days_hours
 
 
 def format_days(hours: float) -> str:
-    """Convert hours to days, showing clean whole numbers when possible."""
-    days = round(hours / 8, 1)
-    # If it's essentially a whole number, show as integer
-    if abs(days - round(days)) < 0.01:
-        return str(int(round(days)))
-    return f"{days:.1f}"
+    """Convert hours to days in Xd Yh format for consistency."""
+    hours = float(hours)
+    whole_days = int(hours // 8)
+    remaining_hours = int(hours % 8)
+    if remaining_hours > 0:
+        return f"{whole_days}d {remaining_hours}h"
+    return f"{whole_days}d"
 
 
 def format_hours_and_days(hours: float) -> str:
-    """Format hours with days equivalent."""
-    hours_rounded = round(hours)
-    days = round(hours / 8, 1)
-    if abs(days - round(days)) < 0.01:
-        return f"{hours_rounded} hrs ({int(round(days))} days)"
-    return f"{hours_rounded} hrs ({days:.1f} days)"
+    """Format hours with days equivalent - kept for backwards compatibility."""
+    return format_days(hours)
 
 
 def dashboard_page():
@@ -57,6 +57,7 @@ def dashboard_page():
         pto_service = PTOService(db)
         accrual_service = AccrualService(db)
         user_service = UserService(db)
+        policy_change_service = PolicyChangeService(db)
 
         # Get current user object for policy lookups
         current_user = user_service.get_user_by_id(user_id)
@@ -131,6 +132,10 @@ def dashboard_page():
 
                         ui.button('LOGOUT', icon='logout', on_click=lambda: logout()).props('flat color=red')
 
+            # ============ WHAT'S NEW SECTION (Policy Changes) ============
+            if current_user:
+                whats_new_section(current_user, policy_change_service)
+
             # ============ PTO BALANCES CARD (not for admin/superadmin - they don't take PTO) ============
             if user_role not in ['admin', 'superadmin']:
               with ui.card().classes('w-full mb-4'):
@@ -190,16 +195,69 @@ def dashboard_page():
                                         ui.icon('info', color='amber').classes('mr-2')
                                         ui.label(f'{year} PTO balances not yet allocated by admin').classes('text-amber-600')
 
-                            with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
+                            # Help dialog functions
+                            def show_vacation_help():
+                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                    with ui.row().classes('w-full p-4 bg-blue-500 text-white items-center'):
+                                        ui.icon('beach_access', size='md').classes('mr-2')
+                                        ui.label('Vacation Time Policy').classes('text-lg font-bold')
+                                    with ui.column().classes('p-4 gap-3'):
+                                        ui.label('Your vacation accrual is based on years of service:').classes('font-semibold')
+                                        with ui.column().classes('pl-4 gap-2'):
+                                            ui.label('• 0-4 years: 10 days (80 hours) per year').classes('text-sm')
+                                            ui.label('• 5-9 years: 15 days (120 hours) per year').classes('text-sm')
+                                            ui.label('• 10+ years: 20 days (160 hours) per year').classes('text-sm')
+                                        ui.label('Carryover: Up to 40 hours can be carried to next year.').classes('text-sm opacity-70 mt-2')
+                                        ui.label('Use it or lose it - excess hours expire Dec 31.').classes('text-sm opacity-70')
+                                        with ui.row().classes('w-full justify-end mt-2'):
+                                            ui.button('Got it', on_click=help_dialog.close).props('color=primary')
+                                help_dialog.open()
+
+                            def show_sick_help():
+                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                    with ui.row().classes('w-full p-4 bg-green-500 text-white items-center'):
+                                        ui.icon('medical_services', size='md').classes('mr-2')
+                                        ui.label('Sick Time Policy').classes('text-lg font-bold')
+                                    with ui.column().classes('p-4 gap-3'):
+                                        ui.label('Annual sick time allocation:').classes('font-semibold')
+                                        with ui.column().classes('pl-4 gap-2'):
+                                            ui.label('• 5 days (40 hours) per year').classes('text-sm')
+                                            ui.label('• For illness, medical appointments, or caring for family').classes('text-sm')
+                                        ui.label('Carryover: Up to 80 hours (10 days) can be carried over.').classes('text-sm opacity-70 mt-2')
+                                        ui.label('State laws may provide additional protections.').classes('text-sm opacity-70')
+                                        with ui.row().classes('w-full justify-end mt-2'):
+                                            ui.button('Got it', on_click=help_dialog.close).props('color=green')
+                                help_dialog.open()
+
+                            def show_personal_help():
+                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                    with ui.row().classes('w-full p-4 bg-purple-500 text-white items-center'):
+                                        ui.icon('person', size='md').classes('mr-2')
+                                        ui.label('Personal Time Policy').classes('text-lg font-bold')
+                                    with ui.column().classes('p-4 gap-3'):
+                                        ui.label('Annual personal time allocation:').classes('font-semibold')
+                                        with ui.column().classes('pl-4 gap-2'):
+                                            ui.label('• 2 days (16 hours) per year').classes('text-sm')
+                                            ui.label('• For any personal matters').classes('text-sm')
+                                            ui.label('• No documentation required').classes('text-sm')
+                                        ui.label('Carryover: Up to 16 hours can be carried to next year.').classes('text-sm opacity-70 mt-2')
+                                        with ui.row().classes('w-full justify-end mt-2'):
+                                            ui.button('Got it', on_click=help_dialog.close).props('color=purple')
+                                help_dialog.open()
+
+                            with ui.row().classes('w-full gap-4 justify-center items-stretch'):
                                 # Vacation
                                 vacation_available = float(year_balance.vacation_available)
-                                vacation_total = float(year_balance.vacation_total) + float(year_balance.vacation_carryover)
+                                vacation_allocated = float(year_balance.vacation_total)
+                                vacation_carryover = float(year_balance.vacation_carryover)
+                                vacation_total = vacation_allocated + vacation_carryover
                                 vacation_pending = float(year_balance.vacation_pending)
                                 vacation_used = float(year_balance.vacation_used)
-                                vacation_pct = (vacation_available / vacation_total * 100) if vacation_total > 0 else 0
 
-                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-blue-500'):
-                                    ui.label('VACATION').classes('text-lg font-bold text-blue-600')
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500').style('min-width: 200px;'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label('VACATION').classes('text-lg font-bold text-blue-600')
+                                        ui.button(icon='help_outline', on_click=show_vacation_help).props('flat dense round size=xs').style('color: #3b82f6')
 
                                     # Show negative balance in red with warning
                                     if vacation_available < 0:
@@ -220,15 +278,25 @@ def dashboard_page():
                                         ui.linear_progress(value=used_ratio, show_value=False).props('color=blue-5 track-color=grey-3').classes('w-full')
                                         if vacation_pending > 0:
                                             ui.label(f'{format_days(vacation_pending)} pending').classes('text-xs text-amber-500')
+                                        # Allocated vs carryover breakdown
+                                        with ui.row().classes('w-full justify-between text-xs mt-1 opacity-50'):
+                                            ui.label(f'{format_days(vacation_allocated)} allocated').tooltip('Annual vacation allocation')
+                                            if vacation_carryover > 0:
+                                                ui.label(f'+{format_days(vacation_carryover)} carryover').tooltip('Hours carried over with management approval')
+                                        ui.label('Carryover not allowed (requires approval)').classes('text-xs opacity-50 mt-1')
 
                                 # Sick
                                 sick_available = float(year_balance.sick_available)
-                                sick_total = float(year_balance.sick_total) + float(year_balance.sick_carryover)
+                                sick_allocated = float(year_balance.sick_total)
+                                sick_carryover = float(year_balance.sick_carryover)
+                                sick_total = sick_allocated + sick_carryover
                                 sick_used = float(year_balance.sick_used)
-                                sick_pct = (sick_available / sick_total * 100) if sick_total > 0 else 0
+                                sick_pending = float(year_balance.sick_pending)
 
-                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-green-500'):
-                                    ui.label('SICK').classes('text-lg font-bold text-green-600')
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-green-500').style('min-width: 200px;'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label('SICK').classes('text-lg font-bold text-green-600')
+                                        ui.button(icon='help_outline', on_click=show_sick_help).props('flat dense round size=xs').style('color: #22c55e')
 
                                     # Show negative balance in red with warning
                                     if sick_available < 0:
@@ -247,15 +315,27 @@ def dashboard_page():
                                             ui.label(f'{format_days(sick_used)} used').classes('text-green-600')
                                             ui.label(f'{format_days(sick_total)} total').classes('opacity-60')
                                         ui.linear_progress(value=used_ratio, show_value=False).props('color=green-5 track-color=grey-3').classes('w-full')
+                                        if sick_pending > 0:
+                                            ui.label(f'{format_days(sick_pending)} pending').classes('text-xs text-amber-500')
+                                        # Allocated vs carryover breakdown
+                                        with ui.row().classes('w-full justify-between text-xs mt-1 opacity-50'):
+                                            ui.label(f'{format_days(sick_allocated)} allocated').tooltip('Annual sick time allocation')
+                                            if sick_carryover > 0:
+                                                ui.label(f'+{format_days(sick_carryover)} carryover').tooltip('Hours carried over from last year (max 80 hrs)')
+                                        ui.label('80hr (10 days) carryover max').classes('text-xs opacity-50 mt-1')
 
                                 # Personal
                                 personal_available = float(year_balance.personal_available)
-                                personal_total = float(year_balance.personal_total) + float(year_balance.personal_carryover)
+                                personal_allocated = float(year_balance.personal_total)
+                                personal_carryover = float(year_balance.personal_carryover)
+                                personal_total = personal_allocated + personal_carryover
                                 personal_used = float(year_balance.personal_used)
-                                personal_pct = (personal_available / personal_total * 100) if personal_total > 0 else 0
+                                personal_pending = float(year_balance.personal_pending)
 
-                                with ui.card().classes('flex-1 min-w-48 p-4 border-l-4 border-purple-500'):
-                                    ui.label('PERSONAL').classes('text-lg font-bold text-purple-600')
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500').style('min-width: 200px;'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label('PERSONAL').classes('text-lg font-bold text-purple-600')
+                                        ui.button(icon='help_outline', on_click=show_personal_help).props('flat dense round size=xs').style('color: #a855f7')
 
                                     # Show negative balance in red with warning
                                     if personal_available < 0:
@@ -274,6 +354,78 @@ def dashboard_page():
                                             ui.label(f'{format_days(personal_used)} used').classes('text-purple-600')
                                             ui.label(f'{format_days(personal_total)} total').classes('opacity-60')
                                         ui.linear_progress(value=used_ratio, show_value=False).props('color=purple-5 track-color=grey-3').classes('w-full')
+                                        if personal_pending > 0:
+                                            ui.label(f'{format_days(personal_pending)} pending').classes('text-xs text-amber-500')
+                                        # Allocated vs carryover breakdown
+                                        with ui.row().classes('w-full justify-between text-xs mt-1 opacity-50'):
+                                            ui.label(f'{format_days(personal_allocated)} allocated').tooltip('Annual personal time allocation')
+                                            if personal_carryover > 0:
+                                                ui.label(f'+{format_days(personal_carryover)} carryover').tooltip('Hours carried over (exception only)')
+                                        ui.label('Carryover not allowed').classes('text-xs opacity-50 mt-1')
+
+                                # Chicago Safe Leave (only for Chicago employees when feature is enabled)
+                                chicago_setting = db.query(SystemSetting).filter(
+                                    SystemSetting.key == 'chicago.safe_leave_enabled'
+                                ).first()
+                                is_chicago_enabled = chicago_setting and chicago_setting.bool_value
+                                is_chicago_employee = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+
+                                if is_chicago_enabled and is_chicago_employee:
+                                    # Chicago Leave (Paid Leave for Any Reason - 16hr carryover)
+                                    chicago_available = float(year_balance.chicago_paid_leave_available)
+                                    chicago_accrued = float(year_balance.chicago_paid_leave_total)
+                                    chicago_carryover = float(year_balance.chicago_paid_leave_carryover)
+                                    chicago_total = chicago_accrued + chicago_carryover
+                                    chicago_used = float(year_balance.chicago_paid_leave_used)
+                                    chicago_pending = float(year_balance.chicago_paid_leave_pending)
+
+                                    def show_chicago_leave_help():
+                                        with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                            with ui.row().classes('w-full p-4 bg-amber-500 text-white items-center'):
+                                                ui.icon('location_city', size='md').classes('mr-2')
+                                                ui.label('Chicago Paid Leave').classes('text-lg font-bold')
+                                            with ui.column().classes('p-4 gap-3'):
+                                                ui.label('Per Chicago ordinance (effective July 1, 2024):').classes('font-semibold')
+                                                with ui.column().classes('pl-4 gap-2'):
+                                                    ui.label('• Use for ANY reason - no justification needed').classes('text-sm')
+                                                    ui.label('• Accrual: 1 hour for every 40 hours worked').classes('text-sm')
+                                                    ui.label('• Up to 40 hours can be used per year').classes('text-sm')
+                                                    ui.label('• Maximum 16 hours can be carried over to next year').classes('text-sm')
+                                                ui.label('This is separate from your regular company PTO.').classes('text-sm opacity-70 mt-2')
+                                                with ui.row().classes('w-full justify-end mt-2'):
+                                                    ui.button('Got it', on_click=help_dialog.close).props('color=amber')
+                                        help_dialog.open()
+
+                                    with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500').style('min-width: 200px;'):
+                                        with ui.row().classes('items-center gap-2'):
+                                            ui.label('CHICAGO LEAVE').classes('text-lg font-bold text-amber-600')
+                                            ui.button(icon='help_outline', on_click=show_chicago_leave_help).props('flat dense round size=xs').style('color: #f59e0b')
+
+                                        # Show negative balance in red with warning
+                                        if chicago_available < 0:
+                                            display_text, tooltip_text = format_days_hours(chicago_available)
+                                            ui.label(display_text).classes('text-2xl font-bold text-red-500 my-2').tooltip(tooltip_text)
+                                            ui.label('OVERDRAWN').classes('text-sm text-red-500 font-medium')
+                                        else:
+                                            display_text, tooltip_text = format_days_hours(chicago_available)
+                                            ui.label(display_text).classes('text-2xl font-bold text-amber-600 my-2').tooltip(tooltip_text)
+                                            ui.label('AVAILABLE').classes('text-sm opacity-70')
+
+                                        # Progress bar showing used/total
+                                        chicago_used_ratio = min(chicago_used / chicago_total, 1.0) if chicago_total > 0 else 0
+                                        with ui.column().classes('w-full mt-3 gap-1'):
+                                            with ui.row().classes('w-full justify-between text-xs'):
+                                                ui.label(f'{format_days(chicago_used)} used').classes('text-amber-600')
+                                                ui.label(f'{format_days(chicago_total)} total').classes('opacity-60')
+                                            ui.linear_progress(value=chicago_used_ratio, show_value=False).props('color=amber-5 track-color=grey-3').classes('w-full')
+                                            if chicago_pending > 0:
+                                                ui.label(f'{format_days(chicago_pending)} pending').classes('text-xs text-amber-500')
+                                            # Show accrued vs carryover breakdown
+                                            with ui.row().classes('w-full justify-between text-xs mt-1 opacity-50'):
+                                                ui.label(f'{format_days(chicago_accrued)} accrued').tooltip('Hours accrued this year')
+                                                if chicago_carryover > 0:
+                                                    ui.label(f'+{format_days(chicago_carryover)} carryover').tooltip('Hours carried over from last year (max 16 hrs)')
+                                            ui.label('40hrs (5 days) annual max • 16hr (2 days) carryover max').classes('text-xs opacity-50 mt-1')
 
                             # ============ OTHER LEAVE TYPES (Non-Accruing) ============
                             other_leave_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
@@ -292,30 +444,32 @@ def dashboard_page():
                             with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used)', icon='more_horiz').classes('w-full'):
                                 ui.label(f'Non-accruing leave used in {year}').classes('text-xs opacity-60 mb-3')
 
+                                # Colors match request_form.py for consistency
                                 leave_info = {
-                                    'bereavement': {'label': 'Bereavement', 'icon': 'sentiment_very_dissatisfied', 'color': 'brown', 'policy': 'Immediate family: 5 days, Extended: 3 days'},
-                                    'fmla': {'label': 'Family & Medical', 'icon': 'family_restroom', 'color': 'teal', 'policy': 'FMLA: Up to 12 weeks unpaid, job-protected'},
-                                    'jury_duty': {'label': 'Jury Duty', 'icon': 'gavel', 'color': 'indigo', 'policy': 'Paid time for jury service'},
-                                    'voting': {'label': 'Voting Time', 'icon': 'how_to_vote', 'color': 'cyan', 'policy': 'Up to 2 hours if polls not open 4+ hrs outside work'},
-                                    'military': {'label': 'Military Leave', 'icon': 'military_tech', 'color': 'deep-orange', 'policy': 'Per USERRA requirements, job-protected'},
+                                    'bereavement': {'label': 'Bereavement', 'icon': 'sentiment_very_dissatisfied', 'hex': '#6366f1', 'policy': 'Immediate family: 5 days, Extended: 3 days'},
+                                    'fmla': {'label': 'Family & Medical', 'icon': 'family_restroom', 'hex': '#0891b2', 'policy': 'FMLA: Up to 12 weeks unpaid, job-protected'},
+                                    'jury_duty': {'label': 'Jury Duty', 'icon': 'gavel', 'hex': '#ec4899', 'policy': 'Paid time for jury service'},
+                                    'voting': {'label': 'Voting Time', 'icon': 'how_to_vote', 'hex': '#0d9488', 'policy': 'Up to 2 hours if polls not open 4+ hrs outside work'},
+                                    'military': {'label': 'Military Leave', 'icon': 'military_tech', 'hex': '#64748b', 'policy': 'Per USERRA requirements, job-protected'},
                                 }
 
                                 with ui.row().classes('w-full gap-2 items-stretch'):
                                     for leave_type, info in leave_info.items():
                                         days = other_leave_usage.get(leave_type, 0)
-                                        color = info['color']
+                                        hex_color = info['hex']
 
-                                        with ui.card().classes(f'p-3 border-l-4 border-{color}-500 flex-1').style('height: 180px;'):
-                                            with ui.row().classes('items-center gap-2 mb-2'):
-                                                ui.icon(info['icon']).classes(f'text-{color}-500')
-                                                ui.label(info['label']).classes('font-medium text-sm')
+                                        with ui.card().classes('p-3 flex-1').style(f'border-left: 4px solid {hex_color}; min-width: 120px;'):
+                                            # Centered icon and title
+                                            with ui.column().classes('items-center gap-1 w-full'):
+                                                ui.icon(info['icon'], size='1.5rem').style(f'color: {hex_color};')
+                                                ui.label(info['label']).classes('font-medium text-sm text-center').style(f'color: {hex_color};')
 
+                                            # Days used (only show if > 0)
                                             if days > 0:
-                                                ui.label(f'{days:.0f} days').classes(f'text-lg font-bold text-{color}-600')
-                                            else:
-                                                ui.label('—').classes('text-lg font-bold opacity-30')
+                                                ui.label(f'{int(days)}d').classes('text-lg font-bold text-center w-full mt-2').style(f'color: {hex_color};')
 
-                                            ui.label(info['policy']).classes('text-xs opacity-50 mt-2')
+                                            # Policy description (directly under title/days)
+                                            ui.label(info['policy']).classes('text-xs opacity-60 mt-2 text-center w-full')
                         else:
                             ui.label(f'No balance data for {year}').classes('opacity-70')
 
@@ -345,7 +499,7 @@ def dashboard_page():
 
                                 with ui.row().classes('items-center gap-2'):
                                     days_display = float(req.total_days)
-                                    ui.label(f'{format_days(days_display * 8)} days').classes('font-medium')
+                                    ui.label(format_days(days_display * 8)).classes('font-medium')
 
                                     def create_cancel_handler(request_id):
                                         def show_cancel_dialog():
@@ -420,7 +574,7 @@ def dashboard_page():
 
                                 with ui.row().classes('items-center gap-3'):
                                     days = float(req['total_days'])
-                                    ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+                                    ui.label(format_days(days * 8)).classes('font-medium')
 
                                     def create_review_handler(request_id):
                                         def review():
@@ -467,7 +621,7 @@ def dashboard_page():
 
                                 with ui.row().classes('items-center gap-3'):
                                     days = float(req['total_days'])
-                                    ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+                                    ui.label(format_days(days * 8)).classes('font-medium')
 
                                     def create_review_handler(request_id):
                                         def review():
@@ -524,29 +678,64 @@ def dashboard_page():
                 with ui.card().classes('w-full mb-4 p-4'):
                     # Row 1: My Time Off Actions
                     with ui.column().classes('w-full gap-3'):
-                        ui.label('My Time Off').classes('text-xs font-semibold uppercase opacity-60')
+                        def show_time_off_help():
+                            with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                with ui.row().classes('w-full p-4 bg-primary text-white items-center'):
+                                    ui.icon('schedule', size='md').classes('mr-2')
+                                    ui.label('My Time Off').classes('text-lg font-bold')
+                                with ui.column().classes('p-4 gap-3'):
+                                    ui.label('Quick actions for managing your time off:').classes('font-semibold')
+                                    with ui.column().classes('pl-4 gap-2'):
+                                        ui.markdown('**Request/Submit Time Off** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
+                                        ui.markdown('**My Requests/History** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
+                                        ui.markdown('**Carryover Request** - Request to carry over unused sick time to next year (employees only)').classes('text-sm')
+                                    with ui.row().classes('w-full justify-end mt-2'):
+                                        ui.button('Got it', on_click=help_dialog.close).props('color=primary')
+                            help_dialog.open()
+
+                        with ui.row().classes('items-center gap-2'):
+                            ui.label('My Time Off').classes('text-xs font-semibold uppercase opacity-60')
+                            ui.button(icon='help_outline', on_click=show_time_off_help).props('flat dense round size=xs').style('color: #3b82f6')
                         with ui.row().classes('w-full gap-3 flex-wrap'):
                             # Managers auto-approve, so show "Submit" instead of "Request"
                             time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
-                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit')
+                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new time off request')
                             # For managers: "My Time Off History" shows their submitted time with color-coded view
                             # For employees: "My Requests" shows pending/approved requests
                             history_label = 'My Time Off History' if user_role == 'manager' else 'My Requests'
-                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit')
+                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
                             # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
                             if user_role != 'manager':
-                                ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit')
+                                ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Request to carry over unused sick time to next year')
 
                     # Row 2: Resources (employees only - managers use Manager Tools)
                     if user_role != 'manager':
                         ui.separator().classes('my-2')
                         with ui.column().classes('w-full gap-3'):
-                            ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                            def show_resources_help():
+                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                    with ui.row().classes('w-full p-4 bg-secondary text-white items-center'):
+                                        ui.icon('folder_open', size='md').classes('mr-2')
+                                        ui.label('Resources').classes('text-lg font-bold')
+                                    with ui.column().classes('p-4 gap-3'):
+                                        ui.label('Helpful tools and information:').classes('font-semibold')
+                                        with ui.column().classes('pl-4 gap-2'):
+                                            ui.markdown('**My Profile** - View your profile information including hire date, department, and manager').classes('text-sm')
+                                            ui.markdown('**Calendar** - View the team calendar showing holidays, your time off, and team schedules').classes('text-sm')
+                                            ui.markdown('**Employee Handbook** - Access company policies, PTO guidelines, and leave information').classes('text-sm')
+                                            ui.markdown('**Reports** - Generate reports on your PTO usage and balances').classes('text-sm')
+                                        with ui.row().classes('w-full justify-end mt-2'):
+                                            ui.button('Got it', on_click=help_dialog.close).props('color=secondary')
+                                help_dialog.open()
+
+                            with ui.row().classes('items-center gap-2'):
+                                ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                                ui.button(icon='help_outline', on_click=show_resources_help).props('flat dense round size=xs').style('color: #6b7280')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
-                                ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit')
-                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                                ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit')
-                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit')
+                                ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View your profile and account information')
+                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View team calendar with holidays and time off')
+                                ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Access company policies and PTO guidelines')
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Generate reports on your PTO usage')
 
                     # Row 3: Manager Tools (managers only)
                     if user_role == 'manager':
@@ -559,8 +748,6 @@ def dashboard_page():
                                 ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Auto Notify', icon='notifications_active', on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline color=indigo').classes('flex-1 min-w-fit')
                             with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
@@ -774,7 +961,7 @@ def dashboard_page():
 
                                     with ui.row().classes('items-center gap-3'):
                                         days = float(req['total_days'])
-                                        ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+                                        ui.label(format_days(days * 8)).classes('font-medium')
 
                                         def create_review_handler(request_id):
                                             def review():
@@ -841,11 +1028,6 @@ def dashboard_page():
                                   on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1')
                         ui.button('Reports', icon='assessment',
                                   on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1')
-                    with ui.row().classes('w-full gap-3 mt-2'):
-                        ui.button('Analytics', icon='insights',
-                                  on_click=lambda: ui.navigate.to('/analytics')).props('outline color=secondary').classes('flex-1')
-                        ui.button('Auto Notify', icon='notifications_active',
-                                  on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('outline color=secondary').classes('flex-1')
 
                     # System section - superadmin only
                     if user_role == 'superadmin':
@@ -855,15 +1037,8 @@ def dashboard_page():
                             ui.icon('settings_applications', size='sm').classes('opacity-60')
                             ui.label('System').classes('text-xs font-semibold uppercase opacity-60')
                         with ui.row().classes('w-full gap-3'):
-                            ui.button('Year-End Processing', icon='event_repeat',
-                                      on_click=lambda: ui.navigate.to('/admin/year-end')).props('outline color=amber').classes('flex-1')
-                            ui.button('Manage Handbook', icon='menu_book',
-                                      on_click=lambda: ui.navigate.to('/admin/handbook')).props('outline color=amber').classes('flex-1')
-                        with ui.row().classes('w-full gap-3 mt-2'):
                             ui.button('System Admin', icon='settings_applications',
                                       on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=amber').classes('flex-1')
-                            ui.button('Email Templates', icon='email',
-                                      on_click=lambda: ui.navigate.to('/admin/email-preview')).props('outline color=amber').classes('flex-1')
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
@@ -903,7 +1078,7 @@ def dashboard_page():
 
                                 with ui.row().classes('gap-3 items-center'):
                                     days_display = float(req.total_days)
-                                    ui.label(f'{format_days(days_display * 8)} days').classes('text-sm')
+                                    ui.label(format_days(days_display * 8)).classes('text-sm')
                                     ui.icon('chevron_right').classes('text-gray-400')
                 else:
                     with ui.row().classes('w-full justify-center py-6'):
@@ -1023,8 +1198,7 @@ def cancel_request(request_id: int):
             balance_service.adjust_vacation_used(balance.id, -Decimal(str(request.total_days)), is_pending=True)
 
         db.commit()
-        ui.notify('Request cancelled successfully', type='positive')
-        ui.navigate.to('/dashboard')
+        show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
 
     except Exception as e:
         show_error_dialog('Error', f'Error cancelling request: {str(e)}')
@@ -1208,7 +1382,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
                                         with ui.row().classes('gap-2 items-center'):
                                             days = float(req.total_days)
-                                            ui.label(f'{format_days(days * 8)} days').classes('font-medium')
+                                            ui.label(format_days(days * 8)).classes('font-medium')
                                             ui.icon('chevron_right').classes('text-gray-400')
                         else:
                             with ui.row().classes('w-full justify-center py-8'):
@@ -1254,7 +1428,9 @@ def show_pto_detail_dialog(request):
     req_user_id = request.user_id
     req_status = request.status
     is_own_request = (req_user_id == user_id)
-    can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request)
+    is_trusted = current_user.get('is_trusted', False)
+    # Trusted employees can delete their own auto-approved requests (no manager approval needed)
+    can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request) or (is_trusted and is_own_request)
 
     with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
         # Header
@@ -1290,7 +1466,7 @@ def show_pto_detail_dialog(request):
                 ui.label('Duration').classes('text-xs font-semibold uppercase opacity-60 mb-2')
                 days = float(request.total_days)
                 hours = days * 8
-                ui.label(f'{format_days(hours)} days ({int(hours)} hours)').classes('font-medium')
+                ui.label(format_days(hours)).classes('font-medium')
 
             # Notes (if any)
             if request.notes:
@@ -1345,9 +1521,8 @@ def show_pto_detail_dialog(request):
                                 balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
 
                     del_db.commit()
-                    ui.notify('Request deleted and balance restored', type='positive')
                     detail_dialog.close()
-                    ui.navigate.to('/dashboard')
+                    show_success_dialog('Success', 'Request deleted and balance restored', on_close=lambda: ui.navigate.to('/dashboard'))
                 finally:
                     del_db.close()
 
@@ -1370,9 +1545,8 @@ def show_pto_detail_dialog(request):
                         balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
 
                     cancel_db.commit()
-                    ui.notify('Request cancelled successfully', type='positive')
                     detail_dialog.close()
-                    ui.navigate.to('/dashboard')
+                    show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
                 finally:
                     cancel_db.close()
 
@@ -1402,9 +1576,8 @@ def show_pto_detail_dialog(request):
                             req.cancellation_requested_at = datetime.now()
 
                             req_db.commit()
-                            ui.notify('Cancellation request submitted to your manager', type='positive')
                             cancel_dialog.close()
-                            ui.navigate.to('/dashboard')
+                            show_success_dialog('Request Submitted', 'Cancellation request submitted to your manager', on_close=lambda: ui.navigate.to('/dashboard'))
                         finally:
                             req_db.close()
 

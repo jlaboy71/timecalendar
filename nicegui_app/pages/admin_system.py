@@ -8,7 +8,7 @@ from nicegui import ui, app
 from src.database import get_db
 from src.config import config
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, create_help_button
 
 
 def admin_system_page():
@@ -70,9 +70,13 @@ def admin_system_page():
                         ui.label('Errors').classes('text-sm')
                         ui.badge('Check Logs' if has_errors else 'None', color='red' if has_errors else 'green')
 
-        # Tabs for different sections
+        # Tabs for different sections (logical order: data, policies, operations, reporting, config)
         with ui.tabs().classes('w-full').props('dense active-color=primary indicator-color=primary') as tabs:
             database_tab = ui.tab('Database', icon='storage')
+            handbook_tab = ui.tab('Handbook', icon='menu_book')
+            eoy_tab = ui.tab('EOY Processing', icon='event_repeat')
+            analytics_tab = ui.tab('Analytics', icon='analytics')
+            autonotify_tab = ui.tab('Auto Notify', icon='notifications_active')
             email_tab = ui.tab('Email Config', icon='email')
             logs_tab = ui.tab('System Logs', icon='description')
             settings_tab = ui.tab('Settings', icon='tune')
@@ -87,35 +91,58 @@ def admin_system_page():
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('storage', size='sm', color='blue')
                         ui.label('Database Status').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Database Status',
+                            'Shows the current state of the application database.<br><br>'
+                            '<b>Status:</b> Whether the database file exists and is accessible.<br>'
+                            '<b>File:</b> The database filename (SQLite .db file).<br>'
+                            '<b>Size:</b> Current size of the database file.<br>'
+                            '<b>Location:</b> Full path to where the database is stored.<br><br>'
+                            '<i>A healthy database shows "Online" status with a green indicator.</i>'
+                        )
 
-                    with ui.row().classes('gap-8 flex-wrap'):
+                    # Use CSS grid for perfect edge-to-edge alignment (4 columns)
+                    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;'):
                         # Status indicator
-                        with ui.column().classes('min-w-32'):
-                            ui.label('Status').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            with ui.row().classes('items-center gap-2 mt-1'):
-                                ui.icon('check_circle' if db_exists else 'error', color='green' if db_exists else 'red', size='xs')
-                                ui.label('Online' if db_exists else 'Offline').classes('font-semibold')
+                        with ui.card().classes(f'p-4 {"bg-green-50 dark:bg-green-900/20" if db_exists else "bg-red-50 dark:bg-red-900/20"}'):
+                            ui.label('Status').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('check_circle' if db_exists else 'error', color='green' if db_exists else 'red', size='sm')
+                                ui.label('Online' if db_exists else 'Offline').classes('font-semibold text-lg')
 
                         # File info
-                        with ui.column().classes('min-w-32'):
-                            ui.label('File').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(str(db_path.name)).classes('font-mono text-sm mt-1')
+                        with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
+                            ui.label('File').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            ui.label(str(db_path.name)).classes('font-mono text-sm')
 
                         # Size
-                        with ui.column().classes('min-w-32'):
-                            ui.label('Size').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(f'{db_size:.2f} MB').classes('font-mono text-sm mt-1')
+                        with ui.card().classes('p-4 bg-purple-50 dark:bg-purple-900/20'):
+                            ui.label('Size').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            ui.label(f'{db_size:.2f} MB').classes('font-mono text-lg font-semibold')
 
                         # Location
-                        with ui.column().classes('flex-1'):
-                            ui.label('Location').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(str(db_path.parent)).classes('font-mono text-xs mt-1 opacity-70 truncate')
+                        with ui.card().classes('p-4 bg-gray-50 dark:bg-gray-800'):
+                            ui.label('Location').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            ui.label(str(db_path.parent)).classes('font-mono text-xs opacity-70 truncate').tooltip(str(db_path.parent))
 
                 # Backup Card
                 with ui.card().classes('w-full p-4 mb-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('backup', size='sm', color='green')
                         ui.label('Backup Management').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Backup Management',
+                            'Create complete copies of your database for disaster recovery.<br><br>'
+                            '<b>How it works:</b><br>'
+                            '• Click "Create Backup Now" to make an instant copy<br>'
+                            '• Backups are timestamped (YYYYMMDD_HHMMSS format)<br>'
+                            '• Stored in the <code style="background: #374151; padding: 2px 6px; border-radius: 4px;">dbbackup/</code> folder<br><br>'
+                            '<b>Best practices:</b><br>'
+                            '• Create a backup before major changes<br>'
+                            '• Create a backup before year-end processing<br>'
+                            '• Periodically download backups to external storage<br><br>'
+                            '<i>Backups include all employee data, PTO records, and settings.</i>'
+                        )
 
                     # Backup info box
                     with ui.row().classes('w-full gap-4 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg'):
@@ -143,7 +170,7 @@ def admin_system_page():
                             # Verify the backup was created and has the same size
                             if backup_file.exists() and backup_file.stat().st_size == db_path.stat().st_size:
                                 backup_status.set_text(f'Backup created: {backup_file.name} ({backup_file.stat().st_size / 1024:.1f} KB)')
-                                ui.notify(f'Backup successful: {backup_file.name}', type='positive')
+                                show_success_dialog('Backup Complete', f'Backup successful: {backup_file.name}')
                             else:
                                 backup_status.set_text('Warning: Backup size mismatch')
                                 show_warning_dialog('Backup Warning', 'Backup was created but the size differs from the source database.')
@@ -161,6 +188,18 @@ def admin_system_page():
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('folder_open', size='sm', color='amber')
                             ui.label('Backup History').classes('text-lg font-semibold')
+                            create_help_button(
+                                'Backup History',
+                                'View and manage all database backups.<br><br>'
+                                '<b>Actions available:</b><br>'
+                                '• <b>Restore</b> - Replace current database with a backup (requires app restart)<br>'
+                                '• <b>Delete</b> - Remove a backup file permanently<br><br>'
+                                '<b>Tips:</b><br>'
+                                '• The "Latest" badge indicates the most recent backup<br>'
+                                '• Always create a new backup before restoring an old one<br>'
+                                '• Summary shows total backups, storage used, and date range<br><br>'
+                                '<span style="color: #ef4444;"><b>Warning:</b> Restoring a backup will overwrite all current data!</span>'
+                            )
                         ui.button('Refresh', icon='refresh', on_click=lambda: refresh_backups()).props('flat dense')
 
                     backups_container = ui.column().classes('w-full')
@@ -229,7 +268,7 @@ def admin_system_page():
                                                         try:
                                                             import shutil
                                                             shutil.copy2(backup_file, db_path)
-                                                            ui.notify('Database restored successfully. Please restart the application.', type='positive')
+                                                            show_success_dialog('Restore Complete', 'Database restored successfully. Please restart the application.')
                                                             dialog.close()
                                                         except Exception as e:
                                                             show_error_dialog('Restore Failed', f'Error restoring database: {str(e)}')
@@ -250,7 +289,7 @@ def admin_system_page():
                                                     def confirm_delete():
                                                         try:
                                                             backup_file.unlink()
-                                                            ui.notify(f'Deleted: {backup_file.name}', type='positive')
+                                                            show_success_dialog('Deleted', f'Deleted: {backup_file.name}')
                                                             dialog.close()
                                                             refresh_backups()
                                                         except Exception as e:
@@ -267,22 +306,35 @@ def admin_system_page():
 
                     refresh_backups()
 
-                # Market Calendar Sync Card
+                # Market Calendar Sync Card with Visual Feedback
                 with ui.card().classes('w-full p-4 mt-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-2'):
                         ui.icon('event', size='sm', color='purple')
                         ui.label('Market Calendar Sync').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Market Calendar Sync',
+                            'Import market holidays for NYSE, CME, CBOE, and Federal calendars.<br><br>'
+                            '<b>Data Sources (in priority order):</b><br>'
+                            '1. <b>pandas_market_calendars</b> - Official exchange data (primary)<br>'
+                            '2. <b>Web Sources</b> - Fallback to exchange websites (planned)<br>'
+                            '3. <b>Static Calculation</b> - Algorithm-based dates (works offline)<br><br>'
+                            '<b>How to use:</b><br>'
+                            '• Click "Sync" to preview holidays before importing<br>'
+                            '• Review all dates in the preview dialog<br>'
+                            '• Confirm to save holidays to the database<br><br>'
+                            '<b>Important:</b> Market holidays affect PTO calendar display - dates marked as closures show differently on the calendar.'
+                        )
 
-                    ui.label('Sync market holidays for NYSE, CME, CBOE, and Federal holidays.').classes('text-sm opacity-70 mb-4')
+                    ui.label('Sync market holidays for NYSE, CME, CBOE, and Federal holidays with preview before import.').classes('text-sm opacity-70 mb-4')
 
                     # Current year and next year
                     current_year = datetime.now().year
-                    sync_status_label = ui.label('').classes('text-sm mb-2')
                     sync_results_container = ui.column().classes('w-full')
 
                     def show_holidays_dialog(year: int):
-                        """Show dialog with all holidays for the selected year."""
+                        """Show dialog with all holidays for the selected year (grouped by date)."""
                         from src.models.market_holiday import MarketHoliday
+                        from collections import defaultdict
                         db_session = next(get_db())
                         try:
                             holidays = db_session.query(MarketHoliday).filter(
@@ -290,67 +342,274 @@ def admin_system_page():
                             ).order_by(MarketHoliday.holiday_date, MarketHoliday.market).all()
 
                             # Group by date
-                            from collections import defaultdict
                             holidays_by_date = defaultdict(list)
                             for h in holidays:
                                 holidays_by_date[h.holiday_date].append(h)
 
-                            with ui.dialog() as dialog, ui.card().classes('min-w-[600px] max-h-[80vh]'):
-                                with ui.row().classes('w-full justify-between items-center mb-4'):
-                                    ui.label(f'{year} Holidays ({len(holidays)} records)').classes('text-xl font-bold')
-                                    ui.button(icon='close', on_click=dialog.close).props('flat round')
+                            # Count unique holiday dates
+                            unique_dates = len(holidays_by_date)
+                            trading_floor_markets = {'NYSE', 'CME', 'CBOE'}
 
-                                with ui.scroll_area().classes('w-full max-h-[60vh]'):
-                                    with ui.column().classes('w-full gap-2'):
-                                        for holiday_date in sorted(holidays_by_date.keys()):
-                                            h_list = holidays_by_date[holiday_date]
-                                            markets = [h.market for h in h_list]
-                                            name = h_list[0].name
+                            with ui.dialog() as dialog, ui.card().classes('min-w-[750px] max-h-[85vh] p-0'):
+                                # Header
+                                with ui.row().classes('w-full p-4 items-center justify-between').style('background-color: #7c3aed'):
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(f'{year} Holidays').classes('text-xl font-bold text-white')
+                                        ui.label(f'{unique_dates} unique dates ({len(holidays)} market records)').classes('text-sm text-white opacity-80')
+                                    ui.button(icon='close', on_click=dialog.close).props('flat round').style('color: white')
 
-                                            with ui.card().classes('w-full p-3'):
-                                                with ui.row().classes('w-full items-center justify-between'):
-                                                    with ui.column().classes('gap-0'):
-                                                        ui.label(name).classes('font-semibold')
-                                                        ui.label(holiday_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
-                                                    with ui.row().classes('gap-1'):
-                                                        for market in markets:
-                                                            color = 'red' if market == 'Federal' else 'blue' if market == 'NYSE' else 'green' if market == 'CME' else 'purple'
-                                                            ui.badge(market, color=color).classes('text-xs')
+                                with ui.column().classes('w-full p-4'):
+                                    # Legend
+                                    with ui.row().classes('w-full items-center gap-4 mb-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg'):
+                                        ui.icon('info', color='gray', size='xs')
+                                        ui.label('Markets:').classes('text-sm font-semibold')
+                                        with ui.row().classes('items-center gap-1'):
+                                            ui.element('div').classes('w-3 h-3 rounded').style('background-color: #3b82f6')
+                                            ui.label('NYSE').classes('text-xs')
+                                        with ui.row().classes('items-center gap-1'):
+                                            ui.element('div').classes('w-3 h-3 rounded').style('background-color: #22c55e')
+                                            ui.label('CME').classes('text-xs')
+                                        with ui.row().classes('items-center gap-1'):
+                                            ui.element('div').classes('w-3 h-3 rounded').style('background-color: #a855f7')
+                                            ui.label('CBOE').classes('text-xs')
+                                        with ui.row().classes('items-center gap-1'):
+                                            ui.element('div').classes('w-3 h-3 rounded').style('background-color: #ef4444')
+                                            ui.label('Federal').classes('text-xs')
+                                        ui.element('div').classes('flex-1')
+                                        ui.icon('storefront', color='blue', size='xs')
+                                        ui.label('= Trading floor closed').classes('text-xs opacity-70')
 
-                                with ui.row().classes('w-full justify-end mt-4'):
-                                    ui.button('Close', on_click=dialog.close).props('flat')
+                                    # Grouped holidays list - ~8 rows visible
+                                    with ui.scroll_area().classes('w-full').style('height: 450px'):
+                                        with ui.column().classes('w-full gap-2'):
+                                            for holiday_date in sorted(holidays_by_date.keys()):
+                                                h_list = holidays_by_date[holiday_date]
+                                                markets = [h.market for h in h_list]
+                                                name = h_list[0].name
+
+                                                # Check if any trading floor is closed
+                                                has_trading_floor = any(m in trading_floor_markets for m in markets)
+
+                                                # Highlight rows with trading floor closures
+                                                row_classes = 'w-full p-3 rounded'
+                                                if has_trading_floor:
+                                                    row_classes += ' border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                                else:
+                                                    row_classes += ' bg-gray-50 dark:bg-gray-800/50'
+
+                                                with ui.card().classes(row_classes):
+                                                    with ui.row().classes('w-full items-center justify-between'):
+                                                        with ui.row().classes('items-center gap-3 flex-1'):
+                                                            if has_trading_floor:
+                                                                ui.icon('storefront', color='blue', size='sm').tooltip('Trading Floor Closed')
+                                                            else:
+                                                                ui.icon('flag', color='red', size='sm').tooltip('Federal Holiday Only')
+
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label(name).classes('font-semibold')
+                                                                ui.label(holiday_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
+
+                                                        with ui.row().classes('items-center gap-1'):
+                                                            for market in sorted(markets):
+                                                                color = 'blue' if market == 'NYSE' else 'green' if market == 'CME' else 'purple' if market == 'CBOE' else 'red'
+                                                                ui.badge(market, color=color).classes('text-xs')
+
+                                    # Footer with summary
+                                    trading_floor_days = sum(1 for h_list in holidays_by_date.values() if any(h.market in trading_floor_markets for h in h_list))
+                                    with ui.row().classes('w-full justify-between items-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700'):
+                                        with ui.row().classes('items-center gap-2'):
+                                            ui.icon('storefront', color='blue', size='xs')
+                                            ui.label(f'{trading_floor_days} days with market closures').classes('text-sm opacity-70')
+                                        ui.button('Close', on_click=dialog.close).props('flat')
 
                             dialog.open()
                         finally:
                             db_session.close()
 
-                    def sync_market_holidays(year: int):
-                        """Sync market holidays for a specific year."""
-                        sync_status_label.set_text(f'Syncing {year} holidays...')
+                    def show_sync_preview_dialog(year: int):
+                        """Show preview dialog before syncing holidays."""
+                        import time
+                        start_time = time.time()
+
+                        with ui.dialog() as preview_dialog, ui.card().classes('min-w-[700px] max-h-[85vh] p-0'):
+                            # Header
+                            with ui.row().classes('w-full p-4 items-center justify-between').style('background-color: #7c3aed'):
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.icon('preview', size='md', color='white')
+                                    ui.label(f'Sync Preview: {year} Holidays').classes('text-lg font-bold text-white')
+                                ui.button(icon='close', on_click=preview_dialog.close).props('flat round').style('color: white')
+
+                            preview_content = ui.column().classes('w-full p-4')
+
+                            with preview_content:
+                                # Step 1: Fetching data
+                                with ui.card().classes('w-full p-4 mb-4 border-l-4 border-blue-500'):
+                                    with ui.row().classes('items-center gap-3'):
+                                        fetch_spinner = ui.spinner('dots', size='sm')
+                                        with ui.column().classes('flex-1'):
+                                            fetch_status = ui.label('Fetching holiday data...').classes('font-semibold')
+                                            fetch_detail = ui.label('Connecting to data source...').classes('text-xs opacity-70')
+
+                            preview_dialog.open()
+
+                            # Perform the actual fetch
+                            try:
+                                from src.services.market_calendar_service import MarketCalendarService, DataSource
+                                from src.models.market_holiday import MarketHoliday
+
+                                db_session = next(get_db())
+                                service = MarketCalendarService(db_session=None)  # Don't save yet
+
+                                # Check which tier will be used
+                                if service._pandas_available:
+                                    fetch_detail.set_text('Using pandas_market_calendars library...')
+                                    holidays = service._get_from_pandas(year)
+                                    source = DataSource.PANDAS_MARKET_CALENDARS
+                                    source_display = 'pandas_market_calendars (Official Exchange Data)'
+                                    confidence = 'High - Verified'
+                                    confidence_color = 'green'
+                                else:
+                                    fetch_detail.set_text('Library unavailable, using static calculation...')
+                                    holidays = service._calculate_static_holidays(year)
+                                    source = DataSource.STATIC_CALCULATION
+                                    source_display = 'Static Calculation (Algorithm-based)'
+                                    confidence = 'Medium - Calculated'
+                                    confidence_color = 'amber'
+
+                                fetch_time = time.time() - start_time
+
+                                # Update status
+                                fetch_spinner.delete()
+                                fetch_status.set_text(f'Data fetched successfully ({fetch_time:.2f}s)')
+                                fetch_detail.set_text(f'Source: {source_display}')
+
+                                # Check existing holidays
+                                existing_holidays = db_session.query(MarketHoliday).filter(
+                                    MarketHoliday.year == year
+                                ).all()
+                                existing_dates = {(h.holiday_date, h.market) for h in existing_holidays}
+
+                                with preview_content:
+                                    # Step 2: Source information
+                                    with ui.card().classes(f'w-full p-4 mb-4 border-l-4 border-{confidence_color}-500'):
+                                        with ui.row().classes('items-center gap-2 mb-2'):
+                                            ui.icon('source', color=confidence_color)
+                                            ui.label('Data Source').classes('font-semibold')
+                                            ui.badge(confidence, color=confidence_color).classes('ml-2')
+                                        with ui.column().classes('gap-1'):
+                                            ui.label(f'Source: {source_display}').classes('text-sm')
+                                            ui.label(f'Response time: {fetch_time:.2f} seconds').classes('text-xs opacity-70')
+                                            if source == DataSource.STATIC_CALCULATION:
+                                                with ui.row().classes('items-center gap-1 mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 rounded'):
+                                                    ui.icon('warning', color='amber', size='xs')
+                                                    ui.label('Static calculation used - verify dates manually for accuracy').classes('text-xs text-amber-700 dark:text-amber-400')
+
+                                    # Step 3: Preview holidays
+                                    with ui.card().classes('w-full p-4 mb-4'):
+                                        with ui.row().classes('items-center justify-between mb-4'):
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.icon('calendar_month', color='purple')
+                                                ui.label(f'{len(holidays)} Holidays Found').classes('font-semibold')
+                                            if existing_holidays:
+                                                ui.badge(f'{len(existing_holidays)} existing', color='blue').props('outline')
+
+                                        # Group by date for display
+                                        from collections import defaultdict
+                                        holidays_by_date = defaultdict(list)
+                                        for h in holidays:
+                                            holidays_by_date[h.date].append(h)
+
+                                        with ui.scroll_area().classes('w-full').style('max-height: 300px'):
+                                            with ui.column().classes('w-full gap-2'):
+                                                for holiday_date in sorted(holidays_by_date.keys()):
+                                                    h_list = holidays_by_date[holiday_date]
+                                                    name = h_list[0].name
+
+                                                    # Check if this is new or existing
+                                                    is_new = not any((holiday_date, h.exchange) in existing_dates for h in h_list)
+
+                                                    with ui.row().classes('w-full items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800'):
+                                                        with ui.row().classes('items-center gap-3'):
+                                                            if is_new:
+                                                                ui.icon('add_circle', color='green', size='xs')
+                                                            else:
+                                                                ui.icon('check_circle', color='blue', size='xs')
+                                                            with ui.column().classes('gap-0'):
+                                                                ui.label(name).classes('text-sm font-medium')
+                                                                ui.label(holiday_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
+                                                        with ui.row().classes('gap-1'):
+                                                            for h in h_list:
+                                                                market = h.exchange if hasattr(h, 'exchange') else 'ALL'
+                                                                color = 'red' if market == 'Federal' else 'blue' if market == 'NYSE' else 'green' if market == 'CME' else 'purple'
+                                                                ui.badge(market, color=color).classes('text-xs')
+                                                            if is_new:
+                                                                ui.badge('NEW', color='green').props('outline dense')
+
+                                    # Summary
+                                    new_count = sum(1 for h in holidays if not any((h.date, m) in existing_dates for m in [h.exchange] if hasattr(h, 'exchange')))
+                                    with ui.row().classes('w-full items-center gap-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg mb-4'):
+                                        ui.icon('summarize', color='purple')
+                                        ui.label(f'Summary: {len(holidays)} holidays will be synced for {year}').classes('text-sm')
+                                        if existing_holidays:
+                                            ui.label(f'({len(existing_holidays)} existing records will be updated)').classes('text-xs opacity-60')
+
+                                    # Action buttons
+                                    def confirm_sync():
+                                        try:
+                                            sync_service = MarketCalendarService(db_session=db_session)
+                                            result = sync_service.sync_market_holidays(year)
+                                            db_session.close()
+
+                                            if result.success:
+                                                show_success_dialog('Holidays Synced', f'Successfully synced {result.count} holidays for {year}!')
+                                                preview_dialog.close()
+                                                refresh_holiday_stats()
+                                            else:
+                                                show_error_dialog('Sync Failed', f'Error: {result.error}')
+                                        except Exception as e:
+                                            show_error_dialog('Sync Error', f'Error: {str(e)}')
+
+                                    with ui.row().classes('w-full justify-end gap-2'):
+                                        ui.button('Cancel', on_click=preview_dialog.close).props('flat')
+                                        ui.button('Confirm & Import', icon='check', on_click=confirm_sync).props('color=primary')
+
+                            except Exception as e:
+                                with preview_content:
+                                    # Error state
+                                    fetch_spinner.delete()
+                                    fetch_status.set_text('Failed to fetch data')
+                                    fetch_detail.set_text(str(e))
+
+                                    with ui.card().classes('w-full p-4 border-l-4 border-red-500 mt-4'):
+                                        with ui.row().classes('items-center gap-2 mb-2'):
+                                            ui.icon('error', color='red')
+                                            ui.label('Fetch Failed').classes('font-semibold text-red-500')
+                                        ui.label(f'Error: {str(e)}').classes('text-sm')
+
+                                        # Offer fallback option
+                                        ui.label('Would you like to try using static calculation instead?').classes('text-sm mt-4')
+                                        with ui.row().classes('gap-2 mt-2'):
+                                            ui.button('Cancel', on_click=preview_dialog.close).props('flat')
+                                            ui.button('Use Static Calculation', icon='calculate', on_click=lambda: use_fallback(year, preview_dialog)).props('color=amber')
+
+                    def use_fallback(year: int, dialog):
+                        """Use static calculation as fallback."""
                         try:
                             from src.services.market_calendar_service import MarketCalendarService
                             db_session = next(get_db())
                             service = MarketCalendarService(db_session=db_session)
-                            result = service.sync_market_holidays(year)
+
+                            # Force static calculation
+                            holidays = service._calculate_static_holidays(year)
+                            service._save_to_database(holidays, service.DataSource.STATIC_CALCULATION)
+                            db_session.commit()
                             db_session.close()
 
-                            if result.success:
-                                source_display = result.source.value.replace('_', ' ').title()
-                                msg = f'{year}: Synced {result.count} holidays from {source_display}'
-                                if result.warning:
-                                    msg += f' (Warning: {result.warning})'
-                                    show_warning_dialog('Sync Warning', msg)
-                                else:
-                                    ui.notify(msg, type='positive')
-                                sync_status_label.set_text(msg)
-                            else:
-                                show_error_dialog('Sync Failed', f'Sync failed: {result.error}')
-                                sync_status_label.set_text(f'Error: {result.error}')
-
+                            show_success_dialog('Holidays Imported', f'Imported {len(holidays)} holidays using static calculation')
+                            dialog.close()
                             refresh_holiday_stats()
                         except Exception as e:
-                            sync_status_label.set_text(f'Error: {str(e)}')
-                            show_error_dialog('Sync Error', f'Error syncing holidays: {str(e)}')
+                            show_error_dialog('Error', f'Fallback failed: {str(e)}')
 
                     def refresh_holiday_stats():
                         """Refresh the holiday statistics display."""
@@ -376,18 +635,278 @@ def admin_system_page():
                                         with ui.row().classes('gap-1'):
                                             if count > 0:
                                                 ui.button('View', icon='visibility', on_click=lambda y=year: show_holidays_dialog(y)).props('flat dense color=primary')
-                                            ui.button('Sync', icon='sync', on_click=lambda y=year: sync_market_holidays(y)).props('flat dense')
+                                            ui.button('Sync', icon='sync', on_click=lambda y=year: show_sync_preview_dialog(y)).props('flat dense color=purple')
                             db_session.close()
                         except Exception as e:
                             with sync_results_container:
                                 ui.label(f'Error loading stats: {e}').classes('text-red-500')
 
-                    # Sync buttons
+                    # Sync buttons with preview
                     with ui.row().classes('gap-2 mb-4'):
-                        ui.button(f'Sync {current_year}', icon='sync', on_click=lambda: sync_market_holidays(current_year)).props('color=primary')
-                        ui.button(f'Sync {current_year + 1}', icon='sync', on_click=lambda: sync_market_holidays(current_year + 1)).props('color=secondary')
+                        ui.button(f'Sync {current_year}', icon='sync', on_click=lambda: show_sync_preview_dialog(current_year)).props('color=primary')
+                        ui.button(f'Sync {current_year + 1}', icon='sync', on_click=lambda: show_sync_preview_dialog(current_year + 1)).props('color=secondary')
 
                     refresh_holiday_stats()
+
+            # ========== HANDBOOK TAB ==========
+            with ui.tab_panel(handbook_tab):
+                # Handbook Management Header Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('menu_book', size='sm', color='amber')
+                        ui.label('Handbook Management').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Handbook Management',
+                            'Manage your employee handbook and track policy changes over time.<br><br>'
+                            '<b>Features:</b><br>'
+                            '• View current handbook content<br>'
+                            '• Upload new handbook versions<br>'
+                            '• AI-powered policy extraction<br>'
+                            '• Version history with rollback<br>'
+                            '• 30-day change indicators<br><br>'
+                            '<i>Changes are tracked and communicated to all employees.</i>'
+                        )
+
+                    ui.label('View and manage your employee handbook. Policy changes are automatically tracked and communicated.').classes('text-sm opacity-70')
+
+                # Action buttons
+                with ui.row().classes('w-full gap-4 mb-4'):
+                    ui.button('View Handbook', icon='visibility', on_click=lambda: ui.navigate.to('/admin/handbook')).props('color=primary')
+                    ui.button('Upload New Version', icon='upload_file', on_click=lambda: ui.navigate.to('/admin/handbook?action=upload')).props('color=secondary outline')
+
+                # Current Handbook Status
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('article', size='sm', color='blue')
+                        ui.label('Current Handbook').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Current Handbook',
+                            'Shows the currently active handbook version.<br><br>'
+                            '<b>Version:</b> The handbook version identifier<br>'
+                            '<b>Published:</b> When this version became active<br>'
+                            '<b>Sections:</b> Number of policy sections defined<br><br>'
+                            '<i>Click "View Handbook" to see the full content.</i>'
+                        )
+
+                    # Get current handbook info
+                    from src.models.handbook_upload import HandbookUpload
+                    db_handbook = next(get_db())
+                    try:
+                        current_handbook = db_handbook.query(HandbookUpload).filter(
+                            HandbookUpload.status == 'published'
+                        ).order_by(HandbookUpload.published_at.desc()).first()
+
+                        # Use CSS grid for status cards
+                        with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;'):
+                            # Version
+                            with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
+                                ui.label('Version').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                if current_handbook:
+                                    ui.label(current_handbook.version).classes('font-mono text-lg font-semibold')
+                                else:
+                                    ui.label('v1.0 (Default)').classes('font-mono text-lg font-semibold')
+
+                            # Published Date
+                            with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
+                                ui.label('Published').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                if current_handbook and current_handbook.published_at:
+                                    ui.label(current_handbook.published_at.strftime('%b %d, %Y')).classes('text-lg font-semibold')
+                                else:
+                                    ui.label('Built-in').classes('text-lg font-semibold')
+
+                            # Status
+                            with ui.card().classes('p-4 bg-green-50 dark:bg-green-900/20'):
+                                ui.label('Status').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.icon('check_circle', color='green', size='sm')
+                                    ui.label('Active').classes('text-lg font-semibold')
+                    finally:
+                        db_handbook.close()
+
+                # Recent Policy Changes
+                with ui.card().classes('w-full p-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('history', size='sm', color='purple')
+                        ui.label('Recent Policy Changes').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Recent Policy Changes',
+                            'Shows policy changes from the last 30 days.<br><br>'
+                            '<b>Change indicators:</b><br>'
+                            '• <span style="color: #22c55e;">Green badge</span> - New or increased value<br>'
+                            '• <span style="color: #f59e0b;">Amber badge</span> - Reverted change<br><br>'
+                            'These changes are displayed throughout the app with tooltips showing the old and new values.<br><br>'
+                            '<i>Indicators automatically expire after 30 days.</i>'
+                        )
+
+                    # Get recent changes
+                    from src.models.policy_change_log import PolicyChangeLog
+                    db_changes = next(get_db())
+                    try:
+                        from datetime import timedelta
+                        thirty_days_ago = datetime.now() - timedelta(days=30)
+                        recent_changes = db_changes.query(PolicyChangeLog).filter(
+                            PolicyChangeLog.created_at >= thirty_days_ago
+                        ).order_by(PolicyChangeLog.created_at.desc()).limit(5).all()
+
+                        if recent_changes:
+                            for change in recent_changes:
+                                days_left = (change.expires_at - datetime.now()).days if change.expires_at else 0
+                                with ui.card().classes('w-full p-3 mb-2 bg-gray-50 dark:bg-gray-800'):
+                                    with ui.row().classes('w-full items-center justify-between'):
+                                        with ui.row().classes('items-center gap-3'):
+                                            icon_name = 'undo' if change.is_revert else 'update'
+                                            icon_color = 'amber' if change.is_revert else 'green'
+                                            ui.icon(icon_name, color=icon_color)
+                                            with ui.column().classes('gap-0'):
+                                                ui.label(change.policy_type.replace('_', ' ').title()).classes('font-semibold')
+                                                ui.label(change.ai_summary or 'Policy updated').classes('text-sm opacity-70')
+                                        with ui.column().classes('items-end gap-1'):
+                                            with ui.row().classes('items-center gap-2'):
+                                                ui.label(change.old_value_display).classes('line-through opacity-50 text-sm')
+                                                ui.icon('arrow_forward', size='xs')
+                                                ui.label(change.new_value_display).classes('font-bold text-green-500')
+                                            ui.label(f'{days_left}d left').classes('text-xs opacity-50')
+                        else:
+                            with ui.row().classes('w-full justify-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg'):
+                                with ui.column().classes('items-center gap-2'):
+                                    ui.icon('check_circle', size='lg', color='green')
+                                    ui.label('No recent changes').classes('text-gray-500')
+                                    ui.label('Policy changes from the last 30 days will appear here').classes('text-sm text-gray-400')
+                    finally:
+                        db_changes.close()
+
+            # ========== EOY PROCESSING TAB ==========
+            with ui.tab_panel(eoy_tab):
+                # EOY Header Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('event_repeat', size='sm', color='red')
+                        ui.label('End of Year Processing').classes('text-lg font-semibold')
+                        create_help_button(
+                            'End of Year Processing',
+                            'Year-end processing manages PTO balance transitions between calendar years.<br><br>'
+                            '<b>What happens during EOY:</b><br>'
+                            '• Sick time carryover is calculated per policy limits<br>'
+                            '• Vacation balances reset to new allocations<br>'
+                            '• Unused personal time is forfeited<br>'
+                            '• Historical records are preserved<br><br>'
+                            '<b>Important:</b> Create a database backup before running EOY processing!'
+                        )
+
+                    ui.label('Manage year-end balance transitions, carryover calculations, and new year allocations.').classes('text-sm opacity-70')
+
+                # Quick Actions
+                with ui.row().classes('w-full gap-4 mb-4'):
+                    ui.button('Go to EOY Processing', icon='open_in_new', on_click=lambda: ui.navigate.to('/admin/year-end')).props('color=primary')
+                    ui.button('Go to Carryover', icon='sync', on_click=lambda: ui.navigate.to('/carryover')).props('color=secondary outline')
+
+                # Current Status Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('assessment', size='sm', color='blue')
+                        ui.label('Processing Status').classes('text-lg font-semibold')
+
+                    current_year = datetime.now().year
+                    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;'):
+                        with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
+                            ui.label('Current Year').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            ui.label(str(current_year)).classes('text-2xl font-bold')
+                        with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
+                            ui.label('Next EOY').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                            ui.label(f'Dec 31, {current_year}').classes('font-semibold')
+
+                    ui.label('Use the EOY Processing page to run year-end balance transitions when ready.').classes('text-sm opacity-70 mt-4')
+
+            # ========== ANALYTICS TAB ==========
+            with ui.tab_panel(analytics_tab):
+                # Analytics Header Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('analytics', size='sm', color='green')
+                        ui.label('Analytics & Insights').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Analytics & Insights',
+                            'View usage patterns and insights about PTO across the organization.<br><br>'
+                            '<b>Available analytics:</b><br>'
+                            '• Department-level PTO usage<br>'
+                            '• Trending request patterns<br>'
+                            '• Approval rate metrics<br>'
+                            '• Balance distribution<br><br>'
+                            '<i>Use these insights to improve workforce planning.</i>'
+                        )
+
+                    ui.label('Explore PTO usage trends, department patterns, and organizational insights.').classes('text-sm opacity-70')
+
+                # Quick Actions
+                with ui.row().classes('w-full gap-4 mb-4'):
+                    ui.button('Go to Analytics', icon='open_in_new', on_click=lambda: ui.navigate.to('/analytics')).props('color=primary')
+                    ui.button('Go to Reports', icon='summarize', on_click=lambda: ui.navigate.to('/reports')).props('color=secondary outline')
+
+                # Analytics Summary Card
+                with ui.card().classes('w-full p-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('trending_up', size='sm', color='blue')
+                        ui.label('Quick Stats').classes('text-lg font-semibold')
+
+                    from src.models.pto_request import PTORequest
+                    from src.models.user import User
+                    db_analytics = next(get_db())
+                    try:
+                        total_requests = db_analytics.query(PTORequest).count()
+                        pending_requests = db_analytics.query(PTORequest).filter(PTORequest.status == 'pending').count()
+                        total_employees = db_analytics.query(User).filter(User.role.in_(['employee', 'manager'])).count()
+
+                        with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;'):
+                            with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
+                                ui.label('Total Requests').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                ui.label(str(total_requests)).classes('text-2xl font-bold')
+                            with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
+                                ui.label('Pending').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                ui.label(str(pending_requests)).classes('text-2xl font-bold')
+                            with ui.card().classes('p-4 bg-green-50 dark:bg-green-900/20'):
+                                ui.label('Employees').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
+                                ui.label(str(total_employees)).classes('text-2xl font-bold')
+                    except Exception:
+                        ui.label('Unable to load analytics').classes('text-sm opacity-70')
+                    finally:
+                        db_analytics.close()
+
+            # ========== AUTO NOTIFY TAB ==========
+            with ui.tab_panel(autonotify_tab):
+                # Auto Notify Header Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('notifications_active', size='sm', color='amber')
+                        ui.label('Auto Notify Reports').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Auto Notify Reports',
+                            'Configure automatic report delivery to department heads and administrators.<br><br>'
+                            '<b>Features:</b><br>'
+                            '• Schedule daily/weekly report emails<br>'
+                            '• Select recipients by department<br>'
+                            '• Choose which reports to include<br>'
+                            '• View delivery history<br><br>'
+                            '<i>Reports are sent based on configured schedules.</i>'
+                        )
+
+                    ui.label('Manage automated report scheduling and delivery preferences.').classes('text-sm opacity-70')
+
+                # Quick Actions
+                with ui.row().classes('w-full gap-4 mb-4'):
+                    ui.button('Go to Auto Notify Settings', icon='open_in_new', on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('color=primary')
+
+                # Scheduled Reports Card
+                with ui.card().classes('w-full p-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('schedule', size='sm', color='blue')
+                        ui.label('Report Scheduling').classes('text-lg font-semibold')
+
+                    with ui.row().classes('w-full justify-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg'):
+                        with ui.column().classes('items-center gap-2'):
+                            ui.icon('schedule_send', size='lg', color='amber')
+                            ui.label('Auto Notify Reports').classes('font-semibold')
+                            ui.label('Configure automated report delivery to department heads').classes('text-sm text-gray-400')
+                            ui.label('Click the button above to manage schedules').classes('text-xs opacity-60 mt-2')
 
             # ========== EMAIL CONFIG TAB ==========
             with ui.tab_panel(email_tab):
@@ -403,54 +922,243 @@ def admin_system_page():
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('email', size='sm', color='blue')
                         ui.label('Email Service Status').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Email Service Status',
+                            'Shows whether the email system is properly configured and ready to send notifications.<br><br>'
+                            '<b>Green status:</b> All SMTP settings are configured and the system can send emails.<br>'
+                            '<b>Amber status:</b> SMTP is not configured - emails will not be sent until you set up the environment variables.'
+                        )
 
                     # Status banner
                     if email_configured:
-                        with ui.row().classes('w-full p-4 bg-green-50 dark:bg-green-900/20 rounded-lg items-center gap-3'):
-                            ui.icon('check_circle', color='green', size='md')
-                            with ui.column().classes('flex-1'):
-                                ui.label('Email service is configured').classes('font-semibold text-green-700 dark:text-green-400')
-                                ui.label('Your application can send notification emails').classes('text-sm opacity-70')
+                        with ui.element('div').classes('w-full p-4 rounded-lg').style('background-color: #14532d; border-left: 4px solid #22c55e'):
+                            with ui.row().classes('items-center gap-3'):
+                                ui.icon('check_circle', size='md').style('color: #22c55e')
+                                with ui.column().classes('flex-1'):
+                                    ui.label('Email service is configured').classes('font-semibold').style('color: #22c55e')
+                                    ui.label('Your application can send notification emails').classes('text-sm opacity-70')
                     else:
-                        with ui.row().classes('w-full p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg items-center gap-3'):
-                            ui.icon('warning', color='amber', size='md')
-                            with ui.column().classes('flex-1'):
-                                ui.label('Email service not configured').classes('font-semibold text-amber-700 dark:text-amber-400')
-                                ui.label('Configure SMTP settings to enable email notifications').classes('text-sm opacity-70')
+                        with ui.element('div').classes('w-full p-4 rounded-lg').style('background-color: #78350f; border-left: 4px solid #f59e0b'):
+                            with ui.row().classes('items-center gap-3'):
+                                ui.icon('warning', size='md').style('color: #f59e0b')
+                                with ui.column().classes('flex-1'):
+                                    ui.label('Email service not configured').classes('font-semibold').style('color: #f59e0b')
+                                    ui.label('Configure SMTP settings to enable email notifications').classes('text-sm opacity-70')
 
                 # Configuration Details Card
                 with ui.card().classes('w-full p-4 mb-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('settings', size='sm', color='gray')
                         ui.label('SMTP Configuration').classes('text-lg font-semibold')
+                        create_help_button(
+                            'SMTP Configuration',
+                            'SMTP (Simple Mail Transfer Protocol) settings are required to send emails.<br><br>'
+                            '<b>Add these to your .env file:</b><br>'
+                            '<code style="background: #374151; padding: 2px 6px; border-radius: 4px;">SMTP_HOST=smtp.your-provider.com</code><br>'
+                            '<code style="background: #374151; padding: 2px 6px; border-radius: 4px;">SMTP_PORT=587</code><br>'
+                            '<code style="background: #374151; padding: 2px 6px; border-radius: 4px;">SMTP_USER=your-email@company.com</code><br>'
+                            '<code style="background: #374151; padding: 2px 6px; border-radius: 4px;">SMTP_PASSWORD=your-app-password</code><br>'
+                            '<code style="background: #374151; padding: 2px 6px; border-radius: 4px;">SMTP_FROM=noreply@company.com</code><br><br>'
+                            '<b>Common SMTP Providers:</b><br>'
+                            '• Gmail: smtp.gmail.com (port 587)<br>'
+                            '• Microsoft 365: smtp.office365.com (port 587)<br>'
+                            '• Amazon SES: email-smtp.us-east-1.amazonaws.com (port 587)<br><br>'
+                            '<i>Restart the application after updating .env</i>'
+                        )
 
-                    with ui.row().classes('gap-8 flex-wrap'):
-                        with ui.column().classes('min-w-40'):
-                            ui.label('Host').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(smtp_host or 'Not set').classes(f'font-mono text-sm mt-1 {"opacity-50" if not smtp_host else ""}')
+                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4'):
+                        with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151'):
+                            ui.label('HOST').classes('text-xs opacity-60 mb-1')
+                            ui.label(smtp_host or 'Not set').classes(f'font-mono text-sm {"opacity-50" if not smtp_host else ""}')
 
-                        with ui.column().classes('min-w-20'):
-                            ui.label('Port').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(smtp_port or 'Not set').classes(f'font-mono text-sm mt-1 {"opacity-50" if not smtp_port else ""}')
+                        with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151'):
+                            ui.label('PORT').classes('text-xs opacity-60 mb-1')
+                            ui.label(smtp_port or 'Not set').classes(f'font-mono text-sm {"opacity-50" if not smtp_port else ""}')
 
-                        with ui.column().classes('min-w-40'):
-                            ui.label('User').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(smtp_user or 'Not set').classes(f'font-mono text-sm mt-1 {"opacity-50" if not smtp_user else ""}')
+                        with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151'):
+                            ui.label('USER').classes('text-xs opacity-60 mb-1')
+                            ui.label(smtp_user or 'Not set').classes(f'font-mono text-sm {"opacity-50" if not smtp_user else ""}')
 
-                        with ui.column().classes('flex-1'):
-                            ui.label('From Address').classes('text-xs text-gray-500 uppercase tracking-wide')
-                            ui.label(smtp_from or 'Not set').classes(f'font-mono text-sm mt-1 {"opacity-50" if not smtp_from else ""}')
+                        with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151'):
+                            ui.label('FROM ADDRESS').classes('text-xs opacity-60 mb-1')
+                            ui.label(smtp_from or 'Not set').classes(f'font-mono text-sm {"opacity-50" if not smtp_from else ""}')
 
-                # Test Email Card
+                # Email Template Preview Card - Embedded directly
                 with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('preview', size='sm', color='purple')
+                        ui.label('Email Template Preview').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Email Template Preview',
+                            'Preview how emails will appear to recipients before they are sent.<br><br>'
+                            '<b>EMP:</b> Emails sent to employees<br>'
+                            '• Request Submitted - Confirmation when employee submits PTO<br>'
+                            '• Request Approved - Notification when manager approves<br>'
+                            '• Request Denied - Notification when manager denies<br><br>'
+                            '<b>MAN:</b> Emails sent to managers<br>'
+                            '• Request Arrived - Alert when employee submits new PTO request<br><br>'
+                            '<b>ADMIN:</b> System emails<br>'
+                            '• Report Email - Format for emailed reports'
+                        )
+
+                    # Email preview - embedded from admin_email_preview.py
+                    from datetime import date as date_type, timedelta
+                    from src.services.email_service import _get_email_template
+
+                    sample_employee = "John Smith"
+                    sample_manager = "Jane Doe"
+                    sample_pto_type = "Vacation"
+                    sample_start = date_type.today() + timedelta(days=7)
+                    sample_end = date_type.today() + timedelta(days=10)
+                    sample_days = 4.0
+
+                    email_types = {
+                        'submitted': 'EMP: REQUEST SUBMITTED',
+                        'approved': 'EMP: REQUEST APPROVED',
+                        'denied': 'EMP: REQUEST DENIED',
+                        'pending': 'MAN: REQUEST ARRIVED',
+                        'chicago': 'CHICAGO SAFE LEAVE',
+                        'report': 'ADMIN: REPORT EMAIL'
+                    }
+
+                    selected_type = {'value': 'approved'}
+                    preview_container = ui.element('div').classes('w-full')
+
+                    def generate_email_preview(email_type: str) -> str:
+                        days_display = str(int(sample_days)) if sample_days == int(sample_days) else f"{sample_days:.1f}"
+                        date_range = f"{sample_start.strftime('%B %d')} - {sample_end.strftime('%B %d, %Y')}"
+
+                        if email_type == 'submitted':
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_employee},</p>
+                            <p style="margin-bottom: 25px;">Your time off request has been submitted and is <span style="color: #f59e0b; font-weight: 600;">pending approval</span>.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="Request Submitted", title_color="#f59e0b", content=content, footer_text="You will receive another email once your request has been reviewed.")
+
+                        elif email_type == 'approved':
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_employee},</p>
+                            <p style="margin-bottom: 25px;">Great news! Your time off request has been <span style="color: #22c55e; font-weight: 600;">approved</span>.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #22c55e;">{days_display}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Approved by:</td><td style="padding: 8px 0; font-weight: 600;">{sample_manager}</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="Request Approved", title_color="#22c55e", content=content, footer_text="Enjoy your time off!")
+
+                        elif email_type == 'denied':
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_employee},</p>
+                            <p style="margin-bottom: 25px;">Unfortunately, your time off request has been <span style="color: #ef4444; font-weight: 600;">denied</span>.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600;">{days_display}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Reviewed by:</td><td style="padding: 8px 0; font-weight: 600;">{sample_manager}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af; vertical-align: top;">Reason:</td><td style="padding: 8px 0; font-weight: 600; color: #fca5a5;">Team coverage needed during this period.</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="Request Denied", title_color="#ef4444", content=content, footer_text="If you have questions, please speak with your manager.")
+
+                        elif email_type == 'pending':
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_manager},</p>
+                            <p style="margin-bottom: 25px;">A new time off request requires your review.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="New Request Pending", title_color="#f59e0b", content=content, footer_text="Please log in to TJM Time Calendar to approve or deny this request.")
+
+                        elif email_type == 'chicago':
+                            # Chicago Safe Leave submitted email preview
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_employee},</p>
+                            <p style="margin-bottom: 25px;">Your time off request has been submitted and is <span style="color: #f59e0b; font-weight: 600;">pending approval</span>.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">Chicago Safe Leave</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Location:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">📍 Chicago (Paid Sick &amp; Safe Leave)</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="Request Submitted", title_color="#f59e0b", content=content, footer_text="You will receive another email once your request has been reviewed.")
+
+                        elif email_type == 'report':
+                            content = """
+                            <p style="font-size: 16px; margin-bottom: 20px; color: #e5e7eb;">Please find the report below:</p>
+                            <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid #C9A227; margin-bottom: 20px;">
+                                <p style="margin: 0; color: #e5e7eb; font-style: italic;">Here is the monthly PTO summary you requested.</p>
+                            </div>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                                <p style="color: #e5e7eb; margin: 0;">Sample report content would appear here...</p>
+                            </div>
+                            """
+                            return _get_email_template(title="Report", title_color="#C9A227", content=content)
+                        return ""
+
+                    def render_email_preview():
+                        preview_container.clear()
+                        with preview_container:
+                            html_content = generate_email_preview(selected_type['value'])
+                            ui.html(f'''
+                                <iframe
+                                    srcdoc="{html_content.replace('"', '&quot;')}"
+                                    style="width: 100%; height: 780px; border: 1px solid #374151; border-radius: 8px; background: #111827;"
+                                ></iframe>
+                            ''', sanitize=False)
+
+                    # Email type buttons - edge to edge
+                    with ui.row().classes('w-full gap-2 mb-4'):
+                        for key, label in email_types.items():
+                            def make_preview_handler(k=key):
+                                def handler():
+                                    selected_type['value'] = k
+                                    render_email_preview()
+                                return handler
+
+                            colors = {'submitted': '#f59e0b', 'approved': '#22c55e', 'denied': '#ef4444', 'pending': '#f59e0b', 'chicago': '#a855f7', 'report': '#C9A227'}
+                            color = colors.get(key, '#6b7280')
+                            ui.button(label, on_click=make_preview_handler()).props('outline').classes('flex-1').style(f'border-color: {color}; color: {color}; font-size: 11px; padding: 8px 4px; font-weight: 600;')
+
+                    # Initial preview
+                    render_email_preview()
+
+                # Test Email Card - Moved to bottom
+                with ui.card().classes('w-full p-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('send', size='sm', color='green')
                         ui.label('Test Email').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Test Email',
+                            'Send a test email to verify your SMTP configuration is working correctly.<br><br>'
+                            'Enter any email address (including your own) and click Send Test. '
+                            'If successful, you\'ll receive a test email confirming the configuration works.<br><br>'
+                            '<b>Note:</b> SMTP must be configured in your .env file before testing.'
+                        )
 
-                    ui.label('Send a test email to verify your configuration').classes('text-sm opacity-70 mb-4')
-
-                    with ui.row().classes('items-center gap-4'):
-                        test_email_input = ui.input(placeholder='Enter recipient email address').props('outlined dense').classes('w-80')
+                    with ui.row().classes('items-center gap-4 w-full'):
+                        test_email_input = ui.input(placeholder='Enter recipient email address').props('outlined dense').classes('flex-1')
 
                         def send_test_email():
                             if not test_email_input.value:
@@ -460,7 +1168,7 @@ def admin_system_page():
                                 show_error_dialog('SMTP Not Configured', 'SMTP is not configured. Please set the environment variables first.')
                                 return
 
-                            ui.notify('Sending test email...', type='info')
+                            show_info_dialog('Sending', 'Sending test email...')
                             try:
                                 from src.services.email_service import email_service
                                 success = email_service.send_email(
@@ -469,52 +1177,13 @@ def admin_system_page():
                                     body='This is a test email from the TJM Time Calendar system.\n\nIf you received this, your email configuration is working correctly!'
                                 )
                                 if success:
-                                    ui.notify('Test email sent successfully!', type='positive')
+                                    show_success_dialog('Email Sent', 'Test email sent successfully!')
                                 else:
                                     show_error_dialog('Email Failed', 'Failed to send email. Please check the logs for more details.')
                             except Exception as e:
                                 show_error_dialog('Error', f'Error sending email: {str(e)}')
 
                         ui.button('Send Test', icon='send', on_click=send_test_email).props('color=primary')
-
-                # Email Template Preview Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('preview', size='sm', color='purple')
-                        ui.label('Email Template Preview').classes('text-lg font-semibold')
-
-                    ui.label('Preview how emails will look to employees and managers before they are sent.').classes('text-sm opacity-70 mb-4')
-
-                    ui.button('Preview Email Templates', icon='visibility', on_click=lambda: ui.navigate.to('/admin/email-preview')).props('color=primary')
-
-                # Setup Guide Card
-                with ui.card().classes('w-full p-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('help_outline', size='sm', color='blue')
-                        ui.label('Setup Guide').classes('text-lg font-semibold')
-
-                    with ui.expansion('How to Configure Email', icon='menu_book').classes('w-full'):
-                        ui.markdown('''
-**Add these to your `.env` file:**
-
-```
-SMTP_HOST=smtp.your-provider.com
-SMTP_PORT=587
-SMTP_USER=your-email@company.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=noreply@company.com
-```
-
-**Common SMTP Providers:**
-
-| Provider | Host | Port |
-|----------|------|------|
-| Gmail | smtp.gmail.com | 587 |
-| Microsoft 365 | smtp.office365.com | 587 |
-| Amazon SES | email-smtp.us-east-1.amazonaws.com | 587 |
-
-*Restart the application after updating `.env`*
-                        ''')
 
             # ========== LOGS TAB ==========
             with ui.tab_panel(logs_tab):
@@ -670,7 +1339,7 @@ SMTP_FROM=noreply@company.com
                                 try:
                                     with open(log_path, 'w') as f:
                                         f.write('')
-                                    ui.notify('Log cleared', type='positive')
+                                    show_success_dialog('Log Cleared', 'Log file has been cleared')
                                     refresh_logs()
                                     refresh_log_cards()  # Update the file size display
                                 except Exception as e:
@@ -807,7 +1476,7 @@ LOG CONTENT:
                                     with ui.row().classes('w-full justify-end mt-3'):
                                         ui.button('Close', icon='close', on_click=lambda: ai_analysis_container.set_visibility(False)).props('flat dense')
 
-                            ui.notify('Analysis complete', type='positive')
+                            show_success_dialog('Analysis Complete', 'Storage analysis completed')
 
                         except Exception as e:
                             ai_analysis_container.clear()
@@ -824,14 +1493,25 @@ LOG CONTENT:
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('security', size='sm', color='blue')
                         ui.label('Security Settings').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Security Settings',
+                            'These settings control application security and session management.<br><br>'
+                            '<b>Debug Mode:</b> Should be <span style="color: #22c55e;">disabled</span> in production. '
+                            'When enabled, detailed error messages are shown which could expose sensitive information.<br><br>'
+                            '<b>Secret Key:</b> A strong, random key used for encrypting session data. '
+                            'Should be at least 32 characters. Generate with: <code style="background: #374151; padding: 2px 6px; border-radius: 4px;">python -c "import secrets; print(secrets.token_hex(32))"</code><br><br>'
+                            '<b>Session Timeout:</b> How long users stay logged in without activity. '
+                            'Default is 30 minutes. Adjust in .env with SESSION_TIMEOUT_MINUTES.'
+                        )
 
                     debug_val = os.getenv('DEBUG', 'false')
                     secret = os.getenv('SECRET_KEY', '')
                     timeout = os.getenv('SESSION_TIMEOUT_MINUTES', '30')
 
-                    with ui.row().classes('gap-4 flex-wrap'):
+                    # Use CSS grid for perfect edge-to-edge alignment
+                    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;'):
                         # Debug Mode
-                        with ui.card().classes(f'p-4 flex-1 min-w-48 {"bg-red-50 dark:bg-red-900/20 border border-red-300" if debug_val.lower() == "true" else "bg-green-50 dark:bg-green-900/20"}'):
+                        with ui.card().classes(f'p-4 {"bg-red-50 dark:bg-red-900/20 border border-red-300" if debug_val.lower() == "true" else "bg-green-50 dark:bg-green-900/20"}'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('bug_report', color='red' if debug_val.lower() == 'true' else 'green')
                                 ui.label('Debug Mode').classes('font-semibold')
@@ -843,7 +1523,7 @@ LOG CONTENT:
                                 ui.label('Production ready').classes('text-xs opacity-70 mt-1')
 
                         # Secret Key
-                        with ui.card().classes(f'p-4 flex-1 min-w-48 {"bg-red-50 dark:bg-red-900/20 border border-red-300" if not (secret and len(secret) > 20) else "bg-green-50 dark:bg-green-900/20"}'):
+                        with ui.card().classes(f'p-4 {"bg-red-50 dark:bg-red-900/20 border border-red-300" if not (secret and len(secret) > 20) else "bg-green-50 dark:bg-green-900/20"}'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('key', color='green' if secret and len(secret) > 20 else 'red')
                                 ui.label('Secret Key').classes('font-semibold')
@@ -855,18 +1535,105 @@ LOG CONTENT:
                                 ui.label('Set a strong key in .env').classes('text-xs text-red-600 dark:text-red-400 mt-1')
 
                         # Session Timeout
-                        with ui.card().classes('p-4 flex-1 min-w-48 bg-gray-50 dark:bg-gray-800'):
+                        with ui.card().classes('p-4 bg-gray-50 dark:bg-gray-800'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('timer', color='blue')
                                 ui.label('Session Timeout').classes('font-semibold')
                             ui.label(f'{timeout} minutes').classes('font-mono text-lg')
                             ui.label('User inactivity limit').classes('text-xs opacity-70 mt-1')
 
+                # Location Policies Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('location_city', size='sm', color='purple')
+                        ui.label('Location Policies').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Location Policies',
+                            'Configure location-specific policies that override default settings.<br><br>'
+                            '<b>Chicago Paid Sick and Safe Leave:</b><br>'
+                            'Required by Chicago city ordinance (effective July 1, 2024). When enabled, employees '
+                            'assigned to Chicago locations will see an additional leave type with:<br>'
+                            '• Separate 80-hour (10 days) annual allocation<br>'
+                            '• Maximum carryover of 80 hours<br>'
+                            '• Can be used for sick time or "safe" purposes (domestic violence, stalking, etc.)<br><br>'
+                            '<i>Employees must have their location set to Chicago to see this option.</i>'
+                        )
+
+                    # Chicago Safe Leave Toggle
+                    with ui.card().classes('p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-300'):
+                        with ui.row().classes('w-full justify-between items-start'):
+                            with ui.column().classes('flex-1'):
+                                with ui.row().classes('items-center gap-2 mb-2'):
+                                    ui.icon('location_on', color='purple')
+                                    ui.label('Chicago Paid Sick and Safe Leave').classes('font-semibold')
+                                ui.label('Enable separate leave bank for Chicago employees per city ordinance (effective July 1, 2024).').classes('text-sm opacity-70 mb-2')
+                                ui.label('Employees in Chicago will see an additional leave type with 80-hour (10 days) carryover limit.').classes('text-xs opacity-60')
+
+                            # Toggle switch
+                            from src.models.system_setting import SystemSetting
+
+                            def get_chicago_setting():
+                                """Get Chicago Safe Leave setting from database."""
+                                db_session = next(get_db())
+                                try:
+                                    setting = db_session.query(SystemSetting).filter(
+                                        SystemSetting.key == 'chicago.safe_leave_enabled'
+                                    ).first()
+                                    return setting.bool_value if setting else False
+                                finally:
+                                    db_session.close()
+
+                            def toggle_chicago_setting(e):
+                                """Toggle Chicago Safe Leave setting."""
+                                db_session = next(get_db())
+                                try:
+                                    setting = db_session.query(SystemSetting).filter(
+                                        SystemSetting.key == 'chicago.safe_leave_enabled'
+                                    ).first()
+                                    if setting:
+                                        setting.value = 'true' if e.value else 'false'
+                                        setting.updated_by = app.storage.general.get('user', {}).get('id')
+                                    else:
+                                        # Create setting if it doesn't exist
+                                        new_setting = SystemSetting(
+                                            key='chicago.safe_leave_enabled',
+                                            value='true' if e.value else 'false',
+                                            description='Enable Chicago Paid Sick and Safe Leave feature for Chicago employees',
+                                            updated_by=app.storage.general.get('user', {}).get('id')
+                                        )
+                                        db_session.add(new_setting)
+                                    db_session.commit()
+                                    status = 'enabled' if e.value else 'disabled'
+                                    show_success_dialog('Setting Updated', f'Chicago Safe Leave {status}')
+                                except Exception as ex:
+                                    db_session.rollback()
+                                    show_error_dialog('Error', f'Failed to update setting: {str(ex)}')
+                                finally:
+                                    db_session.close()
+
+                            chicago_enabled = get_chicago_setting()
+                            with ui.column().classes('items-center'):
+                                chicago_toggle = ui.switch(value=chicago_enabled, on_change=toggle_chicago_setting)
+                                ui.label('Enabled' if chicago_enabled else 'Disabled').classes('text-xs mt-1').bind_text_from(
+                                    chicago_toggle, 'value', backward=lambda v: 'Enabled' if v else 'Disabled'
+                                )
+
                 # Environment Variables Card
                 with ui.card().classes('w-full p-4 mb-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('settings_applications', size='sm', color='amber')
                         ui.label('Environment Configuration').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Environment Configuration',
+                            'Environment variables control application behavior. Set these in your <code style="background: #374151; padding: 2px 6px; border-radius: 4px;">.env</code> file.<br><br>'
+                            '<b>SECRET_KEY:</b> Required for session security. Generate a strong key.<br>'
+                            '<b>DEBUG:</b> Set to "false" in production to hide error details.<br>'
+                            '<b>DATABASE_URL:</b> Connection string for the database.<br>'
+                            '<b>SMTP_HOST:</b> Email server for sending notifications.<br>'
+                            '<b>ANTHROPIC_API_KEY:</b> API key for AI features (log analysis, etc.).<br>'
+                            '<b>LOG_LEVEL:</b> Controls logging verbosity (DEBUG, INFO, WARNING, ERROR).<br><br>'
+                            '<i>Restart the application after changing environment variables.</i>'
+                        )
 
                     # Environment vars as a cleaner table
                     env_vars = [
@@ -897,37 +1664,48 @@ LOG CONTENT:
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('computer', size='sm', color='gray')
                         ui.label('System Information').classes('text-lg font-semibold')
+                        create_help_button(
+                            'System Information',
+                            'Technical details about the server environment running this application.<br><br>'
+                            '<b>Python:</b> The Python version running the application.<br>'
+                            '<b>Platform:</b> Operating system (Windows, Linux, macOS).<br>'
+                            '<b>Architecture:</b> CPU architecture (x64, ARM, etc.).<br>'
+                            '<b>NiceGUI:</b> Version of the web framework powering the UI.<br><br>'
+                            '<i>This information is useful for troubleshooting and support requests.</i>'
+                        )
 
-                    with ui.row().classes('gap-4 flex-wrap'):
+                    # Get NiceGUI version
+                    try:
+                        import nicegui
+                        nicegui_version = nicegui.__version__
+                    except Exception:
+                        nicegui_version = 'Unknown'
+
+                    # Use CSS grid for perfect edge-to-edge alignment (4 columns)
+                    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;'):
                         # Python
-                        with ui.card().classes('p-4 flex-1 min-w-40 bg-blue-50 dark:bg-blue-900/20'):
+                        with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('code', color='blue')
                                 ui.label('Python').classes('font-semibold')
                             ui.label(sys_module.version.split()[0]).classes('font-mono text-lg')
 
                         # Platform
-                        with ui.card().classes('p-4 flex-1 min-w-40 bg-green-50 dark:bg-green-900/20'):
+                        with ui.card().classes('p-4 bg-green-50 dark:bg-green-900/20'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('laptop', color='green')
                                 ui.label('Platform').classes('font-semibold')
                             ui.label(platform.system()).classes('font-mono text-lg')
 
                         # Architecture
-                        with ui.card().classes('p-4 flex-1 min-w-40 bg-purple-50 dark:bg-purple-900/20'):
+                        with ui.card().classes('p-4 bg-purple-50 dark:bg-purple-900/20'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('memory', color='purple')
                                 ui.label('Architecture').classes('font-semibold')
                             ui.label(platform.machine()).classes('font-mono text-lg')
 
                         # NiceGUI Version
-                        try:
-                            import nicegui
-                            nicegui_version = nicegui.__version__
-                        except Exception:
-                            nicegui_version = 'Unknown'
-
-                        with ui.card().classes('p-4 flex-1 min-w-40 bg-amber-50 dark:bg-amber-900/20'):
+                        with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
                             with ui.row().classes('items-center gap-2 mb-2'):
                                 ui.icon('web', color='amber')
                                 ui.label('NiceGUI').classes('font-semibold')

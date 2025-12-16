@@ -279,7 +279,7 @@ def validate_min_length(input_element, min_len: int, field_name: str = 'This fie
     return True
 
 
-def show_validation_dialog(title: str, message: str, icon: str = 'info', icon_color: str = 'amber'):
+def show_validation_dialog(title: str, message: str, icon: str = 'info', icon_color: str = 'amber', on_close=None):
     """
     Show a friendly validation/warning dialog instead of toast notifications.
 
@@ -288,42 +288,91 @@ def show_validation_dialog(title: str, message: str, icon: str = 'info', icon_co
         message: Message to display
         icon: Material icon name (default: 'info')
         icon_color: Icon color (default: 'amber')
+        on_close: Optional callback to execute when OK is clicked (e.g., navigation)
     """
+    def handle_close():
+        dialog.close()
+        if on_close:
+            on_close()
+
     with ui.dialog() as dialog, ui.card().classes('p-0 max-w-sm'):
         with ui.row().classes(f'w-full p-4 bg-{icon_color}-500 text-white items-center'):
             ui.icon(icon, size='md').classes('mr-2')
             ui.label(title).classes('text-lg font-bold')
         with ui.column().classes('p-4 gap-3'):
-            ui.label(message).classes('text-base')
+            ui.label(message).classes('text-base whitespace-pre-line')
             with ui.row().classes('w-full justify-end mt-2'):
-                ui.button('OK', on_click=dialog.close).props('color=primary')
+                ui.button('OK', on_click=handle_close).style('background-color: #C9A227 !important; color: white !important;')
     dialog.open()
 
 
-def show_error_dialog(title: str, message: str):
+def show_error_dialog(title: str, message: str, on_close=None):
     """Show an error dialog with red styling."""
-    show_validation_dialog(title, message, icon='error', icon_color='red')
+    show_validation_dialog(title, message, icon='error', icon_color='red', on_close=on_close)
 
 
-def show_warning_dialog(title: str, message: str):
+def show_warning_dialog(title: str, message: str, on_close=None):
     """Show a warning dialog with amber styling."""
-    show_validation_dialog(title, message, icon='warning', icon_color='amber')
+    show_validation_dialog(title, message, icon='warning', icon_color='amber', on_close=on_close)
 
 
-def show_info_dialog(title: str, message: str):
+def show_info_dialog(title: str, message: str, on_close=None):
     """Show an info dialog with blue styling."""
-    show_validation_dialog(title, message, icon='info', icon_color='blue')
+    show_validation_dialog(title, message, icon='info', icon_color='blue', on_close=on_close)
 
 
-def show_success_dialog(title: str, message: str):
-    """Show a success dialog with TJM gold/amber styling."""
-    # Use custom styling for TJM brand gold (#c9a227)
+def show_success_dialog(title: str, message: str, on_close=None):
+    """Show a success dialog with TJM gold/amber styling.
+
+    Args:
+        title: Dialog title
+        message: Message to display
+        on_close: Optional callback to execute when OK is clicked (e.g., navigation)
+    """
+    def handle_close():
+        dialog.close()
+        if on_close:
+            on_close()
+
     with ui.dialog() as dialog, ui.card().classes('p-0 max-w-sm'):
-        with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #c9a227'):
+        with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #C9A227'):
             ui.icon('check_circle', size='md').classes('mr-2')
             ui.label(title).classes('text-lg font-bold')
         with ui.column().classes('p-4 gap-3'):
-            ui.label(message).classes('text-base')
+            ui.label(message).classes('text-base whitespace-pre-line')
             with ui.row().classes('w-full justify-end mt-2'):
-                ui.button('OK', on_click=dialog.close).props('color=primary')
+                ui.button('OK', on_click=handle_close).style('background-color: #C9A227 !important; color: white !important;')
     dialog.open()
+
+
+def show_help_dialog(title: str, message: str):
+    """Show a dark-themed help dialog with HTML content support.
+
+    Args:
+        title: Dialog title
+        message: HTML message to display (supports <b>, <br>, <code>, <i>, etc.)
+    """
+    with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 600px;'):
+        with ui.row().classes('items-center gap-2 mb-4'):
+            ui.icon('help', color='amber', size='md')
+            ui.label(title).classes('text-lg font-bold')
+        ui.html(f'<div style="color: #e5e7eb; font-size: 14px; line-height: 1.6;">{message}</div>', sanitize=False)
+        with ui.row().classes('w-full justify-end mt-4'):
+            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+    dialog.open()
+
+
+def create_help_button(title: str, message: str):
+    """Create a help button with consistent styling that opens a help dialog.
+
+    Args:
+        title: Dialog title
+        message: HTML message to display
+
+    Returns:
+        The created button element
+    """
+    def on_click():
+        show_help_dialog(title, message)
+
+    return ui.button(icon='help_outline', on_click=on_click).props('flat dense round size=sm').style('color: #f59e0b')

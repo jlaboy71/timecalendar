@@ -13,7 +13,7 @@ def admin_dashboard_page():
         ui.navigate.to('/')
         return
 
-    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title='ADMIN PANEL', show_back=False)
 
         # Navigation cards
@@ -42,25 +42,7 @@ def admin_dashboard_page():
                     ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
                     ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
 
-            # Year-End Processing card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
-                with ui.column().classes('items-center gap-4'):
-                    ui.icon('event_repeat', size='3rem').classes('text-primary')
-                    ui.label('Year-End Processing').classes('text-xl font-semibold')
-                    ui.label('Process year transitions and holidays').classes('text-gray-600 text-center')
-                    ui.button('Go to Year-End', on_click=lambda: ui.navigate.to('/admin/year-end'), color='primary')
-
-        # Second row of cards
-        with ui.row().classes('w-full gap-6 justify-center mt-6'):
-            # Handbook Management card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
-                with ui.column().classes('items-center gap-4'):
-                    ui.icon('menu_book', size='3rem').classes('text-primary')
-                    ui.label('Handbook Management').classes('text-xl font-semibold')
-                    ui.label('Update and manage employee handbook').classes('text-gray-600 text-center')
-                    ui.button('Manage Handbook', on_click=lambda: ui.navigate.to('/admin/handbook'), color='primary')
-
-        # Third row - Super Admin only
+        # Second row - Super Admin only
         if user_role == 'superadmin':
             with ui.row().classes('w-full gap-6 justify-center mt-6'):
                 # System Administration card
