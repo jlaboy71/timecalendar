@@ -20,7 +20,7 @@ class CarryoverRequest(Base):
     From Haventech Handbook:
     - Vacation carryover requires prior written approval from management
     - Default: No carryover allowed
-    - Chicago employees: Up to 16 hours automatic carryover
+    - Chicago employees: Up to 80 hours (10 days) automatic carryover for Sick and Safe Leave
     """
     __tablename__ = "carryover_requests"
 

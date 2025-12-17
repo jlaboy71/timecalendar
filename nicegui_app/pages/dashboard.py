@@ -4,6 +4,7 @@ from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
 from src.services.user_service import UserService
 from src.services.policy_change_service import PolicyChangeService
+from src.services.audit_service import AuditService
 from nicegui_app.components.policy_change_indicator import whats_new_section
 from src.services.department_service import DepartmentService
 from src.models.carryover_request import CarryoverRequest
@@ -130,7 +131,7 @@ def dashboard_page():
                             on_click=toggle_dark_mode
                         ).props('flat round')
 
-                        ui.button('LOGOUT', icon='logout', on_click=lambda: logout()).props('flat color=red')
+                        ui.button('LOGOUT', on_click=lambda: logout()).props('outline dense').style('color: #ef4444 !important; border-color: #C9A227 !important; font-weight: 600;')
 
             # ============ WHAT'S NEW SECTION (Policy Changes) ============
             if current_user:
@@ -143,37 +144,29 @@ def dashboard_page():
                 selected_year = {'value': current_year}
                 next_year = current_year + 1
 
-                # Header with year toggle
+                # Header with year dropdown
                 with ui.row().classes('w-full justify-between items-center mb-4'):
                     balance_title = ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold')
 
-                    # Year toggle buttons
-                    with ui.button_group().props('outline rounded'):
-                        year_btn_current = ui.button(str(current_year), on_click=lambda: switch_year(current_year))
-                        year_btn_next = ui.button(str(next_year), on_click=lambda: switch_year(next_year))
+                    # Year dropdown selector
+                    years = [current_year, next_year]
 
-                    # Set initial button states
-                    year_btn_current.props('color=primary')
-                    year_btn_next.props('color=grey')
+                    def on_year_change(e):
+                        """Switch the displayed year and refresh balances."""
+                        year = e.value
+                        selected_year['value'] = year
+                        balance_title.set_text(f'PTO Balances ({year})')
+                        render_balances(year)
+
+                    ui.select(
+                        {y: str(y) for y in years},
+                        label='Year',
+                        value=selected_year['value'],
+                        on_change=on_year_change
+                    ).props('dense outlined').classes('w-24')
 
                 # Container for balance display (will be refreshed)
                 balance_container = ui.column().classes('w-full')
-
-                def switch_year(year):
-                    """Switch the displayed year and refresh balances."""
-                    selected_year['value'] = year
-                    balance_title.set_text(f'PTO Balances ({year})')
-
-                    # Update button styles
-                    if year == current_year:
-                        year_btn_current.props('color=primary')
-                        year_btn_next.props('color=grey')
-                    else:
-                        year_btn_current.props('color=grey')
-                        year_btn_next.props('color=primary')
-
-                    # Refresh the balance display
-                    render_balances(year)
 
                 def render_balances(year):
                     """Render balance cards for the given year."""
@@ -256,6 +249,7 @@ def dashboard_page():
 
                                 with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500').style('min-width: 200px;'):
                                     with ui.row().classes('items-center gap-2'):
+                                        ui.icon('beach_access').classes('text-blue-600')
                                         ui.label('VACATION').classes('text-lg font-bold text-blue-600')
                                         ui.button(icon='help_outline', on_click=show_vacation_help).props('flat dense round size=xs').style('color: #3b82f6')
 
@@ -295,6 +289,7 @@ def dashboard_page():
 
                                 with ui.card().classes('flex-1 p-4 border-l-4 border-green-500').style('min-width: 200px;'):
                                     with ui.row().classes('items-center gap-2'):
+                                        ui.icon('medical_services').classes('text-green-600')
                                         ui.label('SICK').classes('text-lg font-bold text-green-600')
                                         ui.button(icon='help_outline', on_click=show_sick_help).props('flat dense round size=xs').style('color: #22c55e')
 
@@ -334,6 +329,7 @@ def dashboard_page():
 
                                 with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500').style('min-width: 200px;'):
                                     with ui.row().classes('items-center gap-2'):
+                                        ui.icon('person').classes('text-purple-600')
                                         ui.label('PERSONAL').classes('text-lg font-bold text-purple-600')
                                         ui.button(icon='help_outline', on_click=show_personal_help).props('flat dense round size=xs').style('color: #a855f7')
 
@@ -398,7 +394,8 @@ def dashboard_page():
 
                                     with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500').style('min-width: 200px;'):
                                         with ui.row().classes('items-center gap-2'):
-                                            ui.label('CHICAGO LEAVE').classes('text-lg font-bold text-amber-600')
+                                            ui.icon('schedule').classes('text-amber-600')
+                                            ui.label('LEAVE').classes('text-lg font-bold text-amber-600')
                                             ui.button(icon='help_outline', on_click=show_chicago_leave_help).props('flat dense round size=xs').style('color: #f59e0b')
 
                                         # Show negative balance in red with warning
@@ -476,47 +473,6 @@ def dashboard_page():
                 # Initial render
                 render_balances(current_year)
 
-            # ============ PENDING REQUESTS (if any) - employees only ============
-            if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:
-                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
-                    with ui.row().classes('w-full justify-between items-center mb-3'):
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('pending', color='amber').classes('text-xl')
-                            ui.label('Pending Requests').classes('text-lg font-semibold')
-                        ui.label(f'{len(pending_requests)} awaiting approval').classes('text-sm text-amber-500')
-
-                    for req in pending_requests:
-                        with ui.card().classes('w-full p-3 mb-2'):
-                            with ui.row().classes('w-full justify-between items-center'):
-                                with ui.column().classes('gap-1'):
-                                    with ui.row().classes('gap-2 items-center'):
-                                        ui.label(req.pto_type.title()).classes('font-medium')
-                                        ui.badge('Pending', color='amber').props('outline')
-                                    if req.start_date == req.end_date:
-                                        ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
-                                    else:
-                                        ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
-
-                                with ui.row().classes('items-center gap-2'):
-                                    days_display = float(req.total_days)
-                                    ui.label(format_days(days_display * 8)).classes('font-medium')
-
-                                    def create_cancel_handler(request_id):
-                                        def show_cancel_dialog():
-                                            with ui.dialog() as cancel_dialog, ui.card().classes('p-4'):
-                                                ui.label('Cancel PTO Request?').classes('text-lg font-semibold mb-2')
-                                                ui.label('This will cancel your pending request and restore your balance.').classes('text-sm opacity-70 mb-4')
-                                                with ui.row().classes('w-full justify-end gap-2'):
-                                                    ui.button('Keep Request', on_click=cancel_dialog.close).props('flat')
-                                                    def confirm_cancel():
-                                                        cancel_dialog.close()
-                                                        cancel_request(request_id)
-                                                    ui.button('Cancel Request', on_click=confirm_cancel).props('color=red')
-                                            cancel_dialog.open()
-                                        return show_cancel_dialog
-
-                                    ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id)).props('flat dense color=red size=sm')
-
             # ============ TEAM PENDING REQUESTS (Managers only - admins don't approve requests) ============
             if user_role == 'manager' and team_pending_requests:
                 # Pre-compute conflicts for each pending request
@@ -576,12 +532,8 @@ def dashboard_page():
                                     days = float(req['total_days'])
                                     ui.label(format_days(days * 8)).classes('font-medium')
 
-                                    def create_review_handler(request_id):
-                                        def review():
-                                            ui.navigate.to(f'/manager/request/{request_id}')
-                                        return review
-
-                                    ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=indigo size=sm')
+                                    # Use lambda with default arg to capture request_id properly
+                                    ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=indigo size=sm')
 
                     if len(team_pending_requests) > 5:
                         with ui.row().classes('w-full justify-center mt-2'):
@@ -623,12 +575,8 @@ def dashboard_page():
                                     days = float(req['total_days'])
                                     ui.label(format_days(days * 8)).classes('font-medium')
 
-                                    def create_review_handler(request_id):
-                                        def review():
-                                            ui.navigate.to(f'/manager/request/{request_id}')
-                                        return review
-
-                                    ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=amber size=sm')
+                                    # Use lambda with default arg to capture request_id properly
+                                    ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=amber size=sm')
 
                     if len(cancellation_requests) > 5:
                         with ui.row().classes('w-full justify-center mt-2'):
@@ -722,8 +670,8 @@ def dashboard_page():
                                         with ui.column().classes('pl-4 gap-2'):
                                             ui.markdown('**My Profile** - View your profile information including hire date, department, and manager').classes('text-sm')
                                             ui.markdown('**Calendar** - View the team calendar showing holidays, your time off, and team schedules').classes('text-sm')
-                                            ui.markdown('**Employee Handbook** - Access company policies, PTO guidelines, and leave information').classes('text-sm')
                                             ui.markdown('**Reports** - Generate reports on your PTO usage and balances').classes('text-sm')
+                                            ui.markdown('**Handbook** - Access company policies, PTO guidelines, and leave information').classes('text-sm')
                                         with ui.row().classes('w-full justify-end mt-2'):
                                             ui.button('Got it', on_click=help_dialog.close).props('color=secondary')
                                 help_dialog.open()
@@ -734,8 +682,8 @@ def dashboard_page():
                             with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View your profile and account information')
                                 ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View team calendar with holidays and time off')
-                                ui.button('Employee Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Access company policies and PTO guidelines')
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Generate reports on your PTO usage')
+                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Access company policies and PTO guidelines')
 
                     # Row 3: Manager Tools (managers only)
                     if user_role == 'manager':
@@ -751,6 +699,57 @@ def dashboard_page():
                             with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
+
+            # ============ PENDING REQUESTS (if any) - employees only ============
+            if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:
+                # Type colors for border
+                pending_type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                pending_type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
+
+                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-3'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('pending', color='amber').classes('text-xl')
+                            ui.label('Pending Requests').classes('text-lg font-semibold')
+                        ui.label(f'{len(pending_requests)} awaiting approval').classes('text-sm text-amber-500')
+
+                    for req in pending_requests:
+                        pto_type_lower = req.pto_type.lower()
+                        border_color = pending_type_colors.get(pto_type_lower, 'gray')
+                        type_icon = pending_type_icons.get(pto_type_lower, 'event')
+
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                with ui.row().classes('gap-3 items-center'):
+                                    ui.icon(type_icon).classes(f'text-{border_color}-500')
+                                    with ui.column().classes('gap-0'):
+                                        with ui.row().classes('gap-2 items-center'):
+                                            ui.label(req.pto_type.title()).classes('font-medium')
+                                            ui.badge('Pending', color='amber').props('outline')
+                                        if req.start_date == req.end_date:
+                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
+                                        else:
+                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
+
+                                with ui.row().classes('items-center gap-2'):
+                                    days_display = float(req.total_days)
+                                    ui.label(format_days(days_display * 8)).classes('font-medium')
+
+                                    def create_cancel_handler(request_id):
+                                        def show_cancel_dialog():
+                                            with ui.dialog() as cancel_dialog, ui.card().classes('p-4'):
+                                                ui.label('Cancel PTO Request?').classes('text-lg font-semibold mb-2')
+                                                ui.label('This will cancel your pending request and restore your balance.').classes('text-sm opacity-70 mb-4')
+                                                with ui.row().classes('w-full justify-end gap-2'):
+                                                    ui.button('Keep Request', on_click=cancel_dialog.close).props('flat')
+                                                    def confirm_cancel():
+                                                        cancel_dialog.close()
+                                                        cancel_request(request_id)
+                                                    ui.button('Cancel Request', on_click=confirm_cancel).props('color=red')
+                                            cancel_dialog.open()
+                                        return show_cancel_dialog
+
+                                    ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id)).props('flat dense color=red size=sm')
 
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
@@ -963,12 +962,8 @@ def dashboard_page():
                                         days = float(req['total_days'])
                                         ui.label(format_days(days * 8)).classes('font-medium')
 
-                                        def create_review_handler(request_id):
-                                            def review():
-                                                ui.navigate.to(f'/manager/request/{request_id}')
-                                            return review
-
-                                        ui.button('Review', icon='visibility', on_click=create_review_handler(req['request_id'])).props('flat dense color=amber size=sm')
+                                        # Use lambda with default arg to capture request_id properly
+                                        ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=amber size=sm')
 
                         if len(admin_pending_requests) > 5:
                             with ui.row().classes('w-full justify-center mt-2'):
@@ -1057,12 +1052,8 @@ def dashboard_page():
                         pto_type_lower = req.pto_type.lower()
                         border_color = type_colors.get(pto_type_lower, 'gray')
 
-                        def create_detail_handler(request):
-                            def show_detail():
-                                show_pto_detail_dialog(request)
-                            return show_detail
-
-                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', create_detail_handler(req)):
+                        # Use lambda with default arg to capture req value properly
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
                             with ui.row().classes('w-full justify-between items-center'):
                                 with ui.row().classes('gap-4 items-center'):
                                     # Type icon
@@ -1186,6 +1177,9 @@ def cancel_request(request_id: int):
             show_warning_dialog('Cannot Cancel', 'Only pending requests can be cancelled.')
             return
 
+        # Get employee name for audit log before modifying
+        employee_name = request.user.full_name if request.user else 'Unknown'
+
         # Update the request status
         request.status = 'cancelled'
 
@@ -1198,6 +1192,18 @@ def cancel_request(request_id: int):
             balance_service.adjust_vacation_used(balance.id, -Decimal(str(request.total_days)), is_pending=True)
 
         db.commit()
+
+        # Audit log the cancellation
+        current_user = app.storage.general.get('user', {})
+        AuditService.log_pto_cancel(
+            db=db,
+            user_id=current_user.get('id'),
+            username=current_user.get('username'),
+            request_id=request_id,
+            employee_name=employee_name,
+            cancelled_by_self=True
+        )
+
         show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
 
     except Exception as e:
@@ -1227,8 +1233,8 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
         # Create dialog
         with ui.dialog() as history_dialog, ui.card().classes('w-full max-w-4xl p-0'):
-            # Header
-            with ui.row().classes('w-full justify-between items-center p-4 bg-teal-500 text-white'):
+            # Header - using TJM gray for better readability
+            with ui.row().classes('w-full justify-between items-center p-4 text-white').style('background-color: #5a6a72;'):
                 with ui.column().classes('gap-0'):
                     ui.label(employee_name).classes('text-xl font-bold')
                     ui.label(employee.email).classes('text-sm opacity-80')
@@ -1269,7 +1275,9 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                             with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
                                 # Vacation
                                 with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-blue-500 text-center'):
-                                    ui.label('Vacation').classes('text-xs font-semibold text-blue-600')
+                                    with ui.row().classes('w-full justify-center items-center gap-2 mb-2'):
+                                        ui.icon('beach_access', size='md').style('color: #3b82f6')
+                                        ui.label('Vacation').classes('text-base font-bold text-blue-600')
                                     ui.label(f'{format_days(float(balance.vacation_used))}').classes('text-2xl font-bold text-blue-600')
                                     ui.label('days used').classes('text-xs opacity-60')
                                     total = float(balance.vacation_total) + float(balance.vacation_carryover)
@@ -1277,7 +1285,9 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
                                 # Sick
                                 with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-green-500 text-center'):
-                                    ui.label('Sick').classes('text-xs font-semibold text-green-600')
+                                    with ui.row().classes('w-full justify-center items-center gap-2 mb-2'):
+                                        ui.icon('local_hospital', size='md').style('color: #22c55e')
+                                        ui.label('Sick').classes('text-base font-bold text-green-600')
                                     ui.label(f'{format_days(float(balance.sick_used))}').classes('text-2xl font-bold text-green-600')
                                     ui.label('days used').classes('text-xs opacity-60')
                                     total = float(balance.sick_total) + float(balance.sick_carryover)
@@ -1285,7 +1295,9 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
                                 # Personal
                                 with ui.card().classes('flex-1 min-w-32 p-3 border-l-4 border-purple-500 text-center'):
-                                    ui.label('Personal').classes('text-xs font-semibold text-purple-600')
+                                    with ui.row().classes('w-full justify-center items-center gap-2 mb-2'):
+                                        ui.icon('person', size='md').style('color: #a855f7')
+                                        ui.label('Personal').classes('text-base font-bold text-purple-600')
                                     ui.label(f'{format_days(float(balance.personal_used))}').classes('text-2xl font-bold text-purple-600')
                                     ui.label('days used').classes('text-xs opacity-60')
                                     total = float(balance.personal_total) + float(balance.personal_carryover)
@@ -1361,12 +1373,8 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                 pto_type_lower = req.pto_type.lower()
                                 border_color = type_colors.get(pto_type_lower, 'grey')
 
-                                def create_detail_handler(request):
-                                    def show_detail():
-                                        show_pto_detail_dialog(request)
-                                    return show_detail
-
-                                with ui.card().classes(f'w-full p-3 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', create_detail_handler(req)):
+                                # Use lambda with default arg to capture req value properly
+                                with ui.card().classes(f'w-full p-3 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
                                     with ui.row().classes('w-full justify-between items-center'):
                                         with ui.row().classes('gap-3 items-center'):
                                             ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
@@ -1391,10 +1399,10 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                     filter_text = f' {filter_type}' if filter_type != 'all' else ''
                                     ui.label(f'No{filter_text} time off records for {selected_year}').classes('opacity-60')
 
-            # Initial render
-            render_content()
-
-        history_dialog.open()
+            # Open dialog first, then use timer to render after DOM is ready
+            history_dialog.open()
+            # Small delay ensures dialog is fully in DOM before adding clickable content
+            ui.timer(0.05, render_content, once=True)
 
     except Exception as e:
         show_error_dialog('Error', f'Error loading employee history: {str(e)}')
@@ -1403,8 +1411,15 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
             db.close()
 
 
-def show_pto_detail_dialog(request):
-    """Show detailed information about a PTO request with action buttons."""
+def show_pto_detail_dialog(request_or_id):
+    """Show detailed information about a PTO request with action buttons.
+
+    Args:
+        request_or_id: Either a PTORequest object or a request ID (int).
+                       Will fetch fresh from DB to ensure relationships are loaded.
+    """
+    from src.models.pto_request import PTORequest
+
     type_colors = {
         'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
         'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
@@ -1416,20 +1431,42 @@ def show_pto_detail_dialog(request):
     current_user = app.storage.general.get('user', {})
     user_id = current_user.get('id')
     user_role = current_user.get('role', 'employee')
-
-    pto_type_lower = request.pto_type.lower()
-    header_color = type_colors.get(pto_type_lower, 'grey')
-
-    # Store request info for action handlers
-    req_id = request.id
-    req_type = request.pto_type
-    req_total_days = float(request.total_days)
-    req_year = request.start_date.year
-    req_user_id = request.user_id
-    req_status = request.status
-    is_own_request = (req_user_id == user_id)
     is_trusted = current_user.get('is_trusted', False)
-    # Trusted employees can delete their own auto-approved requests (no manager approval needed)
+
+    # Always fetch fresh to ensure we have an active session with loaded relationships
+    db = next(get_db())
+    try:
+        if isinstance(request_or_id, int):
+            request = db.query(PTORequest).filter(PTORequest.id == request_or_id).first()
+        else:
+            request = db.query(PTORequest).filter(PTORequest.id == request_or_id.id).first()
+
+        if not request:
+            show_error_dialog('Error', 'Request not found')
+            return
+
+        # Extract ALL data from ORM object into plain variables before closing session
+        req_id = request.id
+        req_type = request.pto_type
+        req_type_lower = request.pto_type.lower()
+        req_total_days = float(request.total_days)
+        req_start_date = request.start_date
+        req_end_date = request.end_date
+        req_year = request.start_date.year
+        req_user_id = request.user_id
+        req_status = request.status
+        req_notes = request.notes
+        req_denial_reason = request.denial_reason
+        req_approved_at = request.approved_at
+        req_cancellation_requested = getattr(request, 'cancellation_requested', False)
+        req_employee_name = request.user.full_name if request.user else 'Unknown'
+        req_created_at = request.created_at
+    finally:
+        db.close()
+
+    # Now work only with plain variables - session is closed
+    header_color = type_colors.get(req_type_lower, 'grey')
+    is_own_request = (req_user_id == user_id)
     can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request) or (is_trusted and is_own_request)
 
     with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
@@ -1441,54 +1478,53 @@ def show_pto_detail_dialog(request):
                     'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
                     'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
                 }
-                ui.icon(type_icons.get(pto_type_lower, 'event')).classes('text-2xl')
-                ui.label(f'{request.pto_type.title()} Time Off').classes('text-lg font-bold')
+                ui.icon(type_icons.get(req_type_lower, 'event')).classes('text-2xl')
+                ui.label(f'{req_type.title()} Time Off').classes('text-lg font-bold')
             ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense color=white')
 
         # Content
         with ui.column().classes('w-full p-4 gap-4'):
             # Status badge
             with ui.row().classes('w-full justify-center'):
-                ui.badge(request.status.title(), color=status_colors.get(request.status, 'grey')).classes('text-lg px-4 py-1')
+                ui.badge(req_status.title(), color=status_colors.get(req_status, 'grey')).classes('text-lg px-4 py-1')
 
             # Date info
             with ui.card().classes('w-full p-3'):
                 ui.label('Dates').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                if request.start_date == request.end_date:
-                    ui.label(request.start_date.strftime('%A, %B %d, %Y')).classes('font-medium')
+                if req_start_date == req_end_date:
+                    ui.label(req_start_date.strftime('%A, %B %d, %Y')).classes('font-medium')
                 else:
-                    ui.label(f"{request.start_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
+                    ui.label(f"{req_start_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
                     ui.label('to').classes('text-xs opacity-60')
-                    ui.label(f"{request.end_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
+                    ui.label(f"{req_end_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
 
             # Duration
             with ui.card().classes('w-full p-3'):
                 ui.label('Duration').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                days = float(request.total_days)
-                hours = days * 8
+                hours = req_total_days * 8
                 ui.label(format_days(hours)).classes('font-medium')
 
             # Notes (if any)
-            if request.notes:
+            if req_notes:
                 with ui.card().classes('w-full p-3'):
                     ui.label('Notes').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                    ui.label(request.notes).classes('text-sm')
+                    ui.label(req_notes).classes('text-sm')
 
             # Denial reason (if denied)
-            if request.status == 'denied' and request.denial_reason:
+            if req_status == 'denied' and req_denial_reason:
                 with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
                     ui.label('Denial Reason').classes('text-xs font-semibold uppercase text-red-500 mb-2')
-                    ui.label(request.denial_reason).classes('text-sm')
+                    ui.label(req_denial_reason).classes('text-sm')
 
             # Manager Approval info (if approved)
-            if request.status == 'approved' and request.approved_at:
+            if req_status == 'approved' and req_approved_at:
                 with ui.card().classes('w-full p-3 border-l-4 border-green-500'):
                     ui.label('Manager Approved').classes('text-xs font-semibold uppercase text-green-600 mb-2')
-                    ui.label(request.approved_at.strftime('%A, %B %d, %Y')).classes('font-medium')
+                    ui.label(req_approved_at.strftime('%A, %B %d, %Y')).classes('font-medium')
 
             # Submission info
             with ui.row().classes('w-full justify-center text-xs opacity-50'):
-                ui.label(f'Submitted: {request.created_at.strftime("%b %d, %Y")}')
+                ui.label(f'Submitted: {req_created_at.strftime("%b %d, %Y")}')
 
             # Action buttons section
             def delete_request_direct():
@@ -1521,6 +1557,17 @@ def show_pto_detail_dialog(request):
                                 balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
 
                     del_db.commit()
+
+                    # Audit log the cancellation
+                    AuditService.log_pto_cancel(
+                        db=del_db,
+                        user_id=current_user.get('id'),
+                        username=current_user.get('username'),
+                        request_id=req_id,
+                        employee_name=req_employee_name,
+                        cancelled_by_self=is_own_request
+                    )
+
                     detail_dialog.close()
                     show_success_dialog('Success', 'Request deleted and balance restored', on_close=lambda: ui.navigate.to('/dashboard'))
                 finally:
@@ -1545,6 +1592,17 @@ def show_pto_detail_dialog(request):
                         balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
 
                     cancel_db.commit()
+
+                    # Audit log the cancellation
+                    AuditService.log_pto_cancel(
+                        db=cancel_db,
+                        user_id=current_user.get('id'),
+                        username=current_user.get('username'),
+                        request_id=req_id,
+                        employee_name=req_employee_name,
+                        cancelled_by_self=True
+                    )
+
                     detail_dialog.close()
                     show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
                 finally:
@@ -1588,15 +1646,17 @@ def show_pto_detail_dialog(request):
                 cancel_dialog.open()
 
             # Show action buttons based on role and status
+            # Don't allow cancellation of PTO that has already occurred
+            is_past_request = req_end_date < date.today()
+
             with ui.row().classes('w-full justify-end gap-2 mt-2'):
-                if can_direct_delete and req_status in ['pending', 'approved']:
+                if not is_past_request and can_direct_delete and req_status in ['pending', 'approved']:
                     ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
-                elif is_own_request and req_status == 'pending':
+                elif not is_past_request and is_own_request and req_status == 'pending':
                     ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
-                elif is_own_request and req_status == 'approved':
+                elif not is_past_request and is_own_request and req_status == 'approved':
                     # Check if cancellation already requested
-                    has_cancellation = hasattr(request, 'cancellation_requested') and request.cancellation_requested
-                    if not has_cancellation:
+                    if not req_cancellation_requested:
                         ui.button('Request Cancellation', icon='cancel_schedule_send', on_click=show_cancellation_dialog).props('color=amber')
                     else:
                         ui.label('Cancellation Pending').classes('text-amber-600 text-sm italic')

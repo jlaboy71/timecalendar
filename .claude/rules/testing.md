@@ -83,3 +83,9 @@ Before committing changes:
 1. Run syntax check on modified files
 2. Verify application starts without errors
 3. Test affected user workflows manually
+
+## Test Quality Rules
+- Don't hard-code values just to make tests pass - find the real issue
+- If a test seems wrong, investigate the code behavior first
+- Tests should validate business rules, not implementation details
+- Avoid test workarounds - report broken tests rather than coding around them

@@ -4,7 +4,7 @@ Uses database content (if available) for both display and AI search.
 """
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 from src.database import get_db
 
@@ -73,7 +73,7 @@ def handbook_page():
             render_handbook_content(handbook_content)
 
         # Back to Dashboard button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
 
 def render_ai_chat():

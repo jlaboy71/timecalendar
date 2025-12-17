@@ -1,8 +1,8 @@
 """Admin page for managing departments with dropdown filter and table display."""
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, validate_required, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, validate_required, show_warning_dialog, show_error_dialog, show_success_dialog
 from src.services.department_service import DepartmentService
 from src.services.user_service import UserService
 from src.models.user import User
@@ -87,8 +87,7 @@ def admin_departments_page():
                         try:
                             mgr_id = None if create_manager_select.value == 0 else create_manager_select.value
                             DepartmentService.create_department(db, name_input.value, code_input.value, mgr_id)
-                            ui.notify(f'Department "{name_input.value}" created successfully', type='positive')
-                            ui.navigate.to('/admin/departments')
+                            show_success_dialog('Department Created', f'Department "{name_input.value}" created successfully', on_close=lambda: ui.navigate.to('/admin/departments'))
                         except ValueError as e:
                             show_error_dialog('Error', str(e))
                         finally:
@@ -226,7 +225,7 @@ def admin_departments_page():
                                                 try:
                                                     mgr_id = None if edit_manager.value == 0 else edit_manager.value
                                                     DepartmentService.update_department(db, d['id'], name=edit_name.value, code=edit_code.value, manager_id=mgr_id)
-                                                    ui.notify('Department updated', type='positive')
+                                                    show_success_dialog('Department Updated', 'Department updated successfully')
                                                     edit_dialog.close()
                                                     ui.navigate.to('/admin/departments')
                                                 except ValueError as e:
@@ -257,7 +256,7 @@ def admin_departments_page():
                                                         db = next(get_db())
                                                         try:
                                                             DepartmentService.delete_department(db, d['id'])
-                                                            ui.notify('Deleted', type='positive')
+                                                            show_success_dialog('Deleted', 'Department deleted successfully')
                                                             delete_dialog.close()
                                                             ui.navigate.to('/admin/departments')
                                                         except ValueError as e:
@@ -311,4 +310,4 @@ def admin_departments_page():
         render_department_view()
 
         # Back to Dashboard button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')

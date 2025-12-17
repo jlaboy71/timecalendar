@@ -2,7 +2,7 @@
 from datetime import datetime, date
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 from src.services.year_end_service import YearEndService
 
@@ -312,7 +312,7 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
         # Action buttons
         with ui.row().classes('w-full gap-4 mt-4 justify-center'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')
             ui.button('Refresh Status', on_click=refresh_status, icon='refresh')
             if user_role == 'superadmin':
                 ui.button('System Administration', icon='settings', on_click=lambda: ui.navigate.to('/admin/system')).props('outline')

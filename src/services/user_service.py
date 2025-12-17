@@ -3,7 +3,7 @@ User service for managing user operations.
 """
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from ..models.user import User
 from ..schemas.user_schemas import UserCreate, UserUpdate, UserPasswordChange
 from ..utils.password import hash_password, verify_password
@@ -241,8 +241,8 @@ class UserService:
             return False
 
         # Delete related PTO records first (cascade)
-        self.db.query(PTORequest).filter(PTORequest.user_id == user_id).delete()
-        self.db.query(PTOBalance).filter(PTOBalance.user_id == user_id).delete()
+        self.db.execute(delete(PTORequest).where(PTORequest.user_id == user_id))
+        self.db.execute(delete(PTOBalance).where(PTOBalance.user_id == user_id))
 
         # Delete the user
         self.db.delete(user)

@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog, show_success_dialog
 from src.services.notification_service import NotificationService
 
@@ -48,7 +48,7 @@ def manager_settings_page():
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-3xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title='MANAGER SETTINGS', show_back=True)
 
         # Notification Preferences Card
@@ -382,4 +382,4 @@ def manager_settings_page():
 **Trusted Employees**: Employees marked as "trusted" have their standard PTO (Vacation, Sick, Personal) auto-approved. You still receive notifications for all requests regardless of auto-approval status.
             ''').classes('text-sm opacity-80')
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-4')

@@ -98,3 +98,13 @@ available = total + carryover - used - pending
 - Balances are per-user, per-year
 - Requests use start_date.year for balance lookup
 - Support for requests up to 5 years in advance
+
+## Migration Checklist
+Before adding or modifying model fields:
+1. **Create migration**: `venv\Scripts\python.exe -m alembic revision --autogenerate -m "description"`
+2. **Review generated file**: Check `alembic/versions/` for the new migration
+3. **Test upgrade**: `venv\Scripts\python.exe -m alembic upgrade head`
+4. **Test downgrade**: `venv\Scripts\python.exe -m alembic downgrade -1` (then upgrade again)
+5. **Update model docstring** if the field purpose isn't obvious
+
+**Never modify models without considering migration impact.**

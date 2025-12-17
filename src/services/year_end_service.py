@@ -11,6 +11,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import select, func
 
 from src.models.user import User
 from src.models.pto_balance import PTOBalance
@@ -18,8 +19,10 @@ from src.models.carryover_request import CarryoverRequest
 from src.models.market_holiday import MarketHoliday
 from src.models.year_end_status import YearEndStatus
 from src.models.leave_type import LeaveType
+from src.models.system_setting import SystemSetting
 from src.services.balance_service import BalanceService
 from src.services.accrual_service import AccrualService
+from src.services.report_storage_service import ReportStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +35,35 @@ class YearEndService:
     DEFAULT_SICK_DAYS = 5
     DEFAULT_PERSONAL_DAYS = 2
 
+    # Chicago Leave annual max (40 hours per ordinance)
+    CHICAGO_LEAVE_ANNUAL_MAX = Decimal('40.00')
+
     def __init__(self, db: Session):
         self.db = db
         self.balance_service = BalanceService(db)
+
+    def _get_chicago_leave_amount(self, user: User) -> Decimal:
+        """
+        Get Chicago Leave allocation for a user.
+
+        Returns 40 hours if:
+        1. Chicago Leave feature is enabled
+        2. User's location_city is 'Chicago'
+
+        Returns 0 otherwise.
+        """
+        # Check if feature is enabled
+        stmt = select(SystemSetting).where(SystemSetting.key == 'chicago.safe_leave_enabled')
+        chicago_setting = self.db.execute(stmt).scalar_one_or_none()
+
+        if not chicago_setting or not chicago_setting.bool_value:
+            return Decimal('0.00')
+
+        # Check if user is in Chicago
+        if user and user.location_city and user.location_city.lower() == 'chicago':
+            return self.CHICAGO_LEAVE_ANNUAL_MAX
+
+        return Decimal('0.00')
 
     def check_and_run_auto_processing(self) -> Optional[Dict]:
         """
@@ -48,9 +77,8 @@ class YearEndService:
         current_year = date.today().year
 
         # Check if already processed for current year
-        status = self.db.query(YearEndStatus).filter(
-            YearEndStatus.year == current_year
-        ).first()
+        stmt = select(YearEndStatus).where(YearEndStatus.year == current_year)
+        status = self.db.execute(stmt).scalar_one_or_none()
 
         if status and status.processed:
             logger.debug(f"Year-end processing already complete for {current_year}")
@@ -78,20 +106,21 @@ class YearEndService:
 
     def is_year_processed(self, year: int) -> bool:
         """Check if a year has been processed."""
-        status = self.db.query(YearEndStatus).filter(
-            YearEndStatus.year == year
-        ).first()
+        stmt = select(YearEndStatus).where(YearEndStatus.year == year)
+        status = self.db.execute(stmt).scalar_one_or_none()
         return status is not None and status.processed
 
     def get_processing_record(self, year: int) -> Optional[YearEndStatus]:
         """Get the processing record for a year."""
-        return self.db.query(YearEndStatus).filter(
-            YearEndStatus.year == year
-        ).first()
+        stmt = select(YearEndStatus).where(YearEndStatus.year == year)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def process_year_transition(self, new_year: int) -> Dict:
         """
         Process the transition to a new year.
+
+        All database operations are wrapped in a single transaction.
+        If any step fails, all changes are rolled back to prevent partial/corrupt data.
 
         Args:
             new_year: The new year to process (e.g., 2026)
@@ -104,28 +133,48 @@ class YearEndService:
             'balances_created': 0,
             'carryovers_applied': 0,
             'holidays_created': 0,
+            'reports_purged': 0,
             'errors': []
         }
 
         try:
+            # All database operations in a single transaction
             # Step 1: Create balances for all active employees
-            balances_result = self.create_new_year_balances(new_year)
+            balances_result = self._create_new_year_balances_no_commit(new_year)
             results['balances_created'] = balances_result['created']
             results['errors'].extend(balances_result.get('errors', []))
 
             # Step 2: Apply approved carryover from previous year
-            carryover_result = self.apply_approved_carryover(new_year)
+            carryover_result = self._apply_approved_carryover_no_commit(new_year)
             results['carryovers_applied'] = carryover_result['applied']
             results['errors'].extend(carryover_result.get('errors', []))
 
             # Step 3: Generate federal holidays for new year
-            holidays_result = self.generate_federal_holidays(new_year)
+            holidays_result = self._generate_federal_holidays_no_commit(new_year)
             results['holidays_created'] = holidays_result['created']
+
+            # If we had any errors during processing, rollback
+            if results['errors']:
+                logger.error(f"Year-end processing had errors, rolling back: {results['errors']}")
+                self.db.rollback()
+                return results
+
+            # All steps succeeded - commit the transaction
+            self.db.commit()
+            logger.info(f"Year-end processing committed successfully for {new_year}")
+
+            # Step 4: Purge auto-notify reports (file operation, done after DB commit)
+            previous_year = new_year - 1
+            reports_purged = ReportStorageService.purge_year_reports(previous_year)
+            results['reports_purged'] = reports_purged
+            if reports_purged > 0:
+                logger.info(f"Purged {reports_purged} auto-notify reports from {previous_year}")
 
             logger.info(f"Year-end processing complete for {new_year}: {results}")
 
         except Exception as e:
-            logger.error(f"Year-end processing failed: {str(e)}")
+            logger.error(f"Year-end processing failed, rolling back: {str(e)}")
+            self.db.rollback()
             results['errors'].append(str(e))
 
         return results
@@ -133,6 +182,22 @@ class YearEndService:
     def create_new_year_balances(self, year: int) -> Dict:
         """
         Create PTO balances for all active employees for the new year.
+        This is the standalone version that commits after completion.
+
+        Args:
+            year: The year to create balances for
+
+        Returns:
+            Dictionary with creation results
+        """
+        result = self._create_new_year_balances_no_commit(year)
+        if not result['errors']:
+            self.db.commit()
+        return result
+
+    def _create_new_year_balances_no_commit(self, year: int) -> Dict:
+        """
+        Internal: Create PTO balances without committing (for transaction participation).
 
         Args:
             year: The year to create balances for
@@ -143,12 +208,12 @@ class YearEndService:
         result = {'created': 0, 'skipped': 0, 'errors': []}
 
         # Get all active employees
-        active_users = self.db.query(User).filter(User.is_active == True).all()
+        stmt = select(User).where(User.is_active == True)
+        active_users = self.db.execute(stmt).scalars().all()
 
         # Pre-fetch all existing balances for this year in one query (avoid N+1)
-        existing_balances = self.db.query(PTOBalance.user_id).filter(
-            PTOBalance.year == year
-        ).all()
+        stmt = select(PTOBalance.user_id).where(PTOBalance.year == year)
+        existing_balances = self.db.execute(stmt).all()
         existing_user_ids = {b.user_id for b in existing_balances}
 
         for user in active_users:
@@ -160,6 +225,9 @@ class YearEndService:
 
                 # Calculate PTO allocation based on tenure
                 vacation_days = self._calculate_vacation_allocation(user)
+
+                # Get Chicago leave amount if applicable
+                chicago_leave = self._get_chicago_leave_amount(user)
 
                 # Create new balance
                 balance = PTOBalance(
@@ -174,7 +242,12 @@ class YearEndService:
                     personal_used=Decimal('0.00'),
                     vacation_carryover=Decimal('0.00'),
                     sick_carryover=Decimal('0.00'),
-                    personal_carryover=Decimal('0.00')
+                    personal_carryover=Decimal('0.00'),
+                    # Chicago Leave (uses chicago_paid_leave fields - 16hr carryover max)
+                    chicago_paid_leave_total=chicago_leave,
+                    chicago_paid_leave_used=Decimal('0.00'),
+                    chicago_paid_leave_pending=Decimal('0.00'),
+                    chicago_paid_leave_carryover=Decimal('0.00')
                 )
 
                 self.db.add(balance)
@@ -186,7 +259,7 @@ class YearEndService:
                 logger.error(error_msg)
                 result['errors'].append(error_msg)
 
-        self.db.commit()
+        self.db.flush()  # Flush to DB but don't commit
         return result
 
     def _calculate_vacation_allocation(self, user: User) -> int:
@@ -218,8 +291,24 @@ class YearEndService:
     def apply_approved_carryover(self, new_year: int) -> Dict:
         """
         Apply approved carryover requests to new year balances.
+        This is the standalone version that commits after completion.
 
         Enforces the policy cap - total sick_carryover cannot exceed max_carryover_hours.
+
+        Args:
+            new_year: The year to apply carryover to
+
+        Returns:
+            Dictionary with application results
+        """
+        result = self._apply_approved_carryover_no_commit(new_year)
+        if not result['errors']:
+            self.db.commit()
+        return result
+
+    def _apply_approved_carryover_no_commit(self, new_year: int) -> Dict:
+        """
+        Internal: Apply approved carryover without committing (for transaction participation).
 
         Args:
             new_year: The year to apply carryover to
@@ -231,28 +320,25 @@ class YearEndService:
         previous_year = new_year - 1
 
         # Find all approved carryover requests for this transition
-        approved_carryovers = self.db.query(CarryoverRequest).filter(
+        stmt = select(CarryoverRequest).where(
             CarryoverRequest.status == 'approved',
             CarryoverRequest.from_year == previous_year,
             CarryoverRequest.to_year == new_year
-        ).all()
+        )
+        approved_carryovers = self.db.execute(stmt).scalars().all()
 
         if not approved_carryovers:
             return result
 
         # Pre-fetch all balances and users in bulk to avoid N+1 queries
         carryover_user_ids = [c.employee_id for c in approved_carryovers]
-        existing_balances = {
-            b.user_id: b for b in self.db.query(PTOBalance).filter(
-                PTOBalance.user_id.in_(carryover_user_ids),
-                PTOBalance.year == new_year
-            ).all()
-        }
-        users_map = {
-            u.id: u for u in self.db.query(User).filter(
-                User.id.in_(carryover_user_ids)
-            ).all()
-        }
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id.in_(carryover_user_ids),
+            PTOBalance.year == new_year
+        )
+        existing_balances = {b.user_id: b for b in self.db.execute(stmt).scalars().all()}
+        stmt = select(User).where(User.id.in_(carryover_user_ids))
+        users_map = {u.id: u for u in self.db.execute(stmt).scalars().all()}
 
         # Get accrual service for policy lookups
         accrual_service = AccrualService(self.db)
@@ -267,13 +353,19 @@ class YearEndService:
                     user = users_map.get(carryover.employee_id)
                     if user:
                         vacation_days = self._calculate_vacation_allocation(user)
+                        chicago_leave = self._get_chicago_leave_amount(user)
                         balance = PTOBalance(
                             user_id=carryover.employee_id,
                             year=new_year,
                             vacation_total=Decimal(str(vacation_days)),
                             sick_total=Decimal(str(self.DEFAULT_SICK_DAYS)),
                             personal_total=Decimal(str(self.DEFAULT_PERSONAL_DAYS)),
-                            sick_carryover=Decimal('0.00')
+                            sick_carryover=Decimal('0.00'),
+                            # Chicago Leave (uses chicago_paid_leave fields)
+                            chicago_paid_leave_total=chicago_leave,
+                            chicago_paid_leave_used=Decimal('0.00'),
+                            chicago_paid_leave_pending=Decimal('0.00'),
+                            chicago_paid_leave_carryover=Decimal('0.00')
                         )
                         self.db.add(balance)
                         self.db.flush()
@@ -320,12 +412,27 @@ class YearEndService:
                 logger.error(error_msg)
                 result['errors'].append(error_msg)
 
-        self.db.commit()
+        self.db.flush()  # Flush to DB but don't commit
         return result
 
     def generate_federal_holidays(self, year: int) -> Dict:
         """
         Generate federal/market holidays for a given year.
+        This is the standalone version that commits after completion.
+
+        Args:
+            year: The year to generate holidays for
+
+        Returns:
+            Dictionary with creation results
+        """
+        result = self._generate_federal_holidays_no_commit(year)
+        self.db.commit()
+        return result
+
+    def _generate_federal_holidays_no_commit(self, year: int) -> Dict:
+        """
+        Internal: Generate federal holidays without committing (for transaction participation).
 
         Args:
             year: The year to generate holidays for
@@ -338,12 +445,11 @@ class YearEndService:
         holidays = self._calculate_federal_holidays(year)
 
         # Pre-fetch existing federal holidays for this year in one query
-        existing_holidays = {
-            h.holiday_date for h in self.db.query(MarketHoliday.holiday_date).filter(
-                MarketHoliday.year == year,
-                MarketHoliday.market == 'Federal'
-            ).all()
-        }
+        stmt = select(MarketHoliday.holiday_date).where(
+            MarketHoliday.year == year,
+            MarketHoliday.market == 'Federal'
+        )
+        existing_holidays = {h.holiday_date for h in self.db.execute(stmt).all()}
 
         for holiday_data in holidays:
             # Check if already exists from pre-fetched set
@@ -361,7 +467,7 @@ class YearEndService:
             self.db.add(holiday)
             result['created'] += 1
 
-        self.db.commit()
+        self.db.flush()  # Flush to DB but don't commit
         logger.info(f"Generated {result['created']} federal holidays for {year}")
         return result
 
@@ -551,28 +657,29 @@ class YearEndService:
         previous_year = year - 1
 
         # Count balances
-        balances_count = self.db.query(PTOBalance).filter(
-            PTOBalance.year == year
-        ).count()
+        stmt = select(func.count()).select_from(PTOBalance).where(PTOBalance.year == year)
+        balances_count = self.db.execute(stmt).scalar()
 
-        active_users = self.db.query(User).filter(User.is_active == True).count()
+        stmt = select(func.count()).select_from(User).where(User.is_active == True)
+        active_users = self.db.execute(stmt).scalar()
 
         # Count pending carryovers
-        pending_carryovers = self.db.query(CarryoverRequest).filter(
+        stmt = select(func.count()).select_from(CarryoverRequest).where(
             CarryoverRequest.status == 'pending',
             CarryoverRequest.from_year == previous_year
-        ).count()
+        )
+        pending_carryovers = self.db.execute(stmt).scalar()
 
-        approved_carryovers = self.db.query(CarryoverRequest).filter(
+        stmt = select(func.count()).select_from(CarryoverRequest).where(
             CarryoverRequest.status == 'approved',
             CarryoverRequest.from_year == previous_year,
             CarryoverRequest.to_year == year
-        ).count()
+        )
+        approved_carryovers = self.db.execute(stmt).scalar()
 
         # Count holidays
-        holidays_count = self.db.query(MarketHoliday).filter(
-            MarketHoliday.year == year
-        ).count()
+        stmt = select(func.count()).select_from(MarketHoliday).where(MarketHoliday.year == year)
+        holidays_count = self.db.execute(stmt).scalar()
 
         return {
             'year': year,

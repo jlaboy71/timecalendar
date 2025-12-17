@@ -14,6 +14,36 @@ from datetime import date
 logger = logging.getLogger(__name__)
 
 
+def _get_pto_type_icon(pto_type: str) -> str:
+    """Get emoji icon for PTO type."""
+    icons = {
+        'vacation': '🏖️',
+        'sick': '🏥',
+        'personal': '👤',
+        'bereavement': '🕯️',
+        'fmla': '👨‍👩‍👧',
+        'jury_duty': '⚖️',
+        'voting': '🗳️',
+        'military': '🎖️',
+        'chicago_safe_leave': '📍',
+        'chicago_paid_leave': '📍',
+    }
+    return icons.get(pto_type.lower(), '📅')
+
+
+def _format_date_with_day(d: date) -> str:
+    """Format date with day of week (e.g., 'Monday, December 16, 2024')."""
+    return d.strftime('%A, %B %d, %Y')
+
+
+def _format_date_range_with_days(start_date: date, end_date: date) -> str:
+    """Format date range with days of week."""
+    if start_date == end_date:
+        return _format_date_with_day(start_date)
+    else:
+        return f"{start_date.strftime('%A, %B %d')} - {_format_date_with_day(end_date)}"
+
+
 def _get_logo_base64() -> str:
     """Get the TJM logo as base64 string for email embedding."""
     try:
@@ -153,14 +183,24 @@ class EmailService:
         total_days: float
     ) -> bool:
         """Send confirmation email when PTO request is submitted."""
-        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Submitted"
+        pto_icon = _get_pto_type_icon(pto_type)
+        pto_label = pto_type.replace('_', ' ').title()
+        subject = f"TJM Time Calendar: Your {pto_label} Request Submitted"
 
-        date_range = start_date.strftime('%B %d, %Y')
-        if start_date != end_date:
-            date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+        date_range = _format_date_range_with_days(start_date, end_date)
 
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        # Chicago Safe Leave indicator
+        chicago_row = ""
+        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+            chicago_row = """
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Location:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">📍 Chicago (Paid Leave)</td>
+                </tr>
+            """
 
         content = f"""
         <p style="font-size: 16px; margin-bottom: 20px;">Hi {employee_name},</p>
@@ -170,8 +210,9 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {pto_label}</td>
                 </tr>
+                {chicago_row}
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
                     <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
@@ -203,14 +244,24 @@ class EmailService:
         approver_name: str
     ) -> bool:
         """Send email when PTO request is approved."""
-        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Approved"
+        pto_icon = _get_pto_type_icon(pto_type)
+        pto_label = pto_type.replace('_', ' ').title()
+        subject = f"TJM Time Calendar: Your {pto_label} Request Approved"
 
-        date_range = start_date.strftime('%B %d, %Y')
-        if start_date != end_date:
-            date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+        date_range = _format_date_range_with_days(start_date, end_date)
 
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        # Chicago Safe Leave indicator
+        chicago_row = ""
+        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+            chicago_row = """
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Location:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #22c55e;">📍 Chicago (Paid Leave)</td>
+                </tr>
+            """
 
         content = f"""
         <p style="font-size: 16px; margin-bottom: 20px;">Hi {employee_name},</p>
@@ -220,8 +271,9 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {pto_label}</td>
                 </tr>
+                {chicago_row}
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
                     <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
@@ -258,11 +310,11 @@ class EmailService:
         reason: Optional[str] = None
     ) -> bool:
         """Send email when PTO request is denied."""
-        subject = f"TJM Time Calendar: Your {pto_type.replace('_', ' ').title()} Request Denied"
+        pto_icon = _get_pto_type_icon(pto_type)
+        pto_label = pto_type.replace('_', ' ').title()
+        subject = f"TJM Time Calendar: Your {pto_label} Request Denied"
 
-        date_range = start_date.strftime('%B %d, %Y')
-        if start_date != end_date:
-            date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+        date_range = _format_date_range_with_days(start_date, end_date)
 
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
@@ -284,7 +336,7 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {pto_label}</td>
                 </tr>
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
@@ -322,14 +374,24 @@ class EmailService:
         total_days: float
     ) -> bool:
         """Send email to manager when new PTO request needs approval."""
-        subject = f"TJM Time Calendar: New {pto_type.replace('_', ' ').title()} Request from {employee_name}"
+        pto_icon = _get_pto_type_icon(pto_type)
+        pto_label = pto_type.replace('_', ' ').title()
+        subject = f"TJM Time Calendar: New {pto_label} Request from {employee_name}"
 
-        date_range = start_date.strftime('%B %d, %Y')
-        if start_date != end_date:
-            date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+        date_range = _format_date_range_with_days(start_date, end_date)
 
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        # Chicago Safe Leave indicator
+        chicago_row = ""
+        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+            chicago_row = """
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Location:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">📍 Chicago (Paid Leave)</td>
+                </tr>
+            """
 
         content = f"""
         <p style="font-size: 16px; margin-bottom: 20px;">Hi {manager_name},</p>
@@ -343,8 +405,9 @@ class EmailService:
                 </tr>
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                    <td style="padding: 8px 0; font-weight: 600;">{pto_type.replace('_', ' ').title()}</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {pto_label}</td>
                 </tr>
+                {chicago_row}
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
                     <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
@@ -362,6 +425,60 @@ class EmailService:
             title_color="#f59e0b",
             content=content,
             footer_text="Please log in to TJM Time Calendar to approve or deny this request."
+        )
+        return self._send_email(manager_email, subject, html)
+
+    def send_pto_cancelled_notification(
+        self,
+        manager_email: str,
+        manager_name: str,
+        employee_name: str,
+        pto_type: str,
+        start_date: date,
+        end_date: date,
+        total_days: float
+    ) -> bool:
+        """Send email to manager when an employee cancels their approved PTO."""
+        pto_icon = _get_pto_type_icon(pto_type)
+        pto_label = pto_type.replace('_', ' ').title()
+        subject = f"TJM Time Calendar: {employee_name} Cancelled Approved {pto_label}"
+
+        date_range = _format_date_range_with_days(start_date, end_date)
+
+        # Format days nicely
+        days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {manager_name},</p>
+        <p style="margin-bottom: 25px;">An employee has <span style="color: #ef4444; font-weight: 600;">cancelled</span> their previously approved time off.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{employee_name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {pto_label}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #ef4444;">{days_display}</td>
+                </tr>
+            </table>
+        </div>
+        """
+
+        html = _get_email_template(
+            title="Approved PTO Cancelled",
+            title_color="#ef4444",
+            content=content,
+            footer_text="The employee's PTO balance has been restored automatically."
         )
         return self._send_email(manager_email, subject, html)
 

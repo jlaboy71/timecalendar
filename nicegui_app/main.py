@@ -1,6 +1,5 @@
 from nicegui import ui, app
 import sys
-import re
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -13,7 +12,6 @@ from src.database import get_db, init_db
 from src.config import config
 # Import all models to ensure they're registered with Base before init_db
 from src import models
-from src.services.audit_service import AuditService
 from nicegui_app.pages.login import login_page
 from nicegui_app.pages.dashboard import dashboard_page
 from nicegui_app.pages.request_form import request_form_page
@@ -38,8 +36,8 @@ from nicegui_app.pages.admin_system import admin_system_page
 from nicegui_app.pages.admin_email_preview import email_preview_page
 from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length
-from src.services.session_manager import SessionManager, require_auth
+from nicegui_app.components.theme import apply_dark_mode
+from src.services.session_manager import require_auth
 from src.services.email_service import email_service
 
 # Ensure all database tables exist (creates any missing tables)
@@ -57,6 +55,107 @@ if config.is_production and config.ssl_enabled:
     from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
     app.add_middleware(HTTPSRedirectMiddleware)
     logger.info("HTTPS redirect middleware enabled for production")
+
+# Security headers middleware - always enabled
+from src.middleware.security import add_security_headers
+add_security_headers(app)
+logger.info("Security headers middleware enabled")
+
+
+# Global exception handler middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import HTMLResponse
+from src.services.monitoring_service import MonitoringService
+
+class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
+    """
+    Global exception handler that logs errors and returns user-friendly messages.
+
+    Does not expose stack traces to users in production.
+    """
+    async def dispatch(self, request, call_next):
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as e:
+            # Get user context if available
+            user_context = None
+            try:
+                user = app.storage.general.get('user')
+                if user:
+                    user_context = {
+                        'user_id': user.get('id'),
+                        'username': user.get('username'),
+                        'role': user.get('role')
+                    }
+            except Exception:
+                pass
+
+            # Log and alert using monitoring service
+            monitoring = MonitoringService()
+            monitoring.log_exception(
+                exception=e,
+                context=f"Request to {request.url.path}",
+                user_context=user_context,
+                send_alert=True
+            )
+
+            # Return user-friendly error page
+            error_html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error - TJM Time Calendar</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                <h1 style="color: #5a6a72;">Something went wrong</h1>
+                <p>We encountered an unexpected error processing your request.</p>
+                <p>Our team has been notified and is working to fix the issue.</p>
+                <p><a href="/dashboard" style="color: #c9a227;">Return to Dashboard</a></p>
+            </body>
+            </html>
+            """
+            return HTMLResponse(content=error_html, status_code=500)
+
+app.add_middleware(ExceptionHandlerMiddleware)
+logger.info("Global exception handler middleware enabled")
+
+
+# Health check endpoint for monitoring
+from datetime import datetime, timezone
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
+@app.get('/health')
+async def health_check():
+    """
+    Health check endpoint for monitoring and load balancers.
+
+    Returns:
+        JSON with application health status including database connectivity.
+    """
+    health_status = {
+        'status': 'healthy',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'version': '1.0.0',
+        'database': 'unknown'
+    }
+
+    # Test database connectivity
+    try:
+        db = next(get_db())
+        try:
+            # Simple query to verify connection
+            db.execute(text('SELECT 1'))
+            health_status['database'] = 'connected'
+        finally:
+            db.close()
+    except Exception as e:
+        health_status['status'] = 'unhealthy'
+        health_status['database'] = 'error'
+        health_status['database_error'] = str(e)
+        return JSONResponse(content=health_status, status_code=503)
+
+    return JSONResponse(content=health_status, status_code=200)
+
 
 @ui.page('/')
 def home(timeout: str = None):

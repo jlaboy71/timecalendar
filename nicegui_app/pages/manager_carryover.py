@@ -10,8 +10,9 @@ from src.models.user import User
 from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog
+from src.services.audit_service import AuditService
 
 
 def manager_carryover_page():
@@ -34,7 +35,7 @@ def manager_carryover_page():
     is_admin = user.get('role') in ['admin', 'superadmin']
     current_year = date.today().year
 
-    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Header with greeting
         page_header(title='CARRYOVER REQUEST APPROVALS', show_back=False)
         ui.label(f'Review carryover requests from {current_year} to {current_year + 1}').classes('opacity-70 mb-6')
@@ -275,7 +276,20 @@ def manager_carryover_page():
                         ) + Decimal(str(hours_approved))
 
                 db.commit()
-                ui.notify(f'Approved {hours_approved} hours carryover', type='positive')
+
+                # Audit log the approval
+                employee = db.query(User).filter(User.id == request.employee_id).first()
+                employee_name = employee.full_name if employee else 'Unknown'
+                AuditService.log_carryover_approve(
+                    db=db,
+                    approver_id=user['id'],
+                    approver_name=user.get('full_name', user.get('username')),
+                    request_id=request_id,
+                    employee_name=employee_name,
+                    hours_approved=hours_approved
+                )
+
+                show_success_dialog('Carryover Approved', f'Approved {hours_approved} hours carryover')
                 load_requests()
 
             except Exception as e:
@@ -305,7 +319,20 @@ def manager_carryover_page():
                 request.manager_notes = manager_notes.strip() if manager_notes else None
 
                 db.commit()
-                ui.notify('Carryover request denied', type='info')
+
+                # Audit log the denial
+                employee = db.query(User).filter(User.id == request.employee_id).first()
+                employee_name = employee.full_name if employee else 'Unknown'
+                AuditService.log_carryover_deny(
+                    db=db,
+                    approver_id=user['id'],
+                    approver_name=user.get('full_name', user.get('username')),
+                    request_id=request_id,
+                    employee_name=employee_name,
+                    reason=manager_notes.strip() if manager_notes else None
+                )
+
+                show_info_dialog('Carryover Denied', 'Carryover request has been denied')
                 load_requests()
 
             except Exception as e:
@@ -319,4 +346,4 @@ def manager_carryover_page():
 
         # Back button
         with ui.row().classes('w-full mt-6'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')

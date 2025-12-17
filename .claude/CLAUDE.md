@@ -39,3 +39,9 @@ cd c:\Users\jlaboy\codelab\projects\TimeCalendar
 venv\Scripts\python.exe nicegui_app/main.py
 ```
 Access at: http://localhost:8080
+
+## Critical Reminders
+- **Audit Trail**: Any action affecting PTO balances or requests must use `AuditService` (see `src/services/audit_service.py`)
+- **Business Rules**: Reference `business-rules.md` when modifying PTO logic to ensure handbook compliance
+- **Migrations**: Reference `database.md` checklist before adding/modifying model fields
+- **Role Testing**: When adding features, verify behavior for all 4 roles (employee, manager, admin, superadmin)

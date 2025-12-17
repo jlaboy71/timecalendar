@@ -7,7 +7,9 @@ from pathlib import Path
 from nicegui import ui, app
 from src.database import get_db
 from src.config import config
-from nicegui_app.components.header import page_header
+from src.services.audit_service import AuditService
+from src.models.audit_log import AuditLog
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, create_help_button
 
 
@@ -1003,7 +1005,7 @@ def admin_system_page():
 
                     # Email preview - embedded from admin_email_preview.py
                     from datetime import date as date_type, timedelta
-                    from src.services.email_service import _get_email_template
+                    from src.services.email_service import _get_email_template, _get_pto_type_icon, _format_date_range_with_days
 
                     sample_employee = "John Smith"
                     sample_manager = "Jane Doe"
@@ -1011,12 +1013,15 @@ def admin_system_page():
                     sample_start = date_type.today() + timedelta(days=7)
                     sample_end = date_type.today() + timedelta(days=10)
                     sample_days = 4.0
+                    pto_icon = _get_pto_type_icon('vacation')
+                    date_range = _format_date_range_with_days(sample_start, sample_end)
 
                     email_types = {
                         'submitted': 'EMP: REQUEST SUBMITTED',
                         'approved': 'EMP: REQUEST APPROVED',
                         'denied': 'EMP: REQUEST DENIED',
                         'pending': 'MAN: REQUEST ARRIVED',
+                        'cancelled': 'MAN: PTO CANCELLED',
                         'chicago': 'CHICAGO SAFE LEAVE',
                         'report': 'ADMIN: REPORT EMAIL'
                     }
@@ -1026,7 +1031,6 @@ def admin_system_page():
 
                     def generate_email_preview(email_type: str) -> str:
                         days_display = str(int(sample_days)) if sample_days == int(sample_days) else f"{sample_days:.1f}"
-                        date_range = f"{sample_start.strftime('%B %d')} - {sample_end.strftime('%B %d, %Y')}"
 
                         if email_type == 'submitted':
                             content = f"""
@@ -1034,7 +1038,7 @@ def admin_system_page():
                             <p style="margin-bottom: 25px;">Your time off request has been submitted and is <span style="color: #f59e0b; font-weight: 600;">pending approval</span>.</p>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
                                 <table style="width: 100%; color: #e5e7eb;">
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
                                 </table>
@@ -1048,7 +1052,7 @@ def admin_system_page():
                             <p style="margin-bottom: 25px;">Great news! Your time off request has been <span style="color: #22c55e; font-weight: 600;">approved</span>.</p>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e;">
                                 <table style="width: 100%; color: #e5e7eb;">
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #22c55e;">{days_display}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Approved by:</td><td style="padding: 8px 0; font-weight: 600;">{sample_manager}</td></tr>
@@ -1063,7 +1067,7 @@ def admin_system_page():
                             <p style="margin-bottom: 25px;">Unfortunately, your time off request has been <span style="color: #ef4444; font-weight: 600;">denied</span>.</p>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
                                 <table style="width: 100%; color: #e5e7eb;">
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600;">{days_display}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Reviewed by:</td><td style="padding: 8px 0; font-weight: 600;">{sample_manager}</td></tr>
@@ -1080,13 +1084,28 @@ def admin_system_page():
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
                                 <table style="width: 100%; color: #e5e7eb;">
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td></tr>
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
                                 </table>
                             </div>
                             """
                             return _get_email_template(title="New Request Pending", title_color="#f59e0b", content=content, footer_text="Please log in to TJM Time Calendar to approve or deny this request.")
+
+                        elif email_type == 'cancelled':
+                            content = f"""
+                            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_manager},</p>
+                            <p style="margin-bottom: 25px;">An employee has <span style="color: #ef4444; font-weight: 600;">cancelled</span> their previously approved time off.</p>
+                            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <table style="width: 100%; color: #e5e7eb;">
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #ef4444;">{days_display}</td></tr>
+                                </table>
+                            </div>
+                            """
+                            return _get_email_template(title="Approved PTO Cancelled", title_color="#ef4444", content=content, footer_text="The employee's PTO balance has been restored automatically.")
 
                         elif email_type == 'chicago':
                             # Chicago Safe Leave submitted email preview
@@ -1137,7 +1156,7 @@ def admin_system_page():
                                     render_email_preview()
                                 return handler
 
-                            colors = {'submitted': '#f59e0b', 'approved': '#22c55e', 'denied': '#ef4444', 'pending': '#f59e0b', 'chicago': '#a855f7', 'report': '#C9A227'}
+                            colors = {'submitted': '#f59e0b', 'approved': '#22c55e', 'denied': '#ef4444', 'pending': '#f59e0b', 'cancelled': '#ef4444', 'chicago': '#a855f7', 'report': '#C9A227'}
                             color = colors.get(key, '#6b7280')
                             ui.button(label, on_click=make_preview_handler()).props('outline').classes('flex-1').style(f'border-color: {color}; color: {color}; font-size: 11px; padding: 8px 4px; font-weight: 600;')
 
@@ -1192,7 +1211,8 @@ def admin_system_page():
                 error_log_path = logs_dir / 'tjm_calendar_errors.log'
 
                 # State for current log and AI analysis
-                log_state = {'current_log': 'main', 'current_content': ''}
+                # Options: 'main', 'errors', 'audit'
+                log_state = {'current_log': 'main', 'current_content': '', 'audit_filter': 'all', 'filter_select': None}
 
                 # Log Files Overview Card
                 with ui.card().classes('w-full p-4 mb-4'):
@@ -1201,7 +1221,7 @@ def admin_system_page():
                         ui.label('Log Files').classes('text-lg font-semibold')
 
                     # Container for log file cards (will be refreshed dynamically)
-                    log_cards_container = ui.row().classes('w-full gap-4')
+                    log_cards_container = ui.row().classes('w-full gap-4 items-stretch')
 
                     # AI Analysis results container (declared early for refresh_log_cards reference)
                     ai_analysis_container = ui.column().classes('w-full')
@@ -1225,8 +1245,10 @@ def admin_system_page():
                                 refresh_log_cards()
                                 ai_analysis_container.clear()
                                 ai_analysis_container.set_visibility(False)
+                                if log_state.get('filter_select'):
+                                    log_state['filter_select'].set_visibility(False)
 
-                            with ui.card().classes('p-4 cursor-pointer hover:shadow-md transition-shadow flex-1').on('click', switch_to_main):
+                            with ui.card().classes('p-4 cursor-pointer hover:shadow-md transition-shadow flex-1').style('min-height: 100px;').on('click', switch_to_main):
                                 with ui.row().classes('w-full items-center gap-3'):
                                     ui.icon('article', color='blue', size='md')
                                     with ui.column().classes('flex-1'):
@@ -1243,9 +1265,11 @@ def admin_system_page():
                                 refresh_log_cards()
                                 ai_analysis_container.clear()
                                 ai_analysis_container.set_visibility(False)
+                                if log_state.get('filter_select'):
+                                    log_state['filter_select'].set_visibility(False)
 
                             error_has_content = error_exists and error_size > 0
-                            with ui.card().classes(f'p-4 cursor-pointer hover:shadow-md transition-shadow flex-1 {"border-red-300 border-2" if error_has_content else ""}').on('click', switch_to_errors):
+                            with ui.card().classes(f'p-4 cursor-pointer hover:shadow-md transition-shadow flex-1 {"border-red-300 border-2" if error_has_content else ""}').style('min-height: 100px;').on('click', switch_to_errors):
                                 with ui.row().classes('w-full items-center gap-3'):
                                     ui.icon('error_outline', color='red', size='md')
                                     with ui.column().classes('flex-1'):
@@ -1257,6 +1281,33 @@ def admin_system_page():
                                             ui.badge('Has Errors', color='red').props('dense')
                                         else:
                                             ui.badge('Clear', color='green').props('dense')
+
+                            # Audit log card
+                            def switch_to_audit():
+                                log_state['current_log'] = 'audit'
+                                refresh_logs()
+                                refresh_log_cards()
+                                ai_analysis_container.clear()
+                                ai_analysis_container.set_visibility(False)
+                                if log_state.get('filter_select'):
+                                    log_state['filter_select'].set_visibility(True)
+
+                            # Get audit log count
+                            audit_db = next(get_db())
+                            try:
+                                audit_count = audit_db.query(AuditLog).count()
+                            finally:
+                                audit_db.close()
+
+                            with ui.card().classes(f'p-4 cursor-pointer hover:shadow-md transition-shadow flex-1 {"border-l-4 border-purple-500" if log_state["current_log"] == "audit" else ""}').style('min-height: 100px;').on('click', switch_to_audit):
+                                with ui.row().classes('w-full items-center gap-3'):
+                                    ui.icon('security', color='purple', size='md')
+                                    with ui.column().classes('flex-1'):
+                                        ui.label('Audit Log').classes('font-semibold')
+                                        ui.label('User actions and security events').classes('text-xs opacity-70')
+                                    with ui.column().classes('items-end'):
+                                        ui.label(f'{audit_count} entries').classes('font-mono text-sm')
+                                        ui.badge('Database', color='purple').props('dense')
 
                     # Initial render
                     refresh_log_cards()
@@ -1296,13 +1347,63 @@ def admin_system_page():
                                 auto_refresh_label = ui.label('Auto').classes('text-xs')
                             ui.button('Refresh', icon='refresh', on_click=refresh_all).props('flat dense')
 
-                    # Log viewer (tall to fill the viewing area)
-                    log_display = ui.textarea('').props('outlined readonly').classes('w-full font-mono text-xs bg-gray-50 dark:bg-gray-900').style('height: 380px;')
+                    # Log viewer - use rows prop for reliable height control
+                    log_display = ui.textarea('').props('outlined readonly rows=30').classes('w-full font-mono text-xs bg-gray-50 dark:bg-gray-900')
 
                     def get_current_log_path():
                         return error_log_path if log_state['current_log'] == 'errors' else main_log_path
 
                     def refresh_logs(lines=100):
+                        # Handle audit logs separately (from database)
+                        if log_state['current_log'] == 'audit':
+                            current_log_label.set_text('Viewing: Audit Log')
+                            audit_db = next(get_db())
+                            try:
+                                # Build query based on filter
+                                query = audit_db.query(AuditLog)
+
+                                # Apply filter
+                                filter_val = log_state.get('audit_filter', 'all')
+                                if filter_val == 'login':
+                                    query = query.filter(AuditLog.action.like('login%'))
+                                elif filter_val == 'pto':
+                                    query = query.filter(AuditLog.action.like('pto%'))
+                                elif filter_val == 'user':
+                                    query = query.filter(AuditLog.action.like('user%'))
+                                elif filter_val == 'carryover':
+                                    query = query.filter(AuditLog.action.like('carryover%'))
+
+                                audit_logs = query.order_by(AuditLog.created_at.desc()).limit(lines).all()
+
+                                if not audit_logs:
+                                    log_display.value = 'No audit log entries found.'
+                                    log_state['current_content'] = ''
+                                    return
+
+                                # Format audit logs for display with better formatting
+                                log_lines = []
+                                log_lines.append(f"{'Timestamp':<20} | {'User':<20} | {'Action':<20} | {'Entity':<20} | Details")
+                                log_lines.append("-" * 120)
+                                for log in audit_logs:
+                                    timestamp = log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else 'N/A'
+                                    username = (log.username or 'System')[:20]
+                                    action = (log.action or 'unknown')[:20]
+                                    entity = f"{log.entity_type}:{log.entity_id}" if log.entity_type else ''
+                                    entity = entity[:20]
+                                    details = log.details or ''
+                                    log_lines.append(f"{timestamp:<20} | {username:<20} | {action:<20} | {entity:<20} | {details}")
+
+                                content = '\n'.join(log_lines)
+                                log_display.value = content
+                                log_state['current_content'] = content
+                            except Exception as e:
+                                log_display.value = f'Error reading audit log: {str(e)}'
+                                log_state['current_content'] = ''
+                            finally:
+                                audit_db.close()
+                            return
+
+                        # Handle file-based logs
                         log_path = get_current_log_path()
                         # Update the label
                         if log_state['current_log'] == 'errors':
@@ -1327,13 +1428,37 @@ def admin_system_page():
 
                     # Controls row
                     with ui.row().classes('w-full justify-between items-center mt-3'):
-                        with ui.row().classes('gap-2'):
+                        with ui.row().classes('gap-2 items-center'):
                             ui.label('Show:').classes('text-sm opacity-70')
-                            ui.button('50 lines', on_click=lambda: refresh_logs(50)).props('flat dense size=sm')
-                            ui.button('100 lines', on_click=lambda: refresh_logs(100)).props('flat dense size=sm')
-                            ui.button('500 lines', on_click=lambda: refresh_logs(500)).props('flat dense size=sm')
+                            ui.button('50 entries', on_click=lambda: refresh_logs(50)).props('flat dense size=sm')
+                            ui.button('100 entries', on_click=lambda: refresh_logs(100)).props('flat dense size=sm')
+                            ui.button('500 entries', on_click=lambda: refresh_logs(500)).props('flat dense size=sm')
+
+                            # Audit log filter dropdown (only visible for audit logs)
+                            audit_filter_options = {
+                                'all': 'All Actions',
+                                'login': 'Logins',
+                                'pto': 'PTO Actions',
+                                'user': 'User Changes',
+                                'carryover': 'Carryover'
+                            }
+
+                            def on_filter_change(e):
+                                log_state['audit_filter'] = e.value
+                                refresh_logs()
+
+                            audit_filter_select = ui.select(
+                                options=audit_filter_options,
+                                value='all',
+                                on_change=on_filter_change
+                            ).props('dense outlined').classes('ml-4').style('min-width: 140px;')
+                            audit_filter_select.set_visibility(log_state['current_log'] == 'audit')
+                            log_state['filter_select'] = audit_filter_select
 
                         def clear_current_log():
+                            if log_state['current_log'] == 'audit':
+                                show_warning_dialog('Cannot Clear', 'Audit logs cannot be cleared - they are permanent records.')
+                                return
                             log_path = get_current_log_path()
                             if log_path.exists():
                                 try:
@@ -1345,7 +1470,7 @@ def admin_system_page():
                                 except Exception as e:
                                     show_error_dialog('Error', f'Error clearing log: {str(e)}')
 
-                        ui.button('Clear Log', icon='delete_sweep', on_click=clear_current_log).props('flat dense color=red')
+                        clear_btn = ui.button('Clear Log', icon='delete_sweep', on_click=clear_current_log).props('flat dense color=red')
 
                     refresh_logs()
 
@@ -1438,8 +1563,23 @@ def admin_system_page():
                                 truncated = True
 
                             context = "a specific selection from the" if is_selection else "the recent"
+                            log_type = log_state.get('current_log', 'main')
 
-                            prompt = f"""Analyze {context} application log below and provide a concise summary for a system administrator.
+                            if log_type == 'audit':
+                                prompt = f"""Analyze {context} audit log below and provide a concise summary for a system administrator.
+
+This is a security audit log tracking user actions in a PTO (time-off) management system.
+
+Your analysis should include:
+1. **Overview**: Brief summary of activity patterns (1-2 sentences)
+2. **User Activity**: Which users are most active and what actions they're taking
+3. **Security Events**: Login patterns, failed attempts, unusual activity times
+4. **PTO Operations**: Request submissions, approvals, denials, cancellations
+5. **Concerns**: Any suspicious patterns (unusual hours, bulk operations, failed logins)
+
+Keep it concise and actionable. Use bullet points."""
+                            else:
+                                prompt = f"""Analyze {context} application log below and provide a concise summary for a system administrator.
 
 Your analysis should include:
 1. **Overview**: Brief summary of what's happening in the log (1-2 sentences)
@@ -1447,12 +1587,11 @@ Your analysis should include:
 3. **Errors/Warnings**: Any errors, warnings, or concerning patterns (highlight severity)
 4. **Recommendations**: Any suggested actions if issues are found
 
-Keep it concise and actionable. Use bullet points. If the log shows normal operation with no issues, say so briefly.
+Keep it concise and actionable. Use bullet points. If the log shows normal operation with no issues, say so briefly."""
 
-{"Note: Log was truncated to last " + str(max_chars) + " characters." if truncated else ""}
-
-LOG CONTENT:
-{analysis_content}"""
+                            # Add truncation note and content to prompt
+                            truncation_note = f"\nNote: Log was truncated to last {max_chars} characters.\n" if truncated else ""
+                            prompt = f"{prompt}{truncation_note}\n\nLOG CONTENT:\n{analysis_content}"
 
                             response = client.messages.create(
                                 model="claude-sonnet-4-20250514",
@@ -1713,4 +1852,4 @@ LOG CONTENT:
 
         # Back button
         with ui.row().classes('w-full mt-6'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')

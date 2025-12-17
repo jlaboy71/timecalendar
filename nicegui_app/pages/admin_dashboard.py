@@ -1,6 +1,6 @@
 """Admin panel landing page with navigation to admin functions."""
 from nicegui import ui, app
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 
 
@@ -53,4 +53,4 @@ def admin_dashboard_page():
                         ui.label('Database, email config, logs, and system settings').classes('text-gray-600 text-center')
                         ui.button('System Settings', on_click=lambda: ui.navigate.to('/admin/system'), color='warning')
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-8')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-8')

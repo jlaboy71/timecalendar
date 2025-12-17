@@ -4,8 +4,8 @@ import json
 from datetime import datetime
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog, show_success_dialog
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
@@ -71,10 +71,10 @@ def admin_employees_list_page():
     # Pagination state
     pagination_state = {
         'page': 1,
-        'per_page': 10,
+        'per_page': 25,
     }
 
-    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title='EMPLOYEE MANAGEMENT', show_back=False)
 
         # Add New Employee button
@@ -241,7 +241,7 @@ def admin_employees_list_page():
 
         filter_and_render()
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-4')
 
 
 def admin_employees_add_page():
@@ -402,46 +402,101 @@ def admin_employees_add_page():
             ui.button('Cancel', on_click=lambda: ui.run_javascript('history.back()')).props('flat')
 
             def create_employee():
-                valid = True
-                if not validate_required(first_name_input, 'First Name'):
-                    valid = False
-                if not validate_required(last_name_input, 'Last Name'):
-                    valid = False
-                if not validate_required(username_input, 'Username'):
-                    valid = False
-                if not validate_required(email_input, 'Email'):
-                    valid = False
+                # Collect all missing fields
+                missing_fields = []
+
+                # Validate required text fields
+                if not first_name_input.value or not first_name_input.value.strip():
+                    first_name_input.props('error')
+                    missing_fields.append('First Name')
+                else:
+                    first_name_input.props(remove='error')
+
+                if not last_name_input.value or not last_name_input.value.strip():
+                    last_name_input.props('error')
+                    missing_fields.append('Last Name')
+                else:
+                    last_name_input.props(remove='error')
+
+                if not username_input.value or not username_input.value.strip():
+                    username_input.props('error')
+                    missing_fields.append('Username')
+                else:
+                    username_input.props(remove='error')
+
+                if not email_input.value or not email_input.value.strip():
+                    email_input.props('error')
+                    missing_fields.append('Email')
                 elif not validate_email(email_input):
-                    valid = False
-                if not validate_required(password_input, 'Password'):
-                    valid = False
-                elif not validate_min_length(password_input, 8, 'Password'):
-                    valid = False
+                    missing_fields.append('Email (invalid format)')
+                else:
+                    email_input.props(remove='error')
+
+                if not password_input.value:
+                    password_input.props('error')
+                    missing_fields.append('Password')
+                elif len(password_input.value) < 8:
+                    password_input.props('error')
+                    missing_fields.append('Password (minimum 8 characters)')
+                else:
+                    password_input.props(remove='error')
+
                 if password_input.value != confirm_password_input.value:
                     confirm_password_input.props('error')
-                    show_error_dialog('Password Mismatch', 'The passwords you entered do not match. Please try again.')
-                    valid = False
-                if not validate_required(hire_date_input, 'Hire Date'):
-                    valid = False
+                    missing_fields.append('Confirm Password (passwords must match)')
+                else:
+                    confirm_password_input.props(remove='error')
 
-                # Employees must be assigned to a department with a manager
-                if role_select.value == 'employee':
-                    if not department_select.value:
-                        show_error_dialog('Department Required', 'Employees must be assigned to a department.')
-                        valid = False
-                    else:
-                        # Check if department has a manager
+                if not hire_date_input.value:
+                    hire_date_input.props('error')
+                    missing_fields.append('Hire Date')
+                else:
+                    hire_date_input.props(remove='error')
+
+                # Validate Department
+                if not department_select.value:
+                    department_select.props('error')
+                    missing_fields.append('Department')
+                else:
+                    department_select.props(remove='error')
+                    # Check if department has a manager (for employees)
+                    if role_select.value == 'employee':
                         check_db = next(get_db())
                         try:
                             dept = DepartmentService.get_department_by_id(check_db, department_select.value)
                             if not dept or not dept.manager_id:
-                                show_error_dialog('Manager Required', 'The selected department must have a manager assigned before adding employees.')
-                                valid = False
+                                missing_fields.append('Department (must have a manager assigned)')
                         finally:
                             check_db.close()
 
-                if not valid:
-                    show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
+                # Validate Role
+                if not role_select.value:
+                    role_select.props('error')
+                    missing_fields.append('Role')
+                else:
+                    role_select.props(remove='error')
+
+                # Validate State
+                if not location_state_select.value:
+                    location_state_select.props('error')
+                    missing_fields.append('State')
+                else:
+                    location_state_select.props(remove='error')
+
+                # Validate City
+                if not location_city_select.value:
+                    location_city_select.props('error')
+                    missing_fields.append('City')
+                else:
+                    location_city_select.props(remove='error')
+
+                # Show error dialog if any fields are missing
+                if missing_fields:
+                    field_list = '\n• '.join(missing_fields)
+                    show_error_dialog(
+                        'Required Fields Missing',
+                        f'Please complete the following required fields:\n\n• {field_list}'
+                    )
                     create_btn.props(remove='loading disabled')
                     return
 
@@ -499,8 +554,7 @@ def admin_employees_add_page():
                         new_user.id, new_user.username
                     )
 
-                    ui.notify(f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', type='positive')
-                    ui.navigate.to('/admin/employees')
+                    show_success_dialog('Employee Created', f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', on_close=lambda: ui.navigate.to('/admin/employees'))
 
                 except Exception as e:
                     show_error_dialog('Error', f'Error creating employee: {str(e)}')
@@ -834,8 +888,8 @@ def admin_employees_edit_page(user_id: int):
                                 f"{logged_user.get('first_name')} {logged_user.get('last_name')}",
                                 user_id, {'fields_updated': list(update_data.keys())}
                             )
-                            ui.notify(f'Employee updated successfully', type='positive')
-                            ui.navigate.to(back_url)
+                            nav_url = '/manager/team' if is_manager_editing else '/admin/employees'
+                            show_success_dialog('Employee Updated', 'Employee updated successfully', on_close=lambda: ui.navigate.to(nav_url))
                         else:
                             show_error_dialog('Update Failed', 'There was an error updating the employee. Please try again.')
                             save_btn.props(remove='loading disabled')
@@ -852,7 +906,7 @@ def admin_employees_edit_page(user_id: int):
 
                 save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
 
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
     finally:
         db.close()

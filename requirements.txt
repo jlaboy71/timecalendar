@@ -34,3 +34,7 @@ APScheduler>=3.10.0
 
 # Testing
 pytest==7.4.3
+pytest-cov>=4.1.0
+
+# Development Tools
+ruff>=0.1.0

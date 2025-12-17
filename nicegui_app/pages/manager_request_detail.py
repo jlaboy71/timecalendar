@@ -1,8 +1,8 @@
 """Manager request detail page for approval/denial."""
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
@@ -41,7 +41,7 @@ def manager_request_detail_page(request_id: int):
         request = detail['request']
         balance = detail['balance']
 
-        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
             page_header(title='PTO REQUEST REVIEW', show_back=False)
 
             # Employee Info and PTO Balance side by side
@@ -104,7 +104,7 @@ def manager_request_detail_page(request_id: int):
                 ui.label(f"Type: {request.pto_type.title()}")
                 ui.label(f"Start Date: {request.start_date.strftime('%A, %B %d, %Y')}")
                 ui.label(f"End Date: {request.end_date.strftime('%A, %B %d, %Y')}")
-                ui.label(f"Total Days: {fmt_days(float(request.total_days))}")
+                ui.label(f"Duration: {fmt_days(float(request.total_days))}")
                 ui.label(f"Status: {request.status.title()}")
                 ui.label(f"Submitted: {request.submitted_at.strftime('%A, %B %d, %Y at %I:%M %p')}")
                 if request.notes:
@@ -192,8 +192,7 @@ def manager_request_detail_page(request_id: int):
                                         balance.personal_used = max(0, float(balance.personal_used or 0) - (total_days * 8))
 
                                 db_cancel.commit()
-                                ui.notify('Cancellation approved - time off cancelled and balance restored', type='positive')
-                                ui.navigate.to('/dashboard')
+                                show_success_dialog('Cancellation Approved', 'Time off cancelled and balance restored', on_close=lambda: ui.navigate.to('/calendar'))
                         finally:
                             db_cancel.close()
 
@@ -207,8 +206,7 @@ def manager_request_detail_page(request_id: int):
                                 req.cancellation_reason = None
                                 req.cancellation_requested_at = None
                                 db_deny.commit()
-                                ui.notify('Cancellation denied - time off remains scheduled', type='warning')
-                                ui.navigate.to('/dashboard')
+                                show_warning_dialog('Cancellation Denied', 'Time off remains scheduled', on_close=lambda: ui.navigate.to('/calendar'))
                         finally:
                             db_deny.close()
 
@@ -239,8 +237,7 @@ def manager_request_detail_page(request_id: int):
                                 float(request.total_days),
                                 approver_name
                             )
-                            ui.notify('Request approved!', type='positive')
-                            ui.navigate.to('/dashboard')
+                            show_success_dialog('Request Approved', 'PTO request has been approved!', on_close=lambda: ui.navigate.to('/calendar'))
                         else:
                             show_error_dialog('Approval Failed', 'There was an error approving the request. Please try again.')
                     finally:
@@ -269,8 +266,8 @@ def manager_request_detail_page(request_id: int):
                                 approver_name,
                                 reason
                             )
-                            ui.notify('Request denied', type='warning')
-                            ui.navigate.to('/dashboard')
+                            show_warning_dialog('Request Denied', 'PTO request has been denied')
+                            ui.navigate.to('/calendar')
                         else:
                             show_error_dialog('Denial Failed', 'There was an error denying the request. Please try again.')
                     finally:
@@ -285,8 +282,8 @@ def manager_request_detail_page(request_id: int):
                         denial_input = ui.input('Denial Reason (optional)').classes('w-64')
                         ui.button('Deny', on_click=deny, color='negative')
 
-            # Back button at the bottom
-            ui.button('Back to Calendar', icon='arrow_back', on_click=lambda: ui.navigate.to('/calendar')).props('outline').classes('mt-6')
+            # Back button at the bottom - uses browser history for proper navigation
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
     finally:
         db.close()

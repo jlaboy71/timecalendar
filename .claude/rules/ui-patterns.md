@@ -7,17 +7,24 @@
 
 ## Theme & Branding
 
-### TJM Colors
-- Primary: Blue (#2196F3)
+### TJM Brand Colors
+- **Primary Accent**: TJM Gold (#c9a227) - highlights, active states, important actions
+- **Navigation/Headers**: TJM Gray (#5a6a72)
+- **General UI**: Blue (#2196F3) - buttons, links, interactive elements
 - Logo: Stored as base64 data URL in `nicegui_app/logo.py`
 
 ### Dark Mode
 - Toggle stored in `app.storage.general['dark_mode']`
 - Apply on page load: `apply_dark_mode()` from `components/theme.py`
+- **Dialog backgrounds**: Use `#1f2937` for dark mode dialog cards
 
 ```python
 from nicegui_app.components.theme import apply_dark_mode
 apply_dark_mode()
+
+# Dark mode dialog example
+with ui.dialog() as dialog, ui.card().style('background-color: #1f2937'):
+    ui.label('Dialog content')
 ```
 
 ## Page Structure

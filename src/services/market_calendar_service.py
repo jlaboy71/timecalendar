@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -394,10 +395,11 @@ class MarketCalendarService:
 
             for exchange in exchanges:
                 # Check if already exists
-                existing = self._db_session.query(MarketHoliday).filter(
+                stmt = select(MarketHoliday).where(
                     MarketHoliday.holiday_date == holiday.date,
                     MarketHoliday.market == exchange
-                ).first()
+                )
+                existing = self._db_session.execute(stmt).scalar_one_or_none()
 
                 if existing:
                     # Update existing
@@ -440,9 +442,10 @@ class MarketCalendarService:
 
         from src.models.market_holiday import MarketHoliday
 
-        holidays = self._db_session.query(MarketHoliday).filter(
+        stmt = select(MarketHoliday).where(
             MarketHoliday.year == year
-        ).order_by(MarketHoliday.holiday_date).all()
+        ).order_by(MarketHoliday.holiday_date)
+        holidays = self._db_session.execute(stmt).scalars().all()
 
         return [{
             'id': h.id,
@@ -470,10 +473,11 @@ class MarketCalendarService:
         today = date.today()
         end_date = today + timedelta(days=days)
 
-        holidays = self._db_session.query(MarketHoliday).filter(
+        stmt = select(MarketHoliday).where(
             MarketHoliday.holiday_date >= today,
             MarketHoliday.holiday_date <= end_date
-        ).order_by(MarketHoliday.holiday_date).all()
+        ).order_by(MarketHoliday.holiday_date)
+        holidays = self._db_session.execute(stmt).scalars().all()
 
         return [{
             'id': h.id,

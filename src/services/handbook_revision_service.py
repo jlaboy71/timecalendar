@@ -8,6 +8,7 @@ import difflib
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import select, update
 
 from src.models.handbook_revision import HandbookRevision
 
@@ -22,27 +23,23 @@ class HandbookRevisionService:
 
     def get_active_revision(self) -> Optional[HandbookRevision]:
         """Get the currently active handbook revision."""
-        return self.db.query(HandbookRevision).filter(
-            HandbookRevision.is_active == True
-        ).first()
+        stmt = select(HandbookRevision).where(HandbookRevision.is_active == True)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def get_latest_revision(self) -> Optional[HandbookRevision]:
         """Get the most recent revision regardless of active status."""
-        return self.db.query(HandbookRevision).order_by(
-            HandbookRevision.created_at.desc()
-        ).first()
+        stmt = select(HandbookRevision).order_by(HandbookRevision.created_at.desc())
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def get_all_revisions(self) -> List[HandbookRevision]:
         """Get all revisions ordered by version descending."""
-        return self.db.query(HandbookRevision).order_by(
-            HandbookRevision.created_at.desc()
-        ).all()
+        stmt = select(HandbookRevision).order_by(HandbookRevision.created_at.desc())
+        return list(self.db.execute(stmt).scalars().all())
 
     def get_revision_by_id(self, revision_id: int) -> Optional[HandbookRevision]:
         """Get a specific revision by ID."""
-        return self.db.query(HandbookRevision).filter(
-            HandbookRevision.id == revision_id
-        ).first()
+        stmt = select(HandbookRevision).where(HandbookRevision.id == revision_id)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def create_revision(
         self,
@@ -317,9 +314,10 @@ Write a concise, professional summary suitable for an HR announcement."""
             return False
 
         # Deactivate all others
-        self.db.query(HandbookRevision).filter(
+        stmt = update(HandbookRevision).where(
             HandbookRevision.id != revision_id
-        ).update({'is_active': False})
+        ).values(is_active=False)
+        self.db.execute(stmt)
 
         # Activate this one
         revision.is_active = True
@@ -343,9 +341,10 @@ Write a concise, professional summary suitable for an HR announcement."""
             return {'error': 'Revision not found'}
 
         # Get previous revision for comparison
-        previous = self.db.query(HandbookRevision).filter(
+        stmt = select(HandbookRevision).where(
             HandbookRevision.created_at < revision.created_at
-        ).order_by(HandbookRevision.created_at.desc()).first()
+        ).order_by(HandbookRevision.created_at.desc())
+        previous = self.db.execute(stmt).scalar_one_or_none()
 
         report = {
             'version': revision.version,

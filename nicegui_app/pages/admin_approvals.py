@@ -1,8 +1,8 @@
 """Admin page for viewing and approving all pending PTO requests."""
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_success_dialog, show_info_dialog
 from nicegui_app.components.formatting import fmt_days
 from src.services.pto_service import PTOService
 from src.services.department_service import DepartmentService
@@ -77,8 +77,7 @@ def admin_approvals_page():
                                 except Exception:
                                     pass
                             db.commit()
-                            ui.notify(f'Approved {count} request(s)', type='positive')
-                            ui.navigate.to('/admin/approvals')  # Refresh page
+                            show_success_dialog('Requests Approved', f'Approved {count} request(s)', on_close=lambda: ui.navigate.to('/admin/approvals'))
 
                         def bulk_deny():
                             if not selected_requests:
@@ -100,7 +99,7 @@ def admin_approvals_page():
                                             pass
                                     db.commit()
                                     deny_dialog.close()
-                                    ui.notify(f'Denied {count} request(s)', type='info')
+                                    show_info_dialog('Requests Denied', f'Denied {count} request(s)')
                                     ui.navigate.to('/admin/approvals')  # Refresh page
 
                                 with ui.row().classes('w-full justify-end gap-2'):
@@ -220,7 +219,7 @@ def admin_approvals_page():
                                                     ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 days = float(req['total_days'])
-                                                ui.label(f'{fmt_days(days)} days').classes('text-sm font-medium')
+                                                ui.label(fmt_days(days)).classes('text-sm font-medium')
 
                                     ui.button('Review', icon='visibility',
                                              on_click=lambda r=req: ui.navigate.to(f"/manager/request/{r['request_id']}")).props('color=primary')
@@ -232,7 +231,7 @@ def admin_approvals_page():
                 selected_dept.on('update:model-value', lambda e: render_requests(e.args))
 
             # Back to Dashboard button
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
     finally:
         db.close()

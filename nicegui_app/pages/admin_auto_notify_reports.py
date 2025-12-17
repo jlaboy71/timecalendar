@@ -1,7 +1,7 @@
 """Auto Notify Reports page for viewing trusted employee auto-approve reports."""
 from nicegui import ui, app
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_success_dialog, show_warning_dialog, show_error_dialog
 from src.services.report_storage_service import ReportStorageService
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
@@ -227,7 +227,7 @@ def auto_notify_reports_page():
             )
 
             if not content:
-                ui.notify('Failed to load report', type='negative')
+                show_error_dialog('Error', 'Failed to load report')
                 return
 
             with ui.dialog() as dialog, ui.card().classes('w-full p-0').style('width: 95vw; max-width: 1100px;'):
@@ -258,7 +258,7 @@ def auto_notify_reports_page():
             )
 
             if not content:
-                ui.notify('Failed to load report', type='negative')
+                show_error_dialog('Error', 'Failed to load report')
                 return
 
             # Create a print-friendly dialog
@@ -300,7 +300,7 @@ def auto_notify_reports_page():
 
                 async def send_email():
                     if not email_input.value or '@' not in email_input.value:
-                        ui.notify('Please enter a valid email address', type='warning')
+                        show_warning_dialog('Invalid Email', 'Please enter a valid email address')
                         return
 
                     content = ReportStorageService.get_report(
@@ -311,7 +311,7 @@ def auto_notify_reports_page():
                     )
 
                     if not content:
-                        ui.notify('Failed to load report', type='negative')
+                        show_error_dialog('Error', 'Failed to load report')
                         return
 
                     subject = f"TJM Time Calendar: {report['frequency'].title()} Auto-Notify Report - {report['display_date']}"
@@ -324,10 +324,10 @@ def auto_notify_reports_page():
                     )
 
                     if success:
-                        ui.notify(f'Report sent to {email_input.value}', type='positive')
+                        show_success_dialog('Email Sent', f'Report sent to {email_input.value}')
                         dialog.close()
                     else:
-                        ui.notify('Failed to send email. Check email configuration.', type='negative')
+                        show_error_dialog('Email Failed', 'Failed to send email. Check email configuration.')
 
                 with ui.row().classes('w-full justify-end gap-2'):
                     ui.button('Cancel', on_click=dialog.close).props('flat')
@@ -355,11 +355,11 @@ def auto_notify_reports_page():
                     )
 
                     if success:
-                        ui.notify('Report deleted', type='positive')
+                        show_success_dialog('Deleted', 'Report deleted successfully')
                         dialog.close()
                         refresh_reports()
                     else:
-                        ui.notify('Failed to delete report', type='negative')
+                        show_error_dialog('Error', 'Failed to delete report')
 
                 with ui.row().classes('w-full justify-end gap-2 mt-4'):
                     ui.button('Cancel', on_click=dialog.close).props('flat')
@@ -510,7 +510,7 @@ def auto_notify_reports_page():
                 refresh_reports()
 
                 # Back button
-                ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+                ui.button('Back', icon='arrow_back', on_click=go_back).classes('mt-4')
 
     finally:
         db.close()

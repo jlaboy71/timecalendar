@@ -1,6 +1,7 @@
 """
 PTO service for managing PTO requests in the PTO and Market Calendar System.
 """
+import logging
 from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Optional
@@ -11,6 +12,8 @@ from ..models.pto_request import PTORequest
 from ..models.user import User
 from ..schemas.pto_schemas import PTORequestCreate
 from .balance_service import BalanceService
+
+logger = logging.getLogger(__name__)
 
 # PTO types eligible for trusted employee auto-approve
 TRUSTED_AUTO_APPROVE_TYPES = {'vacation', 'sick', 'personal'}
@@ -74,7 +77,18 @@ class PTOService:
         if year > current_year + max_future_years:
             raise ValueError(f"Cannot request time off more than {max_future_years} years in advance. Maximum year: {current_year + max_future_years}")
 
+        # Get/create balance WITH LOCK to prevent concurrent request race conditions
+        # This serializes all PTO requests for the same user
+        balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
+
+        # Lock the balance row to serialize concurrent requests for this user
+        # This prevents two concurrent requests from both passing the overlap check
+        from src.models.pto_balance import PTOBalance
+        stmt = select(PTOBalance).where(PTOBalance.id == balance.id).with_for_update()
+        self.db.execute(stmt).scalar_one_or_none()
+
         # Check for overlapping requests (same user, same dates)
+        # Now protected by the lock above
         overlapping = self.get_overlapping_requests(
             request_data.user_id,
             request_data.start_date,
@@ -88,26 +102,41 @@ class PTOService:
                 f"Please cancel or modify that request first."
             )
 
-        # Get/create balance
-        balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
-
-        # Note: Vacation balance validation removed - employees can request more than available
-        # (manager discretion on approval). UI shows warnings for over-limit requests.
-        # However, sick and personal days have hard limits that cannot be exceeded.
+        # Validate vacation balance - employees cannot request more than available
+        # Managers/admins can exceed since they have approval authority
+        # This prevents regular employees from submitting over-limit requests
+        hours_requested_check = float(request_data.total_days) * 8
+        if request_data.pto_type == 'vacation':
+            vacation_available = float(balance.vacation_total or 0) - float(balance.vacation_used or 0) - float(balance.vacation_pending or 0)
+            # Only enforce for non-managers/admins - they have discretion to exceed
+            if user.role == 'employee' and hours_requested_check > vacation_available:
+                raise ValueError(
+                    f"Insufficient vacation time. Requesting {request_data.total_days} days "
+                    f"but only {vacation_available / 8:.1f} days available."
+                )
 
         # Determine if auto-approve applies
+        # BUSINESS RULE: The following users can self-approve standard PTO types:
+        #   1. Managers, Admins, Superadmins - they have authority to approve their own PTO
+        #   2. Trusted Employees - flagged by admin, their PTO auto-approves with manager notification
+        # NOTE: If your organization requires manager PTO to be approved by their manager,
+        # change line 111 condition to exclude managers, or implement approval chain.
+        # Current behavior: Managers self-approve (documented in help system and audit trail).
         pto_type_lower = request_data.pto_type.lower()
         is_auto_approve = False
+        auto_approve_reason = None
 
         # Manager/Admin/Superadmin: auto-approve standard PTO types only
         if user.role in ['manager', 'admin', 'superadmin']:
             if pto_type_lower in TRUSTED_AUTO_APPROVE_TYPES:
                 is_auto_approve = True
-            # Special leave types still need documentation/approval even for managers
+                auto_approve_reason = f"Self-approved by {user.role}"
+            # Special leave types (FMLA, Bereavement, etc.) still need documentation/approval
 
         # Trusted Employee: auto-approve ONLY for vacation, sick, personal
         elif user.is_trusted and pto_type_lower in TRUSTED_AUTO_APPROVE_TYPES:
             is_auto_approve = True
+            auto_approve_reason = "Auto-approved (trusted employee)"
 
         # All other combinations: requires approval
         # - Non-trusted employees: always pending
@@ -149,6 +178,15 @@ class PTOService:
         self.db.add(request)
         self.db.commit()
         self.db.refresh(request)
+
+        # Audit log for auto-approved requests
+        if is_auto_approve:
+            logger.info(
+                f"PTO AUTO-APPROVED: Request #{request.id} for user {user.username} (ID:{user.id}), "
+                f"Type: {request.pto_type}, Days: {request.total_days}, "
+                f"Dates: {request.start_date} to {request.end_date}, "
+                f"Reason: {auto_approve_reason}"
+            )
 
         # Handle balance adjustments based on auto-approval status
         if is_auto_approve:
@@ -245,7 +283,7 @@ class PTOService:
         from ..models.user import User
         from ..models.department import Department
 
-        results = db.query(
+        stmt = select(
             PTORequest.id.label('request_id'),
             PTORequest.user_id,
             (User.first_name + ' ' + User.last_name).label('employee_name'),
@@ -258,9 +296,10 @@ class PTOService:
             PTORequest.submitted_at
         ).join(User, PTORequest.user_id == User.id
         ).outerjoin(Department, User.department_id == Department.id
-        ).filter(PTORequest.status == 'pending'
-        ).order_by(PTORequest.submitted_at.desc()).all()
+        ).where(PTORequest.status == 'pending'
+        ).order_by(PTORequest.submitted_at.desc())
 
+        results = db.execute(stmt).all()
         return [dict(row._mapping) for row in results]
 
     @staticmethod
@@ -270,7 +309,7 @@ class PTOService:
         from ..models.user import User
         from ..models.department import Department
 
-        query = db.query(
+        stmt = select(
             PTORequest.id.label('request_id'),
             PTORequest.user_id,
             (User.first_name + ' ' + User.last_name).label('employee_name'),
@@ -284,27 +323,28 @@ class PTOService:
             PTORequest.cancellation_requested_at
         ).join(User, PTORequest.user_id == User.id
         ).outerjoin(Department, User.department_id == Department.id
-        ).filter(
+        ).where(
             PTORequest.status == 'approved',
             PTORequest.cancellation_requested == True
         )
 
         if department_id:
-            query = query.filter(User.department_id == department_id)
+            stmt = stmt.where(User.department_id == department_id)
 
-        results = query.order_by(PTORequest.cancellation_requested_at.desc()).all()
+        stmt = stmt.order_by(PTORequest.cancellation_requested_at.desc())
+        results = db.execute(stmt).all()
         return [dict(row._mapping) for row in results]
 
     @staticmethod
     def get_user_requests(db: Session, user_id: int):
         """Get all PTO requests for a specific user"""
         from ..models.pto_request import PTORequest
-        
-        requests = db.query(PTORequest).filter(
+
+        stmt = select(PTORequest).where(
             PTORequest.user_id == user_id
-        ).order_by(PTORequest.submitted_at.desc()).all()
-        
-        return requests
+        ).order_by(PTORequest.submitted_at.desc())
+
+        return list(db.execute(stmt).scalars().all())
     
     @staticmethod
     def get_request_detail(db: Session, request_id: int):
@@ -313,20 +353,23 @@ class PTOService:
         from ..models.user import User
         from ..models.pto_balance import PTOBalance
 
-        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        stmt = select(PTORequest).where(PTORequest.id == request_id)
+        request = db.execute(stmt).scalar_one_or_none()
         if not request:
             return None
 
-        user = db.query(User).filter(User.id == request.user_id).first()
+        stmt = select(User).where(User.id == request.user_id)
+        user = db.execute(stmt).scalar_one_or_none()
         if not user:
             return None
 
         # Use the year from the request's start date
         request_year = request.start_date.year
-        balance = db.query(PTOBalance).filter(
+        stmt = select(PTOBalance).where(
             PTOBalance.user_id == request.user_id,
             PTOBalance.year == request_year
-        ).first()
+        )
+        balance = db.execute(stmt).scalar_one_or_none()
 
         return {
             'request': request,
@@ -338,34 +381,76 @@ class PTOService:
         }
 
     @staticmethod
+    def _verify_approval_authorization(db: Session, request: PTORequest, approver_id: int) -> None:
+        """
+        Verify that the approver is authorized to approve/deny the request.
+
+        Args:
+            db: SQLAlchemy database session
+            request: The PTO request being approved/denied
+            approver_id: ID of the user attempting to approve/deny
+
+        Raises:
+            ValueError: If approver is not authorized
+        """
+        from src.models.user import User
+
+        stmt = select(User).where(User.id == approver_id)
+        approver = db.execute(stmt).scalar_one_or_none()
+        if approver is None:
+            raise ValueError("Approver not found")
+
+        # Admins and superadmins can approve any request
+        if approver.role in ['admin', 'superadmin']:
+            return
+
+        # Managers can only approve requests from their department
+        if approver.role == 'manager':
+            stmt = select(User).where(User.id == request.user_id)
+            employee = db.execute(stmt).scalar_one_or_none()
+            if employee and employee.department_id == approver.department_id:
+                return
+            raise ValueError("Managers can only approve requests from their own department")
+
+        # Regular employees cannot approve requests
+        raise ValueError("You are not authorized to approve requests")
+
+    @staticmethod
     def approve_request(db: Session, request_id: int, approved_by: int) -> PTORequest:
         """
         Approve a PTO request.
-        
+
+        All database operations are wrapped in a single transaction.
+        If any step fails, all changes are rolled back.
+
         Args:
             db: SQLAlchemy database session
             request_id: ID of the request to approve
             approved_by: ID of the user approving the request
-            
+
         Returns:
             PTORequest: The approved request
-            
+
         Raises:
-            ValueError: If request not found or not pending
+            ValueError: If request not found, not pending, or approver not authorized
         """
-        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        stmt = select(PTORequest).where(PTORequest.id == request_id)
+        request = db.execute(stmt).scalar_one_or_none()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
-        
+
         if request.status != 'pending':
             raise ValueError("Only pending requests can be approved")
-        
+
+        # Verify approver is authorized
+        PTOService._verify_approval_authorization(db, request, approved_by)
+
         # Get year from start_date
         year = request.start_date.year
-        
-        # Get balance
+
+        # Get balance (don't commit yet - part of transaction)
         balance_service = BalanceService(db)
-        balance = balance_service.get_or_create_balance(request.user_id, year)
+        balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
 
         # Validate sick/personal days don't exceed available balance before approving
         hours_requested = float(request.total_days) * 8
@@ -384,104 +469,135 @@ class PTOService:
                     f"but only {available / 8:.1f} days available."
                 )
 
-        # Adjust balances based on PTO type
-        if request.pto_type == 'vacation':
-            balance_service.move_pending_to_used(balance.id, request.total_days)
-        elif request.pto_type == 'sick':
-            balance_service.adjust_sick_used(balance.id, request.total_days)
-        elif request.pto_type == 'personal':
-            balance_service.adjust_personal_used(balance.id, request.total_days)
-        
-        # Update request
-        request.status = 'approved'
-        request.approved_by = approved_by
-        request.approved_at = datetime.now()
-        
-        db.commit()
-        db.refresh(request)
-        return request
+        try:
+            # Adjust balances based on PTO type (don't commit - part of transaction)
+            if request.pto_type == 'vacation':
+                balance_service.move_pending_to_used(balance.id, request.total_days, commit=False)
+            elif request.pto_type == 'sick':
+                balance_service.adjust_sick_used(balance.id, request.total_days, commit=False)
+            elif request.pto_type == 'personal':
+                balance_service.adjust_personal_used(balance.id, request.total_days, commit=False)
+
+            # Update request
+            request.status = 'approved'
+            request.approved_by = approved_by
+            request.approved_at = datetime.now()
+
+            # Commit all changes atomically
+            db.commit()
+            db.refresh(request)
+            return request
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to approve request {request_id}: {e}")
+            raise
     
     @staticmethod
     def deny_request(db: Session, request_id: int, approved_by: int, denial_reason: str) -> PTORequest:
         """
         Deny a PTO request.
-        
+
+        All database operations are wrapped in a single transaction.
+        If any step fails, all changes are rolled back.
+
         Args:
             db: SQLAlchemy database session
             request_id: ID of the request to deny
             approved_by: ID of the user denying the request
             denial_reason: Reason for denial
-            
+
         Returns:
             PTORequest: The denied request
-            
+
         Raises:
-            ValueError: If request not found or not pending
+            ValueError: If request not found, not pending, or approver not authorized
         """
-        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
+        stmt = select(PTORequest).where(PTORequest.id == request_id)
+        request = db.execute(stmt).scalar_one_or_none()
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
-        
+
         if request.status != 'pending':
             raise ValueError("Only pending requests can be denied")
-        
-        # Get year from start_date
-        year = request.start_date.year
-        
-        # Remove pending vacation days if needed
-        if request.pto_type == 'vacation':
-            balance_service = BalanceService(db)
-            balance = balance_service.get_or_create_balance(request.user_id, year)
-            balance_service.remove_pending(balance.id, request.total_days)
-        
-        # Update request
-        request.status = 'denied'
-        request.approved_by = approved_by
-        request.denial_reason = denial_reason
-        request.approved_at = datetime.now()
-        
-        db.commit()
-        db.refresh(request)
-        return request
+
+        # Verify approver is authorized
+        PTOService._verify_approval_authorization(db, request, approved_by)
+
+        try:
+            # Get year from start_date
+            year = request.start_date.year
+
+            # Remove pending vacation days if needed (don't commit - part of transaction)
+            if request.pto_type == 'vacation':
+                balance_service = BalanceService(db)
+                balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
+                balance_service.remove_pending(balance.id, request.total_days, commit=False)
+
+            # Update request
+            request.status = 'denied'
+            request.approved_by = approved_by
+            request.denial_reason = denial_reason
+            request.approved_at = datetime.now()
+
+            # Commit all changes atomically
+            db.commit()
+            db.refresh(request)
+            return request
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to deny request {request_id}: {e}")
+            raise
     
     def cancel_request(self, request_id: int, user_id: int) -> PTORequest:
         """
         Cancel a PTO request.
-        
+
+        All database operations are wrapped in a single transaction.
+        If any step fails, all changes are rolled back.
+
         Args:
             request_id: ID of the request to cancel
             user_id: ID of the user cancelling the request
-            
+
         Returns:
             PTORequest: The cancelled request
-            
+
         Raises:
             ValueError: If request not found, not owned by user, or not pending
         """
         request = self.get_request_by_id(request_id)
         if request is None:
             raise ValueError(f"Request with ID {request_id} not found")
-        
+
         if request.user_id != user_id:
             raise ValueError("You can only cancel your own requests")
-        
+
         if request.status != 'pending':
             raise ValueError("Only pending requests can be cancelled")
-        
-        # Get year from start_date
-        year = request.start_date.year
-        
-        # Remove pending vacation days if needed
-        if request.pto_type == 'vacation':
-            balance = self.balance_service.get_or_create_balance(request.user_id, year)
-            self.balance_service.remove_pending(balance.id, request.total_days)
-        
-        # Update request
-        request.status = 'cancelled'
-        
-        self.db.commit()
-        self.db.refresh(request)
-        return request
+
+        try:
+            # Get year from start_date
+            year = request.start_date.year
+
+            # Remove pending vacation days if needed (don't commit - part of transaction)
+            if request.pto_type == 'vacation':
+                balance = self.balance_service.get_or_create_balance(request.user_id, year, commit=False)
+                self.balance_service.remove_pending(balance.id, request.total_days, commit=False)
+
+            # Update request
+            request.status = 'cancelled'
+
+            # Commit all changes atomically
+            self.db.commit()
+            self.db.refresh(request)
+            return request
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to cancel request {request_id}: {e}")
+            raise
     
     def get_overlapping_requests(
         self, 
@@ -535,16 +651,18 @@ class PTOService:
             List of dicts with conflict info: user name, dates, type, status
         """
         # Get the user's department
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
         if not user or not user.department_id:
             return []
 
         # Find other users in the same department
-        dept_users = self.db.query(User).filter(
+        stmt = select(User).where(
             User.department_id == user.department_id,
             User.id != user_id,
             User.is_active == True
-        ).all()
+        )
+        dept_users = self.db.execute(stmt).scalars().all()
 
         if not dept_users:
             return []

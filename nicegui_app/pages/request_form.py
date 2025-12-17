@@ -9,32 +9,61 @@ from src.database import get_db
 from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
 from src.models.market_holiday import MarketHoliday
+from src.models.system_setting import SystemSetting
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 
 
+def show_help_tip(title: str, message: str):
+    """Show a help tip dialog with OK button."""
+    with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+        with ui.row().classes('items-center gap-2 mb-4'):
+            ui.icon('help', color='amber', size='md')
+            ui.label(title).classes('text-lg font-bold')
+        ui.label(message).classes('text-sm opacity-80')
+        with ui.row().classes('w-full justify-end mt-4'):
+            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+    dialog.open()
+
+
 def count_business_days(start_date, end_date):
-    """Count business days (Mon-Fri) between two dates, inclusive.
+    """Count business days (Mon-Fri) between two dates, inclusive, excluding holidays.
 
     Args:
         start_date: Start date
         end_date: End date
 
     Returns:
-        Number of business days (weekdays only)
+        Number of business days (weekdays only, excluding market holidays)
     """
     if start_date > end_date:
         return 0
+
+    # Get holidays in the date range (only full closure days, not early close)
+    holiday_dates = set()
+    try:
+        db = next(get_db())
+        holidays = db.query(MarketHoliday.holiday_date).filter(
+            MarketHoliday.holiday_date >= start_date,
+            MarketHoliday.holiday_date <= end_date,
+            ~MarketHoliday.name.contains('Early Close')  # Exclude early close days
+        ).distinct().all()
+        holiday_dates = {h.holiday_date for h in holidays}
+        db.close()
+    except Exception:
+        pass  # If we can't get holidays, just count business days
 
     business_days = 0
     current = start_date
     while current <= end_date:
         # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
         if current.weekday() < 5:  # Monday to Friday
-            business_days += 1
+            # Also check if it's not a holiday
+            if current not in holiday_dates:
+                business_days += 1
         current += timedelta(days=1)
     return business_days
 
@@ -88,6 +117,14 @@ def request_form_page():
         if current_user and current_user.department and current_user.department.manager:
             manager = current_user.department.manager
             manager_name = f"{manager.first_name} {manager.last_name}"
+
+        # Check if Chicago Safe Leave is enabled and if user is in Chicago
+        chicago_setting = db.query(SystemSetting).filter(
+            SystemSetting.key == 'chicago.safe_leave_enabled'
+        ).first()
+        is_chicago_enabled = chicago_setting and chicago_setting.bool_value
+        is_chicago_employee = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+        show_chicago_leave = is_chicago_enabled and is_chicago_employee
     finally:
         db.close()
 
@@ -110,13 +147,14 @@ def request_form_page():
         'is_single_day': True,
         'is_half_day': False,
         'is_private': False,  # Only managers/admins can use this
+        'chicago_blocked': False,  # Blocks Chicago Safe Leave when over balance
     }
 
     # ============ MAIN PAGE LAYOUT ============
-    with ui.column().classes('w-full max-w-3xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
 
         # Header with greeting
-        page_header(title='NEW PTO REQUEST', show_back=False)
+        page_header(title='REQUEST FORM', show_back=False)
 
         # Show notice if date was pre-filled from calendar
         if prefill_date:
@@ -132,11 +170,12 @@ def request_form_page():
             'sick': {'color': 'green', 'bg': 'bg-green-500', 'text': 'text-green-600', 'border': 'border-green-500'},
             'personal': {'color': 'purple', 'bg': 'bg-purple-500', 'text': 'text-purple-600', 'border': 'border-purple-500'},
             'work_from_home': {'color': 'red', 'bg': 'bg-red-500', 'text': 'text-red-600', 'border': 'border-red-500'},
+            'chicago_leave': {'color': 'orange', 'bg': 'bg-amber-500', 'text': 'text-amber-600', 'border': 'border-amber-500'},
             'other': {'color': 'grey', 'bg': 'bg-grey-500', 'text': 'text-grey-600', 'border': 'border-grey-500'},
         }
 
         # Primary types (with dedicated buttons) vs Other types
-        primary_types = ['vacation', 'sick', 'personal', 'work_from_home']
+        primary_types = ['vacation', 'sick', 'personal', 'chicago_leave', 'work_from_home']
         other_types = {k: v for k, v in leave_type_options.items() if k not in primary_types}
 
         # State for selected type
@@ -153,11 +192,36 @@ def request_form_page():
             with ui.row().classes('items-center mb-3'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">1</span>', sanitize=False)
                 ui.label('Select Leave Type').classes('text-lg font-semibold')
+                help_text = (
+                    'PRIMARY LEAVE TYPES:\n\n'
+                    'Vacation: Planned time off for rest and relaxation. Accrues based on tenure.\n\n'
+                    'Sick: For illness, medical appointments, or caring for sick family.\n\n'
+                    'Personal: Flexible time for personal matters. Limited hours per year.\n\n'
+                    'WFH: Work From Home - single day only, requires reason.'
+                )
+                if show_chicago_leave:
+                    help_text += '\n\nChicago Leave: Use for ANY reason. 40hr annual max. 16hr carryover.'
+                help_text += (
+                    '\n\n─────────────────\n\n'
+                    'OTHER LEAVE TYPES (click "More Leave Types"):\n\n'
+                    'Bereavement, FMLA, Jury Duty, Voting, Military - no balance tracking.\n\n'
+                    '🔒 Notes for these types are PRIVATE and only visible to you.'
+                )
+                ui.button(icon='help_outline', on_click=lambda: show_help_tip('Leave Types', help_text)).props('flat dense round size=sm').style('color: #f59e0b')
 
-            # Primary type buttons
-            with ui.row().classes('w-full gap-2 mb-2'):
+            # Primary type buttons - stacked icons with colors
+            with ui.row().classes('w-full gap-4 mb-3 justify-center flex-wrap'):
                 # Create button references
                 type_buttons = {}
+
+                # Icon and color mapping for each type
+                type_icons = {
+                    'vacation': ('beach_access', '#3b82f6'),    # Blue
+                    'sick': ('local_hospital', '#22c55e'),       # Green
+                    'personal': ('person', '#a855f7'),           # Purple
+                    'chicago_leave': ('spa', '#f59e0b'),         # Amber
+                    'work_from_home': ('home_work', '#ef4444'),  # Red
+                }
 
                 def create_type_handler(type_code):
                     def handler():
@@ -172,112 +236,175 @@ def request_form_page():
                         update_half_day_visibility()
                         update_date_mode_buttons()
                         update_notes_label()
+                        build_date_selector()  # Rebuild to update PTO type overlay
                     return handler
+
+                def get_available_for_type(type_code):
+                    """Get available hours for a leave type."""
+                    if type_code == 'work_from_home':
+                        return 0  # WFH has no balance
+                    db_bal = next(get_db())
+                    try:
+                        bal_svc = BalanceService(db_bal)
+                        balance = bal_svc.get_or_create_balance(_user_id, date.today().year)
+                        code = type_code.upper()
+                        if code == 'VACATION':
+                            total = float(balance.vacation_total or 0) + float(balance.vacation_carryover or 0)
+                            used = float(balance.vacation_used or 0)
+                            pending = float(balance.vacation_pending or 0)
+                        elif code == 'SICK':
+                            total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                            used = float(balance.sick_used or 0)
+                            pending = 0
+                        elif code == 'PERSONAL':
+                            total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                            used = float(balance.personal_used or 0)
+                            pending = 0
+                        elif code == 'CHICAGO_LEAVE':
+                            total = float(balance.chicago_paid_leave_total or 0) + float(balance.chicago_paid_leave_carryover or 0)
+                            used = float(balance.chicago_paid_leave_used or 0)
+                            pending = float(balance.chicago_paid_leave_pending or 0)
+                        else:
+                            return 0
+                        return max(0, total - used - pending)
+                    finally:
+                        db_bal.close()
+
+                def create_type_card(type_code, label, icon, color):
+                    """Create a visually appealing type selection card with balance display."""
+                    available = get_available_for_type(type_code)
+                    whole_days = int(available // 8)
+                    remaining_hours = int(available % 8)
+
+                    with ui.card().classes('cursor-pointer p-4 text-center').style(
+                        f'width: 120px; height: 120px; border: 2px solid transparent; transition: all 0.2s ease;'
+                    ) as card:
+                        card.on('click', create_type_handler(type_code))
+                        with ui.column().classes('items-center justify-center gap-1 h-full'):
+                            ui.icon(icon, size='3.5rem').style(f'color: {color};')
+                            ui.label(label).classes('text-base font-semibold').style(f'color: {color};')
+                            # Show available balance: days on top, hours below
+                            if type_code == 'work_from_home':
+                                ui.label('∞').classes('text-sm font-medium').style(f'color: {color};')
+                            else:
+                                balance_text = f'{whole_days}d' + (f' {remaining_hours}h' if remaining_hours > 0 else '')
+                                ui.label(balance_text).classes('text-sm font-medium').style(f'color: {color};')
+                    return card
 
                 # Vacation button
                 if 'vacation' in leave_type_options:
-                    type_buttons['vacation'] = ui.button(
-                        'Vacation',
-                        icon='beach_access',
-                        on_click=create_type_handler('vacation')
-                    ).classes('flex-1')
+                    type_buttons['vacation'] = create_type_card(
+                        'vacation', 'Vacation', 'beach_access', '#3b82f6'
+                    )
 
                 # Sick button
                 if 'sick' in leave_type_options:
-                    type_buttons['sick'] = ui.button(
-                        'Sick',
-                        icon='local_hospital',
-                        on_click=create_type_handler('sick')
-                    ).classes('flex-1')
+                    type_buttons['sick'] = create_type_card(
+                        'sick', 'Sick', 'local_hospital', '#22c55e'
+                    )
 
                 # Personal button
                 if 'personal' in leave_type_options:
-                    type_buttons['personal'] = ui.button(
-                        'Personal',
-                        icon='person',
-                        on_click=create_type_handler('personal')
-                    ).classes('flex-1')
+                    type_buttons['personal'] = create_type_card(
+                        'personal', 'Personal', 'person', '#a855f7'
+                    )
+
+                # Leave button (Chicago Safe Leave) - amber, shown only for Chicago employees
+                if show_chicago_leave:
+                    type_buttons['chicago_leave'] = create_type_card(
+                        'chicago_leave', 'Leave', 'spa', '#f59e0b'
+                    )
 
                 # Work From Home button (red)
                 if 'work_from_home' in leave_type_options:
-                    type_buttons['work_from_home'] = ui.button(
-                        'WFH',
-                        icon='home_work',
-                        on_click=create_type_handler('work_from_home')
-                    ).classes('flex-1')
+                    type_buttons['work_from_home'] = create_type_card(
+                        'work_from_home', 'WFH', 'home_work', '#ef4444'
+                    )
 
-            # Other types dropdown (if any exist)
-            other_select = None
+            # Other types - expandable row underneath main types
+            other_types_container = {'ref': None, 'visible': False}
             if other_types:
-                with ui.row().classes('w-full gap-2 items-center'):
-                    type_buttons['other'] = ui.button(
-                        'Other',
-                        icon='more_horiz',
-                        on_click=lambda: select_other_type()
-                    ).classes('shrink-0')
+                # Icon and color mapping for "Other" leave types (colors work in both light/dark mode)
+                # Colors chosen to be distinct from primary types and each other
+                other_type_icons = {
+                    'bereavement': ('sentiment_very_dissatisfied', '#6366f1'),  # Indigo
+                    'fmla': ('medical_services', '#0891b2'),                     # Cyan
+                    'jury_duty': ('gavel', '#ec4899'),                           # Pink/Rose (distinct from indigo)
+                    'voting': ('how_to_vote', '#0d9488'),                        # Teal
+                    'military': ('military_tech', '#64748b'),                    # Slate gray (professional)
+                }
+                default_other_icon = ('event_note', '#78716c')  # Stone gray
 
-                    other_select = ui.select(
-                        other_types,
-                        label='Other Leave Type',
-                        value=None
-                    ).classes('flex-1')
+                def toggle_other_types():
+                    other_types_container['visible'] = not other_types_container['visible']
+                    other_types_container['ref'].set_visibility(other_types_container['visible'])
+                    # Update toggle button text
+                    if other_types_container['visible']:
+                        toggle_btn.text = 'Hide Other Leave Types'
+                        toggle_btn.props('icon=expand_less')
+                    else:
+                        toggle_btn.text = 'More Leave Types'
+                        toggle_btn.props('icon=expand_more')
 
-                    def on_other_select_change(e):
-                        if e.value:
-                            selected_type['value'] = e.value
-                            update_type_button_styles()
-                            update_balance_display()
-                            update_summary_color()
-                            update_calendar_colors()
-                            update_half_day_visibility()
-                            update_date_mode_buttons()
-                            update_notes_label()
+                # Toggle button - styled with TJM gold accent
+                with ui.row().classes('w-full justify-center mt-3'):
+                    toggle_btn = ui.button(
+                        'More Leave Types',
+                        icon='expand_more',
+                        on_click=toggle_other_types
+                    ).props('outline rounded').style('color: #c9a227; border-color: #c9a227;').classes('text-sm')
 
-                    other_select.on('update:model-value', on_other_select_change)
+                # Container for other leave type cards (hidden by default)
+                other_types_container['ref'] = ui.row().classes('w-full gap-4 mt-4 justify-center flex-wrap')
+                other_types_container['ref'].set_visibility(False)
 
-                    def select_other_type():
-                        if other_select and other_select.value:
-                            selected_type['value'] = other_select.value
-                        elif other_types:
-                            # Select first other type
-                            first_other = list(other_types.keys())[0]
-                            other_select.value = first_other
-                            selected_type['value'] = first_other
-                        update_type_button_styles()
-                        update_balance_display()
-                        update_summary_color()
-                        update_calendar_colors()
-                        update_half_day_visibility()
-                        update_date_mode_buttons()
-                        update_notes_label()
+                def create_other_type_card(type_code, label, icon, color):
+                    """Create a card for other leave types - same size as primary types."""
+                    with ui.card().classes('cursor-pointer p-4 text-center').style(
+                        f'width: 120px; height: 120px; border: 2px solid transparent; transition: all 0.2s ease;'
+                    ) as card:
+                        card.on('click', create_type_handler(type_code))
+                        with ui.column().classes('items-center justify-center gap-1 h-full'):
+                            ui.icon(icon, size='3.5rem').style(f'color: {color};')
+                            ui.label(label).classes('text-base font-semibold').style(f'color: {color};')
+                            # No balance for other types
+                            ui.label('No Limit').classes('text-sm').style(f'color: {color}; opacity: 0.7;')
+                    return card
+
+                with other_types_container['ref']:
+                    for code, name in other_types.items():
+                        icon_info = other_type_icons.get(code, default_other_icon)
+                        # Shorten long names for display
+                        short_name = name.replace(' Leave', '').replace('Bereavement', 'Bereave.')
+                        type_buttons[code] = create_other_type_card(code, short_name, icon_info[0], icon_info[1])
 
             def update_type_button_styles():
-                """Update button styles based on current selection."""
+                """Update card styles based on current selection."""
                 current = selected_type['value']
-                is_other = current not in primary_types
 
-                for type_code, btn in type_buttons.items():
-                    if type_code == 'other':
-                        # Other button selected when current type is not primary
-                        if is_other:
-                            btn.props(remove='outline')
-                            btn.props('color=grey')
-                        else:
-                            btn.props(remove='color=grey color=blue color=green color=purple color=red')
-                            btn.props('outline')
-                    elif type_code == current:
-                        # Selected primary button
-                        color = type_colors.get(type_code, {}).get('color', 'primary')
-                        btn.props(remove='outline')
-                        btn.props(f'color={color}')
+                # Color mapping for border highlights (primary + other types)
+                card_colors = {
+                    'vacation': '#3b82f6',      # Blue
+                    'sick': '#22c55e',          # Green
+                    'personal': '#a855f7',      # Purple
+                    'chicago_leave': '#f59e0b', # Amber
+                    'work_from_home': '#ef4444', # Red
+                    # Other leave types
+                    'bereavement': '#6366f1',   # Indigo
+                    'fmla': '#0891b2',          # Cyan
+                    'jury_duty': '#ec4899',     # Pink/Rose
+                    'voting': '#0d9488',        # Teal
+                    'military': '#64748b',      # Slate gray
+                }
+
+                for type_code, card in type_buttons.items():
+                    if type_code == current:
+                        # Selected card - add colored border and subtle glow
+                        color = card_colors.get(type_code, '#64748b')
+                        card.style(f'border: 3px solid {color}; box-shadow: 0 0 12px {color}40; transform: scale(1.05);')
                     else:
-                        # Unselected primary button
-                        btn.props(remove='color=blue color=green color=purple color=red color=grey')
-                        btn.props('outline')
-
-                # Clear other select if primary type selected
-                if not is_other and other_select:
-                    other_select.value = None
+                        # Unselected card - transparent border
+                        card.style('border: 2px solid transparent; box-shadow: none; transform: scale(1);')
 
             def update_half_day_visibility():
                 """Show/hide half-day option based on selected type."""
@@ -317,7 +444,16 @@ def request_form_page():
             pto_type = PTOTypeProxy()
 
             # Balance display for selected type
-            balance_row = ui.row().classes('w-full mt-3 p-3 rounded-lg justify-around').style('border: 1px solid rgba(128,128,128,0.3)')
+            with ui.row().classes('w-full mt-3 items-center gap-2'):
+                ui.label('Your Balance').classes('text-sm font-medium opacity-70')
+                ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                    'Understanding Your Balance',
+                    'Available: Hours you can use for time off requests.\n\n'
+                    'Used: Hours already taken this year.\n\n'
+                    'Pending: Hours in submitted requests awaiting approval.\n\n'
+                    'Your available balance = Total allocation + Carryover - Used - Pending'
+                )).props('flat dense round size=sm').style('color: #f59e0b')
+            balance_row = ui.row().classes('w-full p-3 rounded-lg justify-around').style('border: 1px solid rgba(128,128,128,0.3)')
 
             def get_balance_for_type(leave_type_code, for_year=None):
                 """Get available, used, and pending hours for a leave type.
@@ -357,6 +493,12 @@ def request_form_page():
                         used = float(balance.personal_used or 0)
                         pending = 0
                         carryover = float(balance.personal_carryover or 0)
+                    elif code == 'CHICAGO_LEAVE':
+                        # Chicago Leave uses the chicago_paid_leave balance (16hr carryover)
+                        total = float(balance.chicago_paid_leave_total or 0)
+                        used = float(balance.chicago_paid_leave_used or 0)
+                        pending = float(balance.chicago_paid_leave_pending or 0)
+                        carryover = float(balance.chicago_paid_leave_carryover or 0)
                     else:
                         return 0, 0, 0, 0, False
 
@@ -402,7 +544,25 @@ def request_form_page():
                         return
 
                     total, used, pending, available, balance_allocated = get_balance_for_type(pto_type.value)
+
+                    # Types without balance tracking (bereavement, fmla, jury_duty, voting, military)
+                    non_balance_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+                    if pto_type.value.lower() in non_balance_types:
+                        type_name = other_types.get(pto_type.value, pto_type.value.replace('_', ' ').title())
+                        with ui.column().classes('items-center'):
+                            ui.icon('check_circle', color='green').classes('text-2xl')
+                            ui.label(type_name).classes('text-lg font-bold')
+                        with ui.column().classes('items-center ml-6'):
+                            ui.label('No balance required').classes('text-sm opacity-60')
+                            ui.label('Requires manager approval').classes('text-xs opacity-40')
+                        return
                     target_year = state['start_date'].year
+
+                    # Show Chicago leave indicator
+                    if pto_type.value == 'chicago_leave':
+                        with ui.column().classes('items-center mr-4'):
+                            ui.icon('location_city', color='amber').classes('text-xl')
+                            ui.label('Chicago').classes('text-xs text-amber-500')
 
                     # Show year indicator if different from current year
                     with ui.column().classes('items-center'):
@@ -438,6 +598,13 @@ def request_form_page():
             with ui.row().classes('items-center mb-3'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">2</span>', sanitize=False)
                 ui.label('Select Date(s)').classes('text-lg font-semibold')
+                ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                    'Date Selection',
+                    'Single Day: Request one day off, with optional half-day (4 hours).\n\n'
+                    'Date Range: Request multiple consecutive days off.\n\n'
+                    'Business Days Only: Weekends (Sat/Sun) and company holidays are automatically excluded from your request and won\'t count against your balance.\n\n'
+                    'WFH requests are limited to single day only and must be within 7 days.'
+                )).props('flat dense round size=sm').style('color: #f59e0b')
 
             # Single day vs Date range toggle
             with ui.row().classes('w-full mb-4 gap-2'):
@@ -459,22 +626,38 @@ def request_form_page():
                     'sick': 'border-green-500',
                     'personal': 'border-purple-500',
                     'work_from_home': 'border-red-500',
+                    'chicago_leave': 'border-amber-500',
+                    # Other leave types
+                    'bereavement': 'border-indigo-500',
+                    'fmla': 'border-cyan-500',
+                    'jury_duty': 'border-pink-500',
+                    'voting': 'border-teal-500',
+                    'military': 'border-slate-500',
                 }
-                new_border = color_map.get(current, 'border-grey-500')
-                summary_container.classes(remove='border-blue-500 border-green-500 border-purple-500 border-red-500 border-grey-500')
+                new_border = color_map.get(current, 'border-gray-500')
+                summary_container.classes(remove='border-blue-500 border-green-500 border-purple-500 border-red-500 border-amber-500 border-teal-500 border-grey-500 border-gray-500 border-indigo-500 border-cyan-500 border-pink-500 border-slate-500')
                 summary_container.classes(add=new_border)
 
             def update_calendar_colors():
                 """Update calendar accent colors based on selected PTO type."""
                 current = selected_type['value']
-                # Use grey for any non-primary type (other types like bereavement, fmla, etc.)
-                if current in primary_types:
-                    cal_color = type_colors.get(current, {}).get('color', 'blue')
-                else:
-                    cal_color = 'grey'
+                # Map types to Quasar colors
+                cal_color_map = {
+                    'vacation': 'blue',
+                    'sick': 'green',
+                    'personal': 'purple',
+                    'work_from_home': 'red',
+                    'chicago_leave': 'amber',
+                    'bereavement': 'indigo',
+                    'fmla': 'cyan',
+                    'jury_duty': 'pink',
+                    'voting': 'teal',
+                    'military': 'blue-grey',
+                }
+                cal_color = cal_color_map.get(current, 'grey')
                 for key, cal in calendar_widgets.items():
                     if cal:
-                        cal.props(remove='color=blue color=green color=purple color=red color=grey')
+                        cal.props(remove='color=blue color=green color=purple color=red color=amber color=grey color=indigo color=cyan color=pink color=teal color=blue-grey')
                         cal.props(f'color={cal_color}')
 
             def set_date_mode(is_single):
@@ -492,6 +675,14 @@ def request_form_page():
             def build_date_selector():
                 date_selection_container.clear()
                 with date_selection_container:
+                    # Get PTO type info for overlay
+                    current_type = selected_type['value']
+                    type_icon, type_hex = type_icons.get(current_type, ('event', '#9ca3af'))
+                    type_label = leave_type_options.get(current_type, current_type.replace('_', ' ').title()) if current_type else 'Select Type'
+                    # Shorten "Work From Home" to "WFH" for calendar overlay
+                    if current_type == 'work_from_home':
+                        type_label = 'WFH'
+
                     if state['is_single_day']:
                         # SINGLE DAY MODE
                         def on_single_date_change(e):
@@ -506,11 +697,19 @@ def request_form_page():
                         # Set minimum date to today, exclude weekends and holidays (market closures)
                         # Note: Quasar uses YYYY/MM/DD format, so convert to YYYY-MM-DD for comparison
                         cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
-                        calendar = ui.date(
-                            value=state['start_date'].isoformat(),
-                            on_change=on_single_date_change
-                        ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
-                        calendar_widgets['single'] = calendar
+
+                        # Wrap calendar in relative container for icon overlay
+                        with ui.element('div').classes('relative w-full'):
+                            calendar = ui.date(
+                                value=state['start_date'].isoformat(),
+                                on_change=on_single_date_change
+                            ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
+                            calendar_widgets['single'] = calendar
+
+                            # PTO type overlay on calendar header
+                            with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
+                                ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                                ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
 
                         # Half-day option (only for single day, not for WFH)
                         half_day_row = ui.row().classes('w-full mt-3 items-center')
@@ -551,11 +750,19 @@ def request_form_page():
 
                                 # Set minimum date to today, exclude weekends and holidays (market closures)
                                 cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
-                                start_calendar = ui.date(
-                                    value=state['start_date'].isoformat(),
-                                    on_change=on_start_change
-                                ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
-                                calendar_widgets['start'] = start_calendar
+
+                                # Wrap calendar in relative container for icon overlay
+                                with ui.element('div').classes('relative w-full'):
+                                    start_calendar = ui.date(
+                                        value=state['start_date'].isoformat(),
+                                        on_change=on_start_change
+                                    ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
+                                    calendar_widgets['start'] = start_calendar
+
+                                    # PTO type overlay on calendar header
+                                    with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
+                                        ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                                        ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
 
                             with ui.column().classes('flex-1'):
                                 ui.label('End Date').classes('text-sm font-medium mb-1')
@@ -564,7 +771,25 @@ def request_form_page():
                                     if e.value:
                                         picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
                                         if picked >= state['start_date']:
-                                            state['end_date'] = picked
+                                            # Check for cross-year requests (not allowed)
+                                            if picked.year != state['start_date'].year:
+                                                show_warning_dialog('Cross-Year Request Not Allowed',
+                                                    'PTO requests cannot span multiple years. '
+                                                    'Please submit separate requests for each year.')
+                                                # Reset to start date
+                                                state['end_date'] = state['start_date']
+                                                end_calendar.value = state['start_date'].isoformat()
+                                            # Check for unreasonably large date range (max 90 calendar days / ~3 months)
+                                            elif (picked - state['start_date']).days > 90:
+                                                show_warning_dialog('Date Range Too Large',
+                                                    f'The selected range spans {(picked - state["start_date"]).days} days. '
+                                                    'Please select a shorter range (max ~3 months). '
+                                                    'For extended leave, please contact HR.')
+                                                # Reset to start date
+                                                state['end_date'] = state['start_date']
+                                                end_calendar.value = state['start_date'].isoformat()
+                                            else:
+                                                state['end_date'] = picked
                                         else:
                                             state['end_date'] = state['start_date']
                                             end_calendar.value = state['start_date'].isoformat()
@@ -579,28 +804,6 @@ def request_form_page():
                                 ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
                                 calendar_widgets['end'] = end_calendar
 
-                        # Quick range buttons
-                        with ui.row().classes('w-full gap-2 mt-3 flex-wrap'):
-                            def set_range(start, end):
-                                state['start_date'] = start
-                                state['end_date'] = end
-                                start_calendar.value = start.isoformat()
-                                end_calendar.value = end.isoformat()
-                                update_balance_display()
-                                update_summary()
-                                update_warning()
-
-                            # This week (remaining days)
-                            today = date.today()
-                            friday = today + timedelta(days=(4 - today.weekday()))
-                            if friday > today:
-                                ui.button('Rest of Week', on_click=lambda: set_range(today, friday)).props('size=sm outline')
-
-                            # Next full week
-                            next_mon = today + timedelta(days=(7 - today.weekday()))
-                            next_fri = next_mon + timedelta(days=4)
-                            ui.button('Next Week (Mon-Fri)', on_click=lambda: set_range(next_mon, next_fri)).props('size=sm outline')
-
             def update_summary():
                 summary_container.clear()
                 with summary_container:
@@ -612,8 +815,23 @@ def request_form_page():
                     hours_requested = total_days * 8
 
                     is_wfh = pto_type.value == 'work_from_home'
-                    icon_color = 'red' if is_wfh else 'blue'
-                    text_color = 'text-red-600' if is_wfh else 'text-blue-600'
+                    is_chicago = pto_type.value == 'chicago_leave'
+                    non_balance_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+                    is_non_balance = pto_type.value and pto_type.value.lower() in non_balance_types
+
+                    # Determine colors based on leave type
+                    if is_wfh:
+                        icon_color = 'red'
+                        text_color = 'text-red-600'
+                    elif is_chicago:
+                        icon_color = 'amber'
+                        text_color = 'text-amber-600'
+                    elif is_non_balance:
+                        icon_color = 'grey'
+                        text_color = 'text-grey-600'
+                    else:
+                        icon_color = type_colors.get(pto_type.value, {}).get('color', 'blue')
+                        text_color = type_colors.get(pto_type.value, {}).get('text', 'text-blue-600')
 
                     # Date display
                     with ui.column().classes('items-center'):
@@ -634,34 +852,57 @@ def request_form_page():
 
                     ui.icon('arrow_forward').classes('opacity-40')
 
-                    # Balance after (or WFH indicator)
+                    # Balance after (or special indicators)
                     if is_wfh:
                         with ui.column().classes('items-center'):
                             ui.icon('home_work', color='red').classes('text-2xl')
                             ui.label('WFH').classes('text-xs opacity-60')
+                    elif is_non_balance:
+                        with ui.column().classes('items-center'):
+                            ui.icon('check_circle', color='green').classes('text-2xl')
+                            ui.label('No balance limit').classes('text-xs opacity-60')
                     else:
                         _, _, _, available, _ = get_balance_for_type(pto_type.value)
                         remaining = available - hours_requested
                         with ui.column().classes('items-center'):
                             if remaining < 0:
-                                ui.label(fmt_days(remaining/8)).classes('text-2xl font-bold text-red-600')
+                                remaining_display, remaining_tooltip = format_days_hours(remaining)
+                                ui.label(remaining_display).classes('text-2xl font-bold text-red-600').tooltip(remaining_tooltip)
                                 ui.label('OVER LIMIT').classes('text-xs text-red-600 font-bold')
                             else:
                                 color = 'text-green-600' if remaining >= 16 else 'text-amber-600'
-                                ui.label(fmt_days(remaining/8)).classes(f'text-2xl font-bold {color}')
-                                ui.label('days remaining').classes('text-xs opacity-60')
+                                remaining_display, remaining_tooltip = format_days_hours(remaining)
+                                ui.label(remaining_display).classes(f'text-2xl font-bold {color}').tooltip(remaining_tooltip)
+                                ui.label('remaining').classes('text-xs opacity-60')
 
             # Initialize the date mode buttons
             single_day_btn.props('color=primary')
             range_btn.props('color=grey')
 
         # ============ STEP 3: NOTES ============
+        # Define which types have private notes (other leave types)
+        private_notes_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+
         with ui.card().classes('w-full mb-4 p-3'):
             with ui.row().classes('items-center mb-2'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">3</span>', sanitize=False)
                 notes_header = ui.label('Notes (optional)').classes('text-lg font-semibold')
+                ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                    'Notes & Privacy',
+                    'Notes: Add context for your request.\n\n'
+                    'Required for: WFH requests only (reason needed).\n\n'
+                    '🔒 PRIVATE NOTES: For Bereavement, FMLA, Jury Duty, Voting, and Military leave, notes are optional and ONLY visible to you - your manager will NOT see them.\n\n'
+                    'Keep Private: Managers/admins can mark requests private to hide from the department calendar.'
+                )).props('flat dense round size=sm').style('color: #f59e0b')
 
             description = ui.input().classes('w-full').props('dense')
+
+            # Privacy notice container (shown for other leave types)
+            privacy_notice_container = ui.row().classes('w-full mt-2 items-center gap-2 p-2 rounded').style('background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3);')
+            privacy_notice_container.set_visibility(False)
+            with privacy_notice_container:
+                ui.icon('lock', color='indigo', size='sm')
+                ui.label('Notes are private - only visible to you, not your manager').classes('text-xs text-indigo-400')
 
             # Private toggle - only for managers/admins/superadmins
             if user_role in ['manager', 'admin', 'superadmin']:
@@ -672,17 +913,24 @@ def request_form_page():
                     ui.switch('Keep Private', value=state['is_private'], on_change=on_private_change)
                     ui.label('(Hidden from department calendar)').classes('text-xs opacity-60')
 
-            # Update header if documentation required or WFH (requires reason)
+            # Update header and privacy notice based on leave type
             def update_notes_label():
+                is_private_type = pto_type.value in private_notes_types
                 if pto_type.value == 'work_from_home':
+                    # Only WFH requires a reason
                     notes_header.text = 'Reason (required)'
-                    notes_header.classes('text-lg font-semibold text-red-600', remove='text-gray-600')
-                elif pto_type.value in requires_doc_types:
-                    notes_header.text = 'Notes (required)'
-                    notes_header.classes('text-lg font-semibold text-red-600', remove='text-gray-600')
+                    notes_header.classes('text-lg font-semibold text-red-600', remove='text-gray-600 text-indigo-400')
+                    privacy_notice_container.set_visibility(False)
+                elif is_private_type:
+                    # Other leave types (bereavement, fmla, etc.) have private optional notes
+                    notes_header.text = 'Private Notes (optional)'
+                    notes_header.classes('text-lg font-semibold text-indigo-400', remove='text-red-600 text-gray-600')
+                    privacy_notice_container.set_visibility(True)
                 else:
+                    # Vacation, Sick, Personal, Leave - all have optional notes with privacy notice
                     notes_header.text = 'Notes (optional)'
-                    notes_header.classes('text-lg font-semibold', remove='text-red-600')
+                    notes_header.classes('text-lg font-semibold', remove='text-red-600 text-indigo-400')
+                    privacy_notice_container.set_visibility(True)
 
         # ============ SUBMIT SECTION ============
         with ui.card().classes('w-full'):
@@ -740,13 +988,28 @@ def request_form_page():
                                         ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
 
                         # Warning for exceeding available balance
+                        is_chicago = pto_type.value == 'chicago_leave'
                         if hours_requested > available:
-                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
-                                with ui.row().classes('items-start'):
-                                    ui.icon('warning', color='red').classes('mr-2 mt-1')
-                                    with ui.column().classes('gap-0'):
-                                        ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)} days').classes('text-red-500 font-medium')
-                                        ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
+                            if is_chicago:
+                                # BLOCK Chicago Safe Leave requests when over balance (per ordinance requirement)
+                                state['chicago_blocked'] = True
+                                with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500 bg-red-900/20'):
+                                    with ui.row().classes('items-start'):
+                                        ui.icon('block', color='red').classes('mr-2 mt-1')
+                                        with ui.column().classes('gap-0'):
+                                            ui.label(f'Cannot request - insufficient accrued time').classes('text-red-500 font-bold')
+                                            ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)}').classes('text-red-400 text-sm')
+                                            ui.label('Per Chicago ordinance, you can only use time that has been accrued.').classes('text-sm opacity-70 mt-1')
+                            else:
+                                state['chicago_blocked'] = False
+                                with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
+                                    with ui.row().classes('items-start'):
+                                        ui.icon('warning', color='red').classes('mr-2 mt-1')
+                                        with ui.column().classes('gap-0'):
+                                            ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)}').classes('text-red-500 font-medium')
+                                            ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
+                        else:
+                            state['chicago_blocked'] = False
 
                     # Check for holidays in the selected date range
                     try:
@@ -769,27 +1032,47 @@ def request_form_page():
                     except Exception:
                         pass  # Don't block form if holiday check fails
 
-            with ui.row().classes('w-full gap-4'):
-                submit_btn = ui.button(
-                    'Submit Request',
-                    icon='send',
-                    on_click=lambda: submit_request(
-                        user['id'],
-                        pto_type.value,
-                        state['start_date'],
-                        state['end_date'],
-                        state['is_half_day'],
-                        description.value,
-                        submit_btn,
-                        state['is_private']
-                    )
-                ).classes('flex-1').props('color=primary size=lg')
+                # Update submit button state after warning check
+                try:
+                    update_submit_button()
+                except NameError:
+                    pass  # Function not defined yet during initial setup
 
-                ui.button(
-                    'Cancel',
-                    icon='close',
-                    on_click=lambda: ui.navigate.to('/dashboard')
-                ).classes('flex-1').props('outline size=lg')
+            # Submit button container (updated dynamically based on blocking state)
+            submit_container = ui.row().classes('w-full justify-between')
+            submit_btn_ref = {'btn': None}
+
+            def update_submit_button():
+                """Update submit button based on blocking state."""
+                submit_container.clear()
+                with submit_container:
+                    if state['chicago_blocked']:
+                        # Disabled submit button for blocked Chicago Safe Leave
+                        submit_btn_ref['btn'] = ui.button(
+                            'Cannot Submit - Insufficient Balance',
+                            icon='block',
+                        ).props('color=red disabled')
+                    else:
+                        submit_btn_ref['btn'] = ui.button(
+                            'Submit Request',
+                            icon='send',
+                            on_click=lambda: submit_request(
+                                user['id'],
+                                pto_type.value,
+                                state['start_date'],
+                                state['end_date'],
+                                state['is_half_day'],
+                                description.value,
+                                submit_btn_ref['btn'],
+                                state['is_private']
+                            )
+                        ).props('color=primary')
+
+                    ui.button(
+                        'Cancel',
+                        icon='close',
+                        on_click=go_back
+                    ).props('outline')
 
         # Build initial state
         build_date_selector()
@@ -798,11 +1081,19 @@ def request_form_page():
         update_summary()
         update_summary_color()
         update_warning()
+        update_submit_button()
 
 
 def submit_request(user_id, pto_type, start_date, end_date, half_day, description, submit_btn=None, is_private=False):
     """Submit PTO request with validation and database operations."""
     from datetime import datetime
+
+    # Define which types have private notes (other leave types)
+    private_notes_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
+
+    # Automatically make notes private for other leave types
+    if pto_type.lower() in private_notes_types:
+        is_private = True
 
     if not start_date or not end_date:
         show_warning_dialog('Missing Dates', 'Please select both a start date and end date for your request.')
@@ -818,6 +1109,25 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             submit_btn.props(remove='loading disabled')
         return
 
+    # Cross-year request check (not allowed)
+    if start_date.year != end_date.year:
+        show_warning_dialog('Cross-Year Request Not Allowed',
+            'PTO requests cannot span multiple years. '
+            'Please submit separate requests for each year.')
+        if submit_btn:
+            submit_btn.props(remove='loading disabled')
+        return
+
+    # Maximum date range check (90 calendar days / ~3 months)
+    days_diff = (end_date - start_date).days
+    if days_diff > 90:
+        show_warning_dialog('Date Range Too Large',
+            f'The selected range spans {days_diff} days. Please select a shorter range (max ~3 months). '
+            'For extended leave, please contact HR.')
+        if submit_btn:
+            submit_btn.props(remove='loading disabled')
+        return
+
     # WFH date restriction: only within 1 week allowed (employees only)
     if pto_type.lower() == 'work_from_home':
         one_week_out = date.today() + timedelta(days=7)
@@ -826,6 +1136,45 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
+
+    # Chicago Leave - block if exceeding accrued balance (per city ordinance)
+    if pto_type.lower() == 'chicago_leave':
+        db_chicago_check = next(get_db())
+        try:
+            from src.models import PTOBalance
+            balance = db_chicago_check.query(PTOBalance).filter(
+                PTOBalance.user_id == user_id,
+                PTOBalance.year == start_date.year
+            ).first()
+
+            if balance:
+                # Get Chicago Leave available balance (uses chicago_paid_leave fields)
+                chicago_available = float(balance.chicago_paid_leave_available)
+                leave_name = 'Chicago Leave'
+
+                total_days = (end_date - start_date).days + 1
+                if half_day:
+                    total_days = 0.5
+                hours_requested = total_days * 8
+
+                if hours_requested > chicago_available:
+                    with ui.dialog() as chicago_dialog, ui.card().classes('p-0 max-w-md'):
+                        with ui.row().classes('w-full p-4 bg-red-500 text-white items-center'):
+                            ui.icon('block', size='md').classes('mr-2')
+                            ui.label('Insufficient Accrued Time').classes('text-lg font-bold')
+                        with ui.column().classes('p-4 gap-3'):
+                            ui.label(f'{leave_name} can only be used after it has been accrued.').classes('text-base')
+                            ui.label(f'Requested: {total_days} days ({hours_requested:.0f} hours)').classes('text-sm')
+                            ui.label(f'Available: {chicago_available:.0f} hours').classes('text-sm font-semibold')
+                            ui.label('Per Chicago ordinance, you accrue 1 hour for every 40 hours worked.').classes('text-sm opacity-70 mt-2')
+                            with ui.row().classes('w-full justify-end mt-2'):
+                                ui.button('OK', on_click=chicago_dialog.close).props('color=primary')
+                    chicago_dialog.open()
+                    if submit_btn:
+                        submit_btn.props(remove='loading disabled')
+                    return
+        finally:
+            db_chicago_check.close()
 
     # Block if start or end date is a weekend (server-side safety check)
     # Note: Calendar picker already blocks weekend selection, but this catches bypassed validation
@@ -900,15 +1249,9 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             LeaveType.code == pto_type.upper()
         ).first()
 
-        # WFH requires a reason
+        # Only WFH requires a reason - all other leave types have optional notes
         if pto_type.lower() == 'work_from_home' and not description.strip():
             show_warning_dialog('Reason Required', 'Please provide a reason for your Work From Home request in the notes field.')
-            if submit_btn:
-                submit_btn.props(remove='loading disabled')
-            return
-
-        if leave_type and leave_type.requires_documentation and not description.strip():
-            show_warning_dialog('Description Required', f'Please provide a description for your {leave_type.name} request in the notes field.')
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
@@ -953,9 +1296,9 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
 
         if policy and policy.min_increment_hours:
             if hours_requested < float(policy.min_increment_hours):
-                ui.notify(
-                    f'Minimum request is {policy.min_increment_hours} hours for your location',
-                    type='negative'
+                show_error_dialog(
+                    'Minimum Hours Required',
+                    f'Minimum request is {policy.min_increment_hours} hours for your location'
                 )
                 if submit_btn:
                     submit_btn.props(remove='loading disabled')
@@ -964,9 +1307,9 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         if policy and policy.advance_notice_days and policy.advance_notice_days > 0:
             days_until_start = (start_date - date.today()).days
             if days_until_start < policy.advance_notice_days:
-                ui.notify(
-                    f'Note: {policy.advance_notice_days} days advance notice is typically required',
-                    type='warning'
+                show_warning_dialog(
+                    'Advance Notice',
+                    f'Note: {policy.advance_notice_days} days advance notice is typically required'
                 )
 
         pto_service = PTOService(db)
@@ -1010,7 +1353,8 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 f"{employee.first_name} {employee.last_name} (auto-approved)"
             )
 
-            ui.notify('PTO request approved automatically!', type='positive')
+            show_success_dialog('Request Approved', 'PTO request approved automatically!', on_close=lambda: ui.navigate.to('/dashboard'))
+            return  # Exit early, navigation handled by dialog
         else:
             # Send confirmation email to employee
             email_service.send_pto_submitted(
@@ -1035,9 +1379,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                     float(total_days)
                 )
 
-            ui.notify('PTO request submitted for approval', type='positive')
-
-        ui.navigate.to('/dashboard')
+            show_success_dialog('Request Submitted', 'PTO request submitted for approval', on_close=lambda: ui.navigate.to('/dashboard'))
 
     except Exception as e:
         show_error_dialog('Submit Error', f'Error submitting request: {str(e)}')

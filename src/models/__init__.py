@@ -17,6 +17,9 @@ from .handbook_revision import HandbookRevision
 from .year_end_status import YearEndStatus
 from .manager_notification_preference import ManagerNotificationPreference
 from .pending_notification import PendingNotification
+from .handbook_upload import HandbookUpload
+from .policy_change_log import PolicyChangeLog
+from .system_setting import SystemSetting
 
 # Make all models available when importing from this module
 __all__ = [
@@ -36,4 +39,7 @@ __all__ = [
     'YearEndStatus',
     'ManagerNotificationPreference',
     'PendingNotification',
+    'HandbookUpload',
+    'PolicyChangeLog',
+    'SystemSetting',
 ]

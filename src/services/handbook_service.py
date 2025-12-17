@@ -5,6 +5,7 @@ import os
 import logging
 from typing import Optional
 import anthropic
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,8 @@ class HandbookService:
         try:
             if self._db_session:
                 from src.models.handbook_revision import HandbookRevision
-                active = self._db_session.query(HandbookRevision).filter(
-                    HandbookRevision.is_active == True
-                ).first()
+                stmt = select(HandbookRevision).where(HandbookRevision.is_active == True)
+                active = self._db_session.execute(stmt).scalar_one_or_none()
                 if active:
                     self._handbook_content = active.content
                     logger.debug(f"Loaded handbook version {active.version} from database")
@@ -88,9 +88,8 @@ Remember: You can ONLY provide information from this handbook. For anything else
         try:
             if self._db_session:
                 from src.models.handbook_revision import HandbookRevision
-                active = self._db_session.query(HandbookRevision).filter(
-                    HandbookRevision.is_active == True
-                ).first()
+                stmt = select(HandbookRevision).where(HandbookRevision.is_active == True)
+                active = self._db_session.execute(stmt).scalar_one_or_none()
                 if active:
                     return active.version
         except Exception:

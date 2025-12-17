@@ -81,7 +81,15 @@ class User(Base):
         nullable=True,
         comment="When trust was granted"
     )
-    
+
+    # Soft delete
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        index=True,
+        comment="Soft delete timestamp - user archived when set"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 

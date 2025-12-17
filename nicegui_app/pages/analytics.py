@@ -6,13 +6,25 @@ from src.services.department_service import DepartmentService
 from src.services.export_service import ExportService
 from datetime import date, timedelta
 import base64
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog
 from nicegui_app.components.charts import (
     monthly_trend_chart,
     department_utilization_bars,
     day_of_week_pattern
 )
+
+
+def show_help_tip(title: str, message: str):
+    """Show a help tip dialog with OK button."""
+    with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+        with ui.row().classes('items-center gap-2 mb-4'):
+            ui.icon('help', color='amber', size='md')
+            ui.label(title).classes('text-lg font-bold')
+        ui.label(message).classes('text-sm opacity-80')
+        with ui.row().classes('w-full justify-end mt-4'):
+            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+    dialog.open()
 
 
 def analytics_page():
@@ -90,7 +102,7 @@ def analytics_page():
 
     active_tab = {'value': 'overview'}
 
-    with ui.column().classes('w-full max-w-7xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         # Show department scope for managers
         if is_manager_only and manager_department_name:
             page_header(title=f'ANALYTICS - {manager_department_name.upper()}', show_back=False)
@@ -100,10 +112,16 @@ def analytics_page():
         # Controls row
         with ui.row().classes('w-full items-center justify-between mb-6'):
             # Tab buttons for different views
-            with ui.row().classes('gap-2'):
+            with ui.row().classes('gap-2 items-center'):
                 overview_btn = ui.button('Overview', icon='dashboard')
                 trends_btn = ui.button('Trends', icon='trending_up')
                 insights_btn = ui.button('Insights', icon='lightbulb')
+                ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                    'Analytics Dashboard',
+                    'Overview: Key metrics at a glance - total days used, pending requests, utilization rates, and leave type breakdown.\n\n'
+                    'Trends: Monthly PTO usage charts showing patterns throughout the year. See which months have highest/lowest usage.\n\n'
+                    'Insights: Actionable intelligence - high utilization employees, unusual patterns, and department comparisons.'
+                )).props('flat dense round size=sm').style('color: #f59e0b')
 
                 def update_tab_button_styles():
                     """Update tab button styles based on active tab."""
@@ -188,7 +206,7 @@ def analytics_page():
                         b64 = base64.b64encode(pdf_bytes).decode('utf-8')
                         filename = f"analytics_report_{date.today().isoformat()}.pdf"
                         ui.download(pdf_bytes, filename)
-                        ui.notify('PDF report downloaded', type='positive')
+                        show_success_dialog('Download Complete', 'PDF report downloaded')
                     except Exception as e:
                         show_error_dialog('Export Failed', f'Error exporting PDF: {str(e)}')
                     finally:
@@ -208,7 +226,7 @@ def analytics_page():
                         csv_str = ExportService.generate_carryover_csv(carryover_risk)
                         filename = f"carryover_risk_{date.today().isoformat()}.csv"
                         ui.download(csv_str.encode('utf-8'), filename)
-                        ui.notify('CSV report downloaded', type='positive')
+                        show_success_dialog('Download Complete', 'CSV report downloaded')
                     except Exception as e:
                         show_error_dialog('Export Failed', f'Error exporting CSV: {str(e)}')
                     finally:
@@ -1852,11 +1870,13 @@ def analytics_page():
 
                                 # Color based on coverage
                                 dot_color = '#22c55e' if pct >= 70 else '#ef4444'
+                                date_str = day['date'].strftime('%b %d')
                                 dots_svg += f'''<circle cx="{x}" cy="{y}" r="5" fill="{dot_color}"
                                     style="cursor: pointer;"
                                     onmouseover="this.setAttribute('r', '8');"
-                                    onmouseout="this.setAttribute('r', '5');">
-                                    <title>{day['date'].strftime('%b %d')}: {pct:.0f}%</title>
+                                    onmouseout="this.setAttribute('r', '5');"
+                                    onclick="document.dispatchEvent(new CustomEvent('coverage-point-click', {{detail: {{date: '{date_str}', coverage: {pct:.0f}}}}}));">
+                                    <title>{date_str}: {pct:.0f}%</title>
                                 </circle>'''
 
                             # 70% threshold line only
@@ -1884,6 +1904,24 @@ def analytics_page():
 
                             ui.html(line_svg, sanitize=False).classes('w-full')
 
+                            # Click info display
+                            coverage_click_label = ui.label('Click a point to see details').classes('text-xs text-gray-400 text-center w-full mt-2')
+
+                            # JavaScript to handle coverage point clicks
+                            ui.run_javascript('''
+                                document.addEventListener('coverage-point-click', function(e) {
+                                    const info = e.detail;
+                                    const elem = document.querySelector('[data-coverage-click-info]');
+                                    if (elem) {
+                                        const color = info.coverage >= 70 ? '#22c55e' : '#ef4444';
+                                        elem.textContent = info.date + ': ' + info.coverage + '% coverage';
+                                        elem.style.color = color;
+                                        elem.style.fontWeight = 'bold';
+                                    }
+                                });
+                            ''')
+                            coverage_click_label._props['data-coverage-click-info'] = 'true'
+
                             # Legend
                             with ui.row().classes('w-full justify-center gap-6 mt-2'):
                                 with ui.row().classes('items-center gap-2'):
@@ -1904,5 +1942,5 @@ def analytics_page():
 
         # Navigation buttons
         with ui.row().classes('w-full justify-between mt-6'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')
             ui.button('View Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline')

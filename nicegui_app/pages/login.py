@@ -107,7 +107,8 @@ def authenticate(username_input, password_input, error_message, login_btn):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'role': user.role,
-                'department_id': user.department_id
+                'department_id': user.department_id,
+                'is_trusted': user.is_trusted  # For trusted employee auto-approve features
             }
             ui.navigate.to('/dashboard')
         else:

@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, select
 
 logger = logging.getLogger(__name__)
 
@@ -35,38 +35,46 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
+
+        # Build base conditions for the year
+        base_conditions = [extract('year', PTORequest.start_date) == year]
+        if user_ids is not None:
+            base_conditions.append(PTORequest.user_id.in_(user_ids))
 
         # Total requests for the year
-        base_query = self.db.query(PTORequest).filter(
-            extract('year', PTORequest.start_date) == year
-        )
-        if user_ids is not None:
-            base_query = base_query.filter(PTORequest.user_id.in_(user_ids))
+        stmt = select(func.count()).select_from(PTORequest).where(*base_conditions)
+        total = self.db.execute(stmt).scalar()
 
-        total = base_query.count()
-        approved = base_query.filter(PTORequest.status == 'approved').count()
-        denied = base_query.filter(PTORequest.status == 'denied').count()
-        pending = base_query.filter(PTORequest.status == 'pending').count()
-        cancelled = base_query.filter(PTORequest.status == 'cancelled').count()
+        stmt = select(func.count()).select_from(PTORequest).where(*base_conditions, PTORequest.status == 'approved')
+        approved = self.db.execute(stmt).scalar()
+
+        stmt = select(func.count()).select_from(PTORequest).where(*base_conditions, PTORequest.status == 'denied')
+        denied = self.db.execute(stmt).scalar()
+
+        stmt = select(func.count()).select_from(PTORequest).where(*base_conditions, PTORequest.status == 'pending')
+        pending = self.db.execute(stmt).scalar()
+
+        stmt = select(func.count()).select_from(PTORequest).where(*base_conditions, PTORequest.status == 'cancelled')
+        cancelled = self.db.execute(stmt).scalar()
 
         # Total days taken
-        approved_requests = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             extract('year', PTORequest.start_date) == year,
             PTORequest.status == 'approved'
         )
         if user_ids is not None:
-            approved_requests = approved_requests.filter(PTORequest.user_id.in_(user_ids))
-        approved_requests = approved_requests.all()
+            stmt = stmt.where(PTORequest.user_id.in_(user_ids))
+        approved_requests = self.db.execute(stmt).scalars().all()
         total_days = sum(float(r.total_days) for r in approved_requests)
 
         # Active employees
-        emp_query = self.db.query(User).filter(User.is_active == True)
+        emp_conditions = [User.is_active == True]
         if department_id:
-            emp_query = emp_query.filter(User.department_id == department_id)
-        active_employees = emp_query.count()
+            emp_conditions.append(User.department_id == department_id)
+        stmt = select(func.count()).select_from(User).where(*emp_conditions)
+        active_employees = self.db.execute(stmt).scalar()
 
         # Average days per employee
         avg_days = total_days / active_employees if active_employees > 0 else 0
@@ -101,9 +109,8 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
         monthly_data = []
 
@@ -115,14 +122,14 @@ class AnalyticsService:
                 month_end = date(year, month + 1, 1) - timedelta(days=1)
 
             # Requests that overlap with this month
-            query = self.db.query(PTORequest).filter(
+            stmt = select(PTORequest).where(
                 PTORequest.status == 'approved',
                 PTORequest.start_date <= month_end,
                 PTORequest.end_date >= month_start
             )
             if user_ids is not None:
-                query = query.filter(PTORequest.user_id.in_(user_ids))
-            requests = query.all()
+                stmt = stmt.where(PTORequest.user_id.in_(user_ids))
+            requests = self.db.execute(stmt).scalars().all()
 
             # Calculate days actually in this month
             days_in_month = 0
@@ -151,18 +158,17 @@ class AnalyticsService:
         from src.models.pto_request import PTORequest
         from src.models.user import User
 
-        query = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.status == 'approved',
             extract('year', PTORequest.start_date) == year
         )
 
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
-            query = query.filter(PTORequest.user_id.in_(user_ids))
+            user_stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(user_stmt).scalars().all()]
+            stmt = stmt.where(PTORequest.user_id.in_(user_ids))
 
-        requests = query.all()
+        requests = self.db.execute(stmt).scalars().all()
 
         # Group by type
         type_data = defaultdict(lambda: {'count': 0, 'days': 0})
@@ -201,17 +207,19 @@ class AnalyticsService:
 
         # If department_id specified, only show that department
         if department_id:
-            departments = self.db.query(Department).filter(Department.id == department_id).all()
+            stmt = select(Department).where(Department.id == department_id)
         else:
-            departments = self.db.query(Department).all()
+            stmt = select(Department)
+        departments = self.db.execute(stmt).scalars().all()
 
         result = []
         for dept in departments:
             # Get users in department
-            users = self.db.query(User).filter(
+            stmt = select(User).where(
                 User.department_id == dept.id,
                 User.is_active == True
-            ).all()
+            )
+            users = self.db.execute(stmt).scalars().all()
 
             if not users:
                 continue
@@ -219,11 +227,12 @@ class AnalyticsService:
             user_ids = [u.id for u in users]
 
             # Get approved requests
-            requests = self.db.query(PTORequest).filter(
+            stmt = select(PTORequest).where(
                 PTORequest.user_id.in_(user_ids),
                 PTORequest.status == 'approved',
                 extract('year', PTORequest.start_date) == year
-            ).all()
+            )
+            requests = self.db.execute(stmt).scalars().all()
 
             total_days = sum(float(r.total_days) for r in requests)
             avg_days = total_days / len(users) if users else 0
@@ -261,18 +270,17 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
         # Get all approved requests for the year
-        query = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.status == 'approved',
             extract('year', PTORequest.start_date) == year
         )
         if user_ids is not None:
-            query = query.filter(PTORequest.user_id.in_(user_ids))
-        requests = query.all()
+            stmt = stmt.where(PTORequest.user_id.in_(user_ids))
+        requests = self.db.execute(stmt).scalars().all()
 
         # Aggregate by user
         user_days = defaultdict(float)
@@ -284,7 +292,8 @@ class AnalyticsService:
 
         result = []
         for user_id, days in sorted_users:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            stmt = select(User).where(User.id == user_id)
+            user = self.db.execute(stmt).scalar_one_or_none()
             if user:
                 dept_name = user.department.name if user.department else 'N/A'
                 result.append({
@@ -313,10 +322,11 @@ class AnalyticsService:
         from src.models.user import User
 
         # Get active users in department
-        users = self.db.query(User).filter(
+        stmt = select(User).where(
             User.department_id == department_id,
             User.is_active == True
-        ).all()
+        )
+        users = self.db.execute(stmt).scalars().all()
 
         if not users:
             return []
@@ -325,12 +335,13 @@ class AnalyticsService:
         team_size = len(users)
 
         # Get approved PTO in date range
-        requests = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.user_id.in_(user_ids),
             PTORequest.status == 'approved',
             PTORequest.start_date <= end_date,
             PTORequest.end_date >= start_date
-        ).all()
+        )
+        requests = self.db.execute(stmt).scalars().all()
 
         # Build daily absence count
         daily_absences = defaultdict(set)
@@ -378,14 +389,14 @@ class AnalyticsService:
         from src.models.user import User
         from src.models.department import Department
 
-        pending = self.db.query(PTORequest).filter(
-            PTORequest.status == 'pending'
-        ).all()
+        stmt = select(PTORequest).where(PTORequest.status == 'pending')
+        pending = self.db.execute(stmt).scalars().all()
 
         # Group by department
         dept_counts = defaultdict(int)
         for req in pending:
-            user = self.db.query(User).filter(User.id == req.user_id).first()
+            stmt = select(User).where(User.id == req.user_id)
+            user = self.db.execute(stmt).scalar_one_or_none()
             if user and user.department:
                 dept_counts[user.department.name] += 1
             else:
@@ -414,14 +425,13 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
-        query = self.db.query(PTOBalance).filter(PTOBalance.year == year)
+        stmt = select(PTOBalance).where(PTOBalance.year == year)
         if user_ids is not None:
-            query = query.filter(PTOBalance.user_id.in_(user_ids))
-        balances = query.all()
+            stmt = stmt.where(PTOBalance.user_id.in_(user_ids))
+        balances = self.db.execute(stmt).scalars().all()
 
         total_allocated = 0
         total_used = 0
@@ -429,10 +439,11 @@ class AnalyticsService:
 
         for bal in balances:
             # Check if user is active
-            user_query = self.db.query(User).filter(User.id == bal.user_id, User.is_active == True)
+            user_conditions = [User.id == bal.user_id, User.is_active == True]
             if department_id:
-                user_query = user_query.filter(User.department_id == department_id)
-            user = user_query.first()
+                user_conditions.append(User.department_id == department_id)
+            stmt = select(User).where(*user_conditions)
+            user = self.db.execute(stmt).scalar_one_or_none()
             if not user:
                 continue
 
@@ -461,10 +472,11 @@ class AnalyticsService:
         from src.models.user import User
 
         # Get total active employees
-        emp_query = self.db.query(User).filter(User.is_active == True)
+        emp_conditions = [User.is_active == True]
         if department_id:
-            emp_query = emp_query.filter(User.department_id == department_id)
-        total_employees = emp_query.count()
+            emp_conditions.append(User.department_id == department_id)
+        stmt = select(func.count()).select_from(User).where(*emp_conditions)
+        total_employees = self.db.execute(stmt).scalar()
 
         if total_employees == 0:
             return []
@@ -472,7 +484,8 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in emp_query.all()]
+            stmt = select(User).where(*emp_conditions)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
         results = []
         current = start_date
@@ -484,14 +497,15 @@ class AnalyticsService:
                 continue
 
             # Count approved absences for this date
-            query = self.db.query(PTORequest).filter(
+            absence_conditions = [
                 PTORequest.status == 'approved',
                 PTORequest.start_date <= current,
                 PTORequest.end_date >= current
-            )
+            ]
             if user_ids is not None:
-                query = query.filter(PTORequest.user_id.in_(user_ids))
-            absent_count = query.count()
+                absence_conditions.append(PTORequest.user_id.in_(user_ids))
+            stmt = select(func.count()).select_from(PTORequest).where(*absence_conditions)
+            absent_count = self.db.execute(stmt).scalar()
 
             present_count = total_employees - absent_count
             attendance_rate = (present_count / total_employees * 100) if total_employees > 0 else 0
@@ -527,16 +541,18 @@ class AnalyticsService:
 
         results = []
 
-        user_query = self.db.query(User).filter(User.is_active == True)
+        user_conditions = [User.is_active == True]
         if department_id:
-            user_query = user_query.filter(User.department_id == department_id)
-        users = user_query.all()
+            user_conditions.append(User.department_id == department_id)
+        stmt = select(User).where(*user_conditions)
+        users = self.db.execute(stmt).scalars().all()
 
         for user in users:
-            balance = self.db.query(PTOBalance).filter(
+            stmt = select(PTOBalance).where(
                 PTOBalance.user_id == user.id,
                 PTOBalance.year == year
-            ).first()
+            )
+            balance = self.db.execute(stmt).scalar_one_or_none()
 
             if not balance:
                 continue
@@ -551,7 +567,8 @@ class AnalyticsService:
             pct_remaining = (vacation_remaining / vacation_total) * 100
 
             if pct_remaining >= min_remaining_pct:
-                dept = self.db.query(Department).filter(Department.id == user.department_id).first()
+                stmt = select(Department).where(Department.id == user.department_id)
+                dept = self.db.execute(stmt).scalar_one_or_none()
                 dept_name = dept.name if dept else "Unknown"
 
                 # Calculate risk level
@@ -629,17 +646,16 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
-        query = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.status == 'approved',
             extract('year', PTORequest.start_date) == year
         )
         if user_ids is not None:
-            query = query.filter(PTORequest.user_id.in_(user_ids))
-        requests = query.all()
+            stmt = stmt.where(PTORequest.user_id.in_(user_ids))
+        requests = self.db.execute(stmt).scalars().all()
 
         for req in requests:
             current = req.start_date
@@ -663,21 +679,20 @@ class AnalyticsService:
         # Get user IDs if department filter is set
         user_ids = None
         if department_id:
-            user_ids = [u.id for u in self.db.query(User).filter(
-                User.department_id == department_id
-            ).all()]
+            stmt = select(User).where(User.department_id == department_id)
+            user_ids = [u.id for u in self.db.execute(stmt).scalars().all()]
 
         results = []
 
         for month in range(1, 13):
-            query = self.db.query(PTORequest).filter(
+            stmt = select(PTORequest).where(
                 PTORequest.status == 'approved',
                 extract('year', PTORequest.start_date) == year,
                 extract('month', PTORequest.start_date) == month
             )
             if user_ids is not None:
-                query = query.filter(PTORequest.user_id.in_(user_ids))
-            requests = query.all()
+                stmt = stmt.where(PTORequest.user_id.in_(user_ids))
+            requests = self.db.execute(stmt).scalars().all()
 
             vacation_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() == 'vacation')
             sick_days = sum(float(r.total_days) for r in requests if r.pto_type.lower() == 'sick')
@@ -704,14 +719,16 @@ class AnalyticsService:
         from src.models.user import User
         from src.models.department import Department
 
-        departments = self.db.query(Department).all()
+        stmt = select(Department)
+        departments = self.db.execute(stmt).scalars().all()
         results = []
 
         for dept in departments:
-            users = self.db.query(User).filter(
+            stmt = select(User).where(
                 User.department_id == dept.id,
                 User.is_active == True
-            ).all()
+            )
+            users = self.db.execute(stmt).scalars().all()
 
             if not users:
                 continue
@@ -720,10 +737,11 @@ class AnalyticsService:
             total_used = 0.0
 
             for user in users:
-                balance = self.db.query(PTOBalance).filter(
+                stmt = select(PTOBalance).where(
                     PTOBalance.user_id == user.id,
                     PTOBalance.year == year
-                ).first()
+                )
+                balance = self.db.execute(stmt).scalar_one_or_none()
 
                 if balance:
                     total_allocated += float(balance.vacation_total + balance.sick_total + balance.personal_total)
@@ -814,18 +832,20 @@ class AnalyticsService:
         from src.models.user import User
 
         # Get active employees in department
-        employees = self.db.query(User).filter(
+        stmt = select(User).where(
             User.department_id == department_id,
             User.is_active == True
-        ).order_by(User.last_name, User.first_name).all()
+        ).order_by(User.last_name, User.first_name)
+        employees = self.db.execute(stmt).scalars().all()
 
         results = []
         for emp in employees:
             # Get balance for year
-            balance = self.db.query(PTOBalance).filter(
+            stmt = select(PTOBalance).where(
                 PTOBalance.user_id == emp.id,
                 PTOBalance.year == year
-            ).first()
+            )
+            balance = self.db.execute(stmt).scalar_one_or_none()
 
             if balance:
                 # Convert hours to days (divide by 8)
