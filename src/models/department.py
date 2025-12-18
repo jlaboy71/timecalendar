@@ -29,9 +29,11 @@ class Department(Base):
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     
     # Manager assignment
+    # use_alter=True breaks the circular FK dependency with users.department_id
+    # This allows SQLite to properly order table drops during test cleanup
     manager_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
-        ForeignKey("users.id"), 
+        Integer,
+        ForeignKey("users.id", use_alter=True),
         nullable=True
     )
     

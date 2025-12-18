@@ -7,7 +7,7 @@ Handles:
 - Generating federal/market holidays for the new year
 """
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -35,8 +35,9 @@ class YearEndService:
     DEFAULT_SICK_DAYS = 5
     DEFAULT_PERSONAL_DAYS = 2
 
-    # Chicago Leave annual max (40 hours per ordinance)
-    CHICAGO_LEAVE_ANNUAL_MAX = Decimal('40.00')
+    # Chicago Leave limits per ordinance
+    CHICAGO_LEAVE_ANNUAL_MAX = Decimal('40.00')  # 40 hours (5 days) annual allocation
+    CHICAGO_LEAVE_CARRYOVER_MAX = Decimal('16.00')  # 16 hours (2 days) max carryover
 
     def __init__(self, db: Session):
         self.db = db
@@ -96,7 +97,11 @@ class YearEndService:
         status.processed = True
         status.processed_at = datetime.now()
         status.balances_created = results['balances_created']
-        status.carryovers_applied = results['carryovers_applied']
+        # Sum all carryover types for the total count (Personal does NOT carry over)
+        status.carryovers_applied = (
+            results['sick_carryovers_auto'] +
+            results['vacation_exceptions_applied']
+        )
         status.holidays_created = results['holidays_created']
 
         self.db.commit()
@@ -131,7 +136,9 @@ class YearEndService:
         results = {
             'year': new_year,
             'balances_created': 0,
-            'carryovers_applied': 0,
+            'sick_carryovers_auto': 0,
+            'chicago_leave_carryovers_auto': 0,
+            'vacation_exceptions_applied': 0,
             'holidays_created': 0,
             'reports_purged': 0,
             'errors': []
@@ -144,12 +151,22 @@ class YearEndService:
             results['balances_created'] = balances_result['created']
             results['errors'].extend(balances_result.get('errors', []))
 
-            # Step 2: Apply approved carryover from previous year
-            carryover_result = self._apply_approved_carryover_no_commit(new_year)
-            results['carryovers_applied'] = carryover_result['applied']
-            results['errors'].extend(carryover_result.get('errors', []))
+            # Step 2: AUTO-CARRYOVER sick only (Personal does NOT carry over - use-it-or-lose-it)
+            auto_carryover_result = self._auto_carryover_sick_no_commit(new_year)
+            results['sick_carryovers_auto'] = auto_carryover_result['sick_applied']
+            results['errors'].extend(auto_carryover_result.get('errors', []))
 
-            # Step 3: Generate federal holidays for new year
+            # Step 2b: AUTO-CARRYOVER Chicago Paid Leave (up to 16 hours per ordinance)
+            chicago_carryover_result = self._auto_carryover_chicago_leave_no_commit(new_year)
+            results['chicago_leave_carryovers_auto'] = chicago_carryover_result['chicago_applied']
+            results['errors'].extend(chicago_carryover_result.get('errors', []))
+
+            # Step 3: Apply approved VACATION exception carryover (rare manager-approved cases)
+            vacation_result = self._apply_vacation_exception_carryover_no_commit(new_year)
+            results['vacation_exceptions_applied'] = vacation_result['applied']
+            results['errors'].extend(vacation_result.get('errors', []))
+
+            # Step 4: Generate federal holidays for new year
             holidays_result = self._generate_federal_holidays_no_commit(new_year)
             results['holidays_created'] = holidays_result['created']
 
@@ -163,12 +180,14 @@ class YearEndService:
             self.db.commit()
             logger.info(f"Year-end processing committed successfully for {new_year}")
 
-            # Step 4: Purge auto-notify reports (file operation, done after DB commit)
-            previous_year = new_year - 1
-            reports_purged = ReportStorageService.purge_year_reports(previous_year)
-            results['reports_purged'] = reports_purged
-            if reports_purged > 0:
-                logger.info(f"Purged {reports_purged} auto-notify reports from {previous_year}")
+            # DISABLED: Auto-purge of reports removed per user request
+            # Reports should only be deleted via explicit user action
+            # previous_year = new_year - 1
+            # reports_purged = ReportStorageService.purge_year_reports(previous_year)
+            # results['reports_purged'] = reports_purged
+            # if reports_purged > 0:
+            #     logger.info(f"Purged {reports_purged} auto-notify reports from {previous_year}")
+            results['reports_purged'] = 0  # No auto-purge
 
             logger.info(f"Year-end processing complete for {new_year}: {results}")
 
@@ -413,6 +432,242 @@ class YearEndService:
                 result['errors'].append(error_msg)
 
         self.db.flush()  # Flush to DB but don't commit
+        return result
+
+    def _auto_carryover_sick_no_commit(self, new_year: int) -> Dict:
+        """
+        Auto-carryover unused sick leave only (no approval needed - required by law).
+
+        NOTE: Personal leave does NOT carry over (use-it-or-lose-it policy per company handbook).
+
+        Calculates unused sick from previous year and carries over up to policy max.
+
+        Args:
+            new_year: The year to apply carryover to
+
+        Returns:
+            Dictionary with application results
+        """
+        result = {'sick_applied': 0, 'errors': []}
+        previous_year = new_year - 1
+
+        # Get all active users with previous year balances
+        stmt = select(PTOBalance).where(PTOBalance.year == previous_year)
+        previous_balances = self.db.execute(stmt).scalars().all()
+
+        if not previous_balances:
+            return result
+
+        # Pre-fetch new year balances and users
+        user_ids = [b.user_id for b in previous_balances]
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id.in_(user_ids),
+            PTOBalance.year == new_year
+        )
+        new_balances = {b.user_id: b for b in self.db.execute(stmt).scalars().all()}
+
+        stmt = select(User).where(User.id.in_(user_ids), User.is_active == True)
+        users_map = {u.id: u for u in self.db.execute(stmt).scalars().all()}
+
+        accrual_service = AccrualService(self.db)
+
+        for prev_balance in previous_balances:
+            user_id = prev_balance.user_id
+            user = users_map.get(user_id)
+
+            if not user:
+                continue  # Skip inactive users
+
+            new_balance = new_balances.get(user_id)
+            if not new_balance:
+                continue  # Skip if no new year balance exists
+
+            try:
+                # Calculate unused sick (total + carryover - used)
+                unused_sick = (
+                    (prev_balance.sick_total or Decimal('0')) +
+                    (prev_balance.sick_carryover or Decimal('0')) -
+                    (prev_balance.sick_used or Decimal('0'))
+                )
+
+                # Get sick policy max carryover
+                sick_policy = accrual_service.get_policy_for_employee(user, 'SICK')
+                max_sick_carryover_hours = Decimal('0')
+                if sick_policy and sick_policy.max_carryover_hours:
+                    max_sick_carryover_hours = sick_policy.max_carryover_hours
+
+                # Convert unused sick days to hours and cap
+                unused_sick_hours = unused_sick * Decimal('8')
+                if max_sick_carryover_hours > 0 and unused_sick_hours > max_sick_carryover_hours:
+                    unused_sick_hours = max_sick_carryover_hours
+
+                # Apply sick carryover (convert back to days)
+                if unused_sick_hours > 0:
+                    new_balance.sick_carryover = unused_sick_hours / Decimal('8')
+                    result['sick_applied'] += 1
+                    logger.info(f"Auto-carried over {unused_sick_hours}hrs sick for user {user_id}")
+
+                # NOTE: Personal leave does NOT carry over (use-it-or-lose-it)
+
+            except Exception as e:
+                error_msg = f"Failed auto-carryover for user {user_id}: {str(e)}"
+                logger.error(error_msg)
+                result['errors'].append(error_msg)
+
+        self.db.flush()
+        return result
+
+    def _auto_carryover_chicago_leave_no_commit(self, new_year: int) -> Dict:
+        """
+        Auto-carryover unused Chicago Paid Leave (no approval needed - per Chicago ordinance).
+
+        Per Chicago Paid Leave ordinance:
+        - Employees can carry over up to 16 hours (2 days) of unused Paid Leave
+        - Carryover is automatic (no approval required)
+        - Carryover is SEPARATE from new year allocation (not combined)
+
+        Ledger separation:
+        - chicago_paid_leave_total: New year allocation (40 hours)
+        - chicago_paid_leave_carryover: Hours carried from previous year (max 16)
+        - These are tracked separately in balance calculations
+
+        Args:
+            new_year: The year to apply carryover to
+
+        Returns:
+            Dictionary with application results
+        """
+        result = {'chicago_applied': 0, 'capped': 0, 'errors': []}
+        previous_year = new_year - 1
+
+        # Check if Chicago Leave feature is enabled
+        stmt = select(SystemSetting).where(SystemSetting.key == 'chicago.safe_leave_enabled')
+        chicago_setting = self.db.execute(stmt).scalar_one_or_none()
+
+        if not chicago_setting or not chicago_setting.bool_value:
+            logger.debug("Chicago Leave feature not enabled, skipping carryover")
+            return result
+
+        # Get all previous year balances that have Chicago Leave data
+        stmt = select(PTOBalance).where(
+            PTOBalance.year == previous_year,
+            PTOBalance.chicago_paid_leave_total > 0
+        )
+        previous_balances = self.db.execute(stmt).scalars().all()
+
+        if not previous_balances:
+            logger.debug(f"No Chicago Leave balances found for {previous_year}")
+            return result
+
+        # Pre-fetch new year balances and users
+        user_ids = [b.user_id for b in previous_balances]
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id.in_(user_ids),
+            PTOBalance.year == new_year
+        )
+        new_balances = {b.user_id: b for b in self.db.execute(stmt).scalars().all()}
+
+        stmt = select(User).where(User.id.in_(user_ids), User.is_active == True)
+        users_map = {u.id: u for u in self.db.execute(stmt).scalars().all()}
+
+        for prev_balance in previous_balances:
+            user_id = prev_balance.user_id
+            user = users_map.get(user_id)
+
+            if not user:
+                continue  # Skip inactive users
+
+            # Verify user is still a Chicago employee
+            if not user.location_city or user.location_city.lower() != 'chicago':
+                continue  # Skip if user is no longer in Chicago
+
+            new_balance = new_balances.get(user_id)
+            if not new_balance:
+                continue  # Skip if no new year balance exists
+
+            try:
+                # Calculate unused Chicago Paid Leave (hours)
+                # Formula: total + carryover_from_previous - used
+                # Note: pending is NOT subtracted (unused = what's not consumed)
+                unused_chicago = (
+                    (prev_balance.chicago_paid_leave_total or Decimal('0')) +
+                    (prev_balance.chicago_paid_leave_carryover or Decimal('0')) -
+                    (prev_balance.chicago_paid_leave_used or Decimal('0'))
+                )
+
+                # Skip if nothing to carry over
+                if unused_chicago <= 0:
+                    logger.debug(f"User {user_id} has no unused Chicago Leave to carry over")
+                    continue
+
+                # Cap at 16 hours (per Chicago ordinance)
+                carryover_hours = min(unused_chicago, self.CHICAGO_LEAVE_CARRYOVER_MAX)
+
+                if unused_chicago > self.CHICAGO_LEAVE_CARRYOVER_MAX:
+                    result['capped'] += 1
+                    logger.info(
+                        f"User {user_id} Chicago Leave carryover capped: "
+                        f"{unused_chicago:.2f}hrs unused -> {carryover_hours:.2f}hrs carried over (16hr max)"
+                    )
+
+                # Apply carryover to new year balance (SEPARATE from total allocation)
+                new_balance.chicago_paid_leave_carryover = carryover_hours
+                result['chicago_applied'] += 1
+
+                logger.info(
+                    f"Auto-carried over {carryover_hours:.2f}hrs Chicago Paid Leave for user {user_id} "
+                    f"({previous_year} -> {new_year})"
+                )
+
+            except Exception as e:
+                error_msg = f"Failed Chicago Leave auto-carryover for user {user_id}: {str(e)}"
+                logger.error(error_msg)
+                result['errors'].append(error_msg)
+
+        self.db.flush()
+        return result
+
+    def _apply_vacation_exception_carryover_no_commit(self, new_year: int) -> Dict:
+        """
+        Count approved vacation exception carryover requests (for stats only).
+
+        NOTE: Vacation carryover is NOT added to the new year's vacation_carryover field.
+        Instead, when vacation is used in the new year and there's an approved carryover,
+        the usage is deducted from the FROM year's balance (tracked via hours_used).
+        The CarryoverRequest record serves as the reference for available carryover.
+
+        Args:
+            new_year: The year to check carryover for
+
+        Returns:
+            Dictionary with count of approved carryover requests
+        """
+        result = {'applied': 0, 'errors': []}
+        previous_year = new_year - 1
+
+        # Find approved vacation carryover requests only (for counting/logging)
+        stmt = select(CarryoverRequest).where(
+            CarryoverRequest.status == 'approved',
+            CarryoverRequest.from_year == previous_year,
+            CarryoverRequest.to_year == new_year
+        )
+        approved_requests = self.db.execute(stmt).scalars().all()
+
+        if not approved_requests:
+            return result
+
+        # Just count - DO NOT add to vacation_carryover
+        # The CarryoverRequest record IS the carryover reference
+        # Usage will be tracked via hours_used and deducted from FROM year balance
+        for request in approved_requests:
+            hours_approved = request.hours_approved or request.hours_requested
+            if hours_approved > 0:
+                result['applied'] += 1
+                logger.info(
+                    f"Vacation exception carryover available: {hours_approved}hrs for user {request.employee_id} "
+                    f"({previous_year} -> {new_year}) - tracked via CarryoverRequest"
+                )
+
         return result
 
     def generate_federal_holidays(self, year: int) -> Dict:
@@ -691,7 +946,3 @@ class YearEndService:
             'holidays_created': holidays_count,
             'ready_for_transition': pending_carryovers == 0 and balances_count >= active_users
         }
-
-
-# Import timedelta for the methods
-from datetime import timedelta

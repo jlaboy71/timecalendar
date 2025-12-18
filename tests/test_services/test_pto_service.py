@@ -82,15 +82,17 @@ class TestCreateRequest:
         """Test that start date in the past is rejected."""
         service = PTOService(db)
 
+        # Dates within 7 days in the past are now allowed (retroactive submissions)
+        # Test that dates MORE than 7 days in the past are rejected
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() - timedelta(days=1),
-            end_date=date.today(),
+            start_date=date.today() - timedelta(days=10),
+            end_date=date.today() - timedelta(days=9),
             total_days=Decimal("1.00")
         )
 
-        with pytest.raises(ValueError, match="Start date cannot be in the past"):
+        with pytest.raises(ValueError, match="Start date cannot be more than 7 days in the past"):
             service.create_request(request_data)
 
     def test_rejects_end_before_start(self, db, test_employee, test_balance):
@@ -155,21 +157,32 @@ class TestCreateRequest:
 
         assert test_balance.vacation_pending == original_pending + Decimal("2.00")
 
-    def test_rejects_insufficient_vacation_for_employee(self, db, test_employee, test_balance):
-        """Test that employee cannot request more vacation than available."""
+    def test_allows_vacation_request_exceeding_balance(self, db, test_employee, test_balance):
+        """
+        Test that vacation requests exceeding balance are ALLOWED to be submitted.
+
+        Per business rules (pto_service.py:109-111):
+        "Vacation balance validation is NOT a hard block per business rules.
+        Employees can submit requests exceeding available balance - manager decides whether to approve."
+
+        Only sick and personal days have hard limits enforced.
+        """
         service = PTOService(db)
 
         # Request more days than available (balance has 80 hours = 10 days)
+        # Use dates within current year to avoid year boundary issues
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=7),
-            end_date=date.today() + timedelta(days=27),
+            start_date=date.today() + timedelta(days=1),
+            end_date=date.today() + timedelta(days=10),
             total_days=Decimal("15.00")  # More than 10 days available
         )
 
-        with pytest.raises(ValueError, match="Insufficient vacation time"):
-            service.create_request(request_data)
+        # Should NOT raise - vacation requests are not hard-blocked
+        request = service.create_request(request_data)
+        assert request is not None
+        assert request.status == 'pending'  # Goes to pending for manager review
 
 
 class TestGetRequestById:

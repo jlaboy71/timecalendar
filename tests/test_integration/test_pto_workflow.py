@@ -34,11 +34,12 @@ class TestEmployeeVacationWorkflow:
         initial_pending = test_balance.vacation_pending
 
         # Step 1: Employee submits vacation request
+        # Use dates within current year to avoid year boundary issues (balance fixture is for current year)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=14),
-            end_date=date.today() + timedelta(days=15),
+            start_date=date.today() + timedelta(days=1),
+            end_date=date.today() + timedelta(days=2),
             total_days=Decimal("2.00"),
             notes="Family trip"
         )
@@ -317,12 +318,12 @@ class TestTrustedEmployeeWorkflow:
 
         initial_used = test_balance.vacation_used
 
-        # Submit vacation request
+        # Submit vacation request (use dates within current year to avoid year boundary issues)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=14),
-            end_date=date.today() + timedelta(days=15),
+            start_date=date.today() + timedelta(days=1),
+            end_date=date.today() + timedelta(days=2),
             total_days=Decimal("2.00")
         )
 
