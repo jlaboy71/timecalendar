@@ -13,6 +13,7 @@ from src.services.balance_service import BalanceService
 from src.schemas.pto_schemas import PTORequestCreate
 from src.models.pto_request import PTORequest
 from src.constants import PTOStatus, PTOType
+from tests.utils import get_next_working_day, get_working_day_range
 
 
 class TestEmployeeVacationWorkflow:
@@ -34,12 +35,13 @@ class TestEmployeeVacationWorkflow:
         initial_pending = test_balance.vacation_pending
 
         # Step 1: Employee submits vacation request
-        # Use dates within current year to avoid year boundary issues (balance fixture is for current year)
+        # Use working days to avoid weekend validation errors
+        start_date, end_date = get_working_day_range(start_skip=1, num_days=2)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=1),
-            end_date=date.today() + timedelta(days=2),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("2.00"),
             notes="Family trip"
         )
@@ -86,9 +88,8 @@ class TestEmployeeVacationWorkflow:
         initial_pending = test_balance.vacation_pending
         initial_used = test_balance.vacation_used
 
-        # Use dates in the same year as the balance (today + 1-2 days to stay safe)
-        request_start = date.today() + timedelta(days=1)
-        request_end = date.today() + timedelta(days=2)
+        # Use working days to avoid weekend validation errors
+        request_start, request_end = get_working_day_range(start_skip=1, num_days=2)
 
         # Step 1: Employee submits vacation request
         request_data = PTORequestCreate(
@@ -131,9 +132,8 @@ class TestEmployeeVacationWorkflow:
         # Record initial state
         initial_pending = test_balance.vacation_pending
 
-        # Use dates in the same year as the balance
-        request_start = date.today() + timedelta(days=3)
-        request_end = date.today() + timedelta(days=4)
+        # Use working days to avoid weekend validation errors
+        request_start, request_end = get_working_day_range(start_skip=2, num_days=2)
 
         # Step 1: Submit request
         request_data = PTORequestCreate(
@@ -174,12 +174,13 @@ class TestManagerAutoApproveWorkflow:
 
         initial_used = balance.vacation_used
 
-        # Manager submits vacation request
+        # Manager submits vacation request - use working days
+        start_date, end_date = get_working_day_range(start_skip=3, num_days=3)
         request_data = PTORequestCreate(
             user_id=test_manager.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=7),
-            end_date=date.today() + timedelta(days=9),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("3.00"),
             notes="Personal time"
         )
@@ -205,12 +206,13 @@ class TestSickLeaveWorkflow:
 
         initial_sick_used = test_balance.sick_used
 
-        # Employee submits sick leave
+        # Employee submits sick leave - use working day
+        sick_date = get_next_working_day(skip_days=1)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.SICK.value,
-            start_date=date.today() + timedelta(days=1),
-            end_date=date.today() + timedelta(days=1),
+            start_date=sick_date,
+            end_date=sick_date,
             total_days=Decimal("1.00"),
             notes="Not feeling well"
         )
@@ -235,22 +237,24 @@ class TestMultipleRequestsWorkflow:
 
         initial_pending = test_balance.vacation_pending
 
-        # Submit first request (use dates in same year as balance)
+        # Submit first request - use working days
+        start1, end1 = get_working_day_range(start_skip=1, num_days=2)
         request1_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=1),
-            end_date=date.today() + timedelta(days=2),
+            start_date=start1,
+            end_date=end1,
             total_days=Decimal("2.00")
         )
         request1 = pto_service.create_request(request1_data)
 
-        # Submit second request (different dates, still in same year)
+        # Submit second request (different dates) - use working days
+        start2, end2 = get_working_day_range(start_skip=5, num_days=2)
         request2_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=5),
-            end_date=date.today() + timedelta(days=6),
+            start_date=start2,
+            end_date=end2,
             total_days=Decimal("2.00")
         )
         request2 = pto_service.create_request(request2_data)
@@ -280,24 +284,26 @@ class TestOverlapPrevention:
         """Test that overlapping requests are rejected."""
         pto_service = PTOService(db)
 
-        # Submit first request (use dates close to today to stay in same year)
-        base_date = date.today() + timedelta(days=1)
+        # Submit first request - use working days
+        start1, end1 = get_working_day_range(start_skip=1, num_days=3)
         request1_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=base_date,
-            end_date=base_date + timedelta(days=2),
+            start_date=start1,
+            end_date=end1,
             total_days=Decimal("3.00")
         )
         request1 = pto_service.create_request(request1_data)
         assert request1.id is not None
 
-        # Try to submit overlapping request
+        # Try to submit overlapping request - middle day of first request
+        overlap_start = get_next_working_day(start1, skip_days=1)  # Day 2 of first request
+        overlap_end = get_next_working_day(overlap_start, skip_days=2)
         request2_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=base_date + timedelta(days=1),  # Overlaps with request1
-            end_date=base_date + timedelta(days=3),
+            start_date=overlap_start,
+            end_date=overlap_end,
             total_days=Decimal("3.00")
         )
 
@@ -318,12 +324,13 @@ class TestTrustedEmployeeWorkflow:
 
         initial_used = test_balance.vacation_used
 
-        # Submit vacation request (use dates within current year to avoid year boundary issues)
+        # Submit vacation request - use working days
+        start_date, end_date = get_working_day_range(start_skip=1, num_days=2)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=1),
-            end_date=date.today() + timedelta(days=2),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("2.00")
         )
 

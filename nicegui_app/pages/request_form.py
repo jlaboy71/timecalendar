@@ -15,6 +15,7 @@ from decimal import Decimal
 from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
+from src.utils.working_days import is_weekend, is_working_day, get_holidays_in_range
 
 
 def show_help_tip(title: str, message: str):
@@ -185,8 +186,6 @@ def request_form_page():
         calendar_widgets = {}
         # Half-day container reference for visibility control
         half_day_container = {'ref': None}
-        # Date range button reference for WFH single-day enforcement
-        date_range_btn = {'ref': None}
 
         with ui.card().classes('w-full mb-4'):
             with ui.row().classes('items-center mb-3'):
@@ -234,7 +233,7 @@ def request_form_page():
                         update_summary_color()
                         update_calendar_colors()
                         update_half_day_visibility()
-                        update_date_mode_buttons()
+                        update_date_mode_for_type()
                         update_notes_label()
                         build_date_selector()  # Rebuild to update PTO type overlay
                     return handler
@@ -415,22 +414,15 @@ def request_form_page():
                     else:
                         half_day_container['ref'].set_visibility(True)
 
-            def update_date_mode_buttons():
-                """Enable/disable date range button based on selected type. WFH is single-day only."""
-                if date_range_btn['ref']:
-                    if selected_type['value'] == 'work_from_home':
-                        # WFH is single-day only - disable date range and force single day
-                        date_range_btn['ref'].props('disabled')
-                        date_range_btn['ref'].tooltip('WFH requests are limited to single day only')
-                        # Force single day mode if not already
-                        if not state['is_single_day']:
-                            state['is_single_day'] = True
-                            state['end_date'] = state['start_date']
-                            build_date_selector()
-                            update_summary()
-                    else:
-                        date_range_btn['ref'].props(remove='disabled')
-                        date_range_btn['ref'].tooltip('')
+            def update_date_mode_for_type():
+                """Handle type-specific date mode restrictions (e.g., WFH is single-day only)."""
+                if selected_type['value'] == 'work_from_home':
+                    # WFH is single-day only - force single day mode if in range
+                    if not state['is_single_day']:
+                        state['is_single_day'] = True
+                        state['end_date'] = state['start_date']
+                        build_date_selector()
+                        update_summary()
 
             # Initialize button styles
             update_type_button_styles()
@@ -463,10 +455,10 @@ def request_form_page():
                     for_year: Year to get balance for (defaults to selected start date year)
 
                 Returns:
-                    Tuple of (total, used, pending, available, balance_exists)
+                    Tuple of (total, used, pending, available, balance_exists, exception_carryover)
                 """
                 if not leave_type_code:
-                    return 0, 0, 0, 0, False
+                    return 0, 0, 0, 0, False, 0
 
                 # Use the start date year if no year specified
                 target_year = for_year or state['start_date'].year
@@ -476,6 +468,7 @@ def request_form_page():
                 try:
                     bal_svc = BalanceService(db_session)
                     balance = bal_svc.get_or_create_balance(_user_id, target_year)
+                    exception_carryover = 0  # Vacation exception carryover from previous year
 
                     code = leave_type_code.upper()
                     if code == 'VACATION':
@@ -483,6 +476,8 @@ def request_form_page():
                         used = float(balance.vacation_used or 0)
                         pending = float(balance.vacation_pending or 0)
                         carryover = float(balance.vacation_carryover or 0)
+                        # Also get vacation exception carryover from previous year
+                        exception_carryover = float(PTOService.get_available_vacation_carryover(db_session, _user_id, target_year))
                     elif code == 'SICK':
                         total = float(balance.sick_total or 0)
                         used = float(balance.sick_used or 0)
@@ -500,12 +495,12 @@ def request_form_page():
                         pending = float(balance.chicago_paid_leave_pending or 0)
                         carryover = float(balance.chicago_paid_leave_carryover or 0)
                     else:
-                        return 0, 0, 0, 0, False
+                        return 0, 0, 0, 0, False, 0
 
-                    available = total + carryover - used - pending
-                    # Check if balance has been allocated (total > 0)
-                    balance_allocated = total > 0
-                    return total + carryover, used, pending, available, balance_allocated
+                    available = total + carryover + exception_carryover - used - pending
+                    # Check if balance has been allocated (total > 0 OR exception carryover exists)
+                    balance_allocated = total > 0 or exception_carryover > 0
+                    return total + carryover, used, pending, available, balance_allocated, exception_carryover
                 finally:
                     db_session.close()
 
@@ -543,7 +538,7 @@ def request_form_page():
                             ui.label('Requires manager approval').classes('text-xs opacity-40')
                         return
 
-                    total, used, pending, available, balance_allocated = get_balance_for_type(pto_type.value)
+                    total, used, pending, available, balance_allocated, exception_carryover = get_balance_for_type(pto_type.value)
 
                     # Types without balance tracking (bereavement, fmla, jury_duty, voting, military)
                     non_balance_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
@@ -593,6 +588,14 @@ def request_form_page():
                             ui.label(pending_display).classes('text-lg font-medium text-amber-500').tooltip(pending_tooltip)
                             ui.label('PENDING').classes('text-xs opacity-60')
 
+                    # Show vacation carryover if available (from approved exception)
+                    if exception_carryover > 0 and pto_type.value == 'vacation':
+                        ui.element('div').classes('w-px h-10').style('background: rgba(128,128,128,0.3)')
+                        with ui.column().classes('items-center'):
+                            carryover_display, carryover_tooltip = format_days_hours(exception_carryover)
+                            ui.label(carryover_display).classes('text-lg font-medium text-amber-500').tooltip(carryover_tooltip)
+                            ui.label(f'{target_year - 1} CARRYOVER').classes('text-xs text-amber-500')
+
         # ============ STEP 2: DATE SELECTION ============
         with ui.card().classes('w-full mb-4'):
             with ui.row().classes('items-center mb-3'):
@@ -600,20 +603,20 @@ def request_form_page():
                 ui.label('Select Date(s)').classes('text-lg font-semibold')
                 ui.button(icon='help_outline', on_click=lambda: show_help_tip(
                     'Date Selection',
-                    'Single Day: Request one day off, with optional half-day (4 hours).\n\n'
-                    'Date Range: Request multiple consecutive days off.\n\n'
+                    'Click once for a single day, or click two dates for a range.\n\n'
                     'Business Days Only: Weekends (Sat/Sun) and company holidays are automatically excluded from your request and won\'t count against your balance.\n\n'
+                    'Half Day: Available for single-day requests (except WFH and Personal days).\n\n'
                     'WFH requests are limited to single day only and must be within 7 days.'
                 )).props('flat dense round size=sm').style('color: #f59e0b')
 
-            # Single day vs Date range toggle
-            with ui.row().classes('w-full mb-4 gap-2'):
-                single_day_btn = ui.button('Single Day', on_click=lambda: set_date_mode(True)).classes('flex-1')
-                range_btn = ui.button('Date Range', on_click=lambda: set_date_mode(False)).classes('flex-1')
-                date_range_btn['ref'] = range_btn  # Store reference for WFH single-day enforcement
+            # Microcopy explaining the calendar interaction
+            ui.label('Click a start date, then an end date. Weekends and holidays are excluded from your total.').classes('text-sm opacity-70 mb-3')
 
             # Date selection container
             date_selection_container = ui.column().classes('w-full')
+
+            # Half-day container reference (for showing/hiding)
+            half_day_switch_ref = {'ref': None}
 
             # Summary display (updates in real-time)
             summary_container = ui.row().classes('w-full mt-4 p-3 rounded-lg justify-around items-center border-l-4 border-blue-500')
@@ -660,17 +663,37 @@ def request_form_page():
                         cal.props(remove='color=blue color=green color=purple color=red color=amber color=grey color=indigo color=cyan color=pink color=teal color=blue-grey')
                         cal.props(f'color={cal_color}')
 
-            def set_date_mode(is_single):
-                state['is_single_day'] = is_single
-                if is_single:
-                    state['end_date'] = state['start_date']
-                    single_day_btn.props('color=primary')
-                    range_btn.props('color=grey')
-                else:
-                    single_day_btn.props('color=grey')
-                    range_btn.props('color=primary')
+            def update_half_day_visibility():
+                """Update half-day switch visibility based on PTO type and date selection."""
+                if half_day_switch_ref['ref'] is None:
+                    return
+                # Half-day is hidden for:
+                # - Date ranges (start != end)
+                # - WFH requests
+                # - Personal day requests
+                is_single_day = state['start_date'] == state['end_date']
+                is_wfh = selected_type['value'] == 'work_from_home'
+                is_personal = selected_type['value'] == 'personal'
+                should_show = is_single_day and not is_wfh and not is_personal
+                half_day_switch_ref['ref'].set_visibility(should_show)
+                # Reset half-day if hidden
+                if not should_show:
+                    state['is_half_day'] = False
+
+            def on_clear_dates():
+                """Reset date selection to today."""
+                today = date.today()
+                # Find next working day if today is weekend
+                current = today
+                while is_weekend(current):
+                    current += timedelta(days=1)
+                state['start_date'] = current
+                state['end_date'] = current
+                state['is_single_day'] = True
+                state['is_half_day'] = False
                 build_date_selector()
                 update_summary()
+                update_half_day_visibility()
 
             def build_date_selector():
                 date_selection_container.clear()
@@ -683,36 +706,103 @@ def request_form_page():
                     if current_type == 'work_from_home':
                         type_label = 'WFH'
 
-                    if state['is_single_day']:
-                        # SINGLE DAY MODE
-                        def on_single_date_change(e):
-                            if e.value:
-                                picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
-                                state['start_date'] = picked
-                                state['end_date'] = picked
-                                update_balance_display()
-                                update_summary()
-                                update_warning()
+                    # Single range calendar with click-click pattern
+                    def on_date_change(e):
+                        if e.value is None:
+                            return
 
-                        # Set minimum date to today, exclude weekends and holidays (market closures)
-                        # Note: Quasar uses YYYY/MM/DD format, so convert to YYYY-MM-DD for comparison
-                        cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
+                        value = e.value
 
-                        # Wrap calendar in relative container for icon overlay
-                        with ui.element('div').classes('relative w-full'):
-                            calendar = ui.date(
-                                value=state['start_date'].isoformat(),
-                                on_change=on_single_date_change
-                            ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
-                            calendar_widgets['single'] = calendar
+                        # Handle range selection (dict with 'from' and 'to')
+                        if isinstance(value, dict):
+                            from_date = date.fromisoformat(value['from']) if value.get('from') else None
+                            to_date = date.fromisoformat(value['to']) if value.get('to') else None
 
-                            # PTO type overlay on calendar header
-                            with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
-                                ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
-                                ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                            if from_date and to_date:
+                                # Validate start date is not weekend/holiday
+                                if is_weekend(from_date):
+                                    show_warning_dialog('Invalid Start Date',
+                                        f'Start date cannot be a {from_date.strftime("%A")}. Please select a business day (Mon-Fri).')
+                                    # Reset to previous state
+                                    range_calendar.value = state['start_date'].isoformat()
+                                    return
 
-                        # Half-day option (only for single day, not for WFH)
-                        half_day_row = ui.row().classes('w-full mt-3 items-center')
+                                # Check for cross-year requests
+                                if from_date.year != to_date.year:
+                                    show_warning_dialog('Cross-Year Request Not Allowed',
+                                        'PTO requests cannot span multiple years. '
+                                        'Please submit separate requests for each year.')
+                                    range_calendar.value = state['start_date'].isoformat()
+                                    return
+
+                                # Check for unreasonably large date range
+                                if (to_date - from_date).days > 90:
+                                    show_warning_dialog('Date Range Too Large',
+                                        f'The selected range spans {(to_date - from_date).days} days. '
+                                        'Please select a shorter range (max ~3 months). '
+                                        'For extended leave, please contact HR.')
+                                    range_calendar.value = state['start_date'].isoformat()
+                                    return
+
+                                # WFH is single-day only - collapse to start date
+                                if selected_type['value'] == 'work_from_home' and from_date != to_date:
+                                    ui.notify('WFH requests are single-day only. Using start date.', type='info')
+                                    state['start_date'] = from_date
+                                    state['end_date'] = from_date
+                                    state['is_single_day'] = True
+                                    range_calendar.value = from_date.isoformat()
+                                else:
+                                    state['start_date'] = from_date
+                                    state['end_date'] = to_date
+                                    state['is_single_day'] = (from_date == to_date)
+
+                        # Handle single date selection (string)
+                        elif isinstance(value, str):
+                            picked = date.fromisoformat(value)
+
+                            # Validate not weekend/holiday
+                            if is_weekend(picked):
+                                show_warning_dialog('Invalid Date',
+                                    f'Cannot select a {picked.strftime("%A")}. Please select a business day (Mon-Fri).')
+                                range_calendar.value = state['start_date'].isoformat()
+                                return
+
+                            state['start_date'] = picked
+                            state['end_date'] = picked
+                            state['is_single_day'] = True
+
+                        update_balance_display()
+                        update_summary()
+                        update_warning()
+                        update_half_day_visibility()
+
+                    # Set calendar color based on PTO type
+                    cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
+
+                    # Build initial value - use range dict if dates differ, else single string
+                    if state['start_date'] == state['end_date']:
+                        initial_value = state['start_date'].isoformat()
+                    else:
+                        initial_value = {'from': state['start_date'].isoformat(), 'to': state['end_date'].isoformat()}
+
+                    # Wrap calendar in relative container for icon overlay
+                    with ui.element('div').classes('relative w-full'):
+                        range_calendar = ui.date(
+                            value=initial_value,
+                            on_change=on_date_change
+                        ).props(f'range color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
+                        calendar_widgets['range'] = range_calendar
+
+                        # PTO type overlay on calendar header
+                        with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
+                            ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                            ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+
+                    # Half-day option and Clear button row
+                    with ui.row().classes('w-full mt-3 items-center justify-between'):
+                        # Half-day switch (only for single day, not for WFH or Personal)
+                        half_day_row = ui.row().classes('items-center')
+                        half_day_switch_ref['ref'] = half_day_row
                         half_day_container['ref'] = half_day_row
                         with half_day_row:
                             def on_half_day_change(e):
@@ -722,87 +812,11 @@ def request_form_page():
 
                             ui.switch('Half Day (4 hours)', value=state['is_half_day'], on_change=on_half_day_change)
 
-                        # Hide half-day for WFH
-                        if selected_type['value'] == 'work_from_home':
-                            half_day_row.set_visibility(False)
+                        # Clear Dates button
+                        ui.button('Clear Dates', icon='clear', on_click=on_clear_dates).props('flat dense').classes('text-sm')
 
-                    else:
-                        # DATE RANGE MODE
-                        ui.label('Select start and end dates:').classes('text-sm opacity-70 mb-2')
-
-                        # Reset half day when in range mode
-                        state['is_half_day'] = False
-
-                        with ui.row().classes('w-full gap-4'):
-                            with ui.column().classes('flex-1'):
-                                ui.label('Start Date').classes('text-sm font-medium mb-1')
-
-                                def on_start_change(e):
-                                    if e.value:
-                                        picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
-                                        state['start_date'] = picked
-                                        if state['end_date'] < picked:
-                                            state['end_date'] = picked
-                                            end_calendar.value = picked.isoformat()
-                                        update_balance_display()
-                                        update_summary()
-                                        update_warning()
-
-                                # Set minimum date to today, exclude weekends and holidays (market closures)
-                                cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
-
-                                # Wrap calendar in relative container for icon overlay
-                                with ui.element('div').classes('relative w-full'):
-                                    start_calendar = ui.date(
-                                        value=state['start_date'].isoformat(),
-                                        on_change=on_start_change
-                                    ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
-                                    calendar_widgets['start'] = start_calendar
-
-                                    # PTO type overlay on calendar header
-                                    with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
-                                        ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
-                                        ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
-
-                            with ui.column().classes('flex-1'):
-                                ui.label('End Date').classes('text-sm font-medium mb-1')
-
-                                def on_end_change(e):
-                                    if e.value:
-                                        picked = date.fromisoformat(e.value) if isinstance(e.value, str) else e.value
-                                        if picked >= state['start_date']:
-                                            # Check for cross-year requests (not allowed)
-                                            if picked.year != state['start_date'].year:
-                                                show_warning_dialog('Cross-Year Request Not Allowed',
-                                                    'PTO requests cannot span multiple years. '
-                                                    'Please submit separate requests for each year.')
-                                                # Reset to start date
-                                                state['end_date'] = state['start_date']
-                                                end_calendar.value = state['start_date'].isoformat()
-                                            # Check for unreasonably large date range (max 90 calendar days / ~3 months)
-                                            elif (picked - state['start_date']).days > 90:
-                                                show_warning_dialog('Date Range Too Large',
-                                                    f'The selected range spans {(picked - state["start_date"]).days} days. '
-                                                    'Please select a shorter range (max ~3 months). '
-                                                    'For extended leave, please contact HR.')
-                                                # Reset to start date
-                                                state['end_date'] = state['start_date']
-                                                end_calendar.value = state['start_date'].isoformat()
-                                            else:
-                                                state['end_date'] = picked
-                                        else:
-                                            state['end_date'] = state['start_date']
-                                            end_calendar.value = state['start_date'].isoformat()
-                                        update_summary()
-                                        update_warning()
-
-                                # Set minimum date to today, exclude weekends and holidays (market closures)
-                                cal_color = type_colors.get(selected_type['value'], {}).get('color', 'grey') if selected_type['value'] in primary_types else 'grey'
-                                end_calendar = ui.date(
-                                    value=state['end_date'].isoformat(),
-                                    on_change=on_end_change
-                                ).props(f'color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
-                                calendar_widgets['end'] = end_calendar
+                    # Update half-day visibility based on current state
+                    update_half_day_visibility()
 
             def update_summary():
                 summary_container.clear()
@@ -848,7 +862,7 @@ def request_form_page():
                     # Hours/Days requested
                     with ui.column().classes('items-center'):
                         ui.label(fmt_days(total_days)).classes(f'text-2xl font-bold {text_color}')
-                        ui.label(f'day{"s" if total_days != 1 else ""} ({hours_requested:.0f} hrs)').classes('text-xs opacity-60')
+                        ui.label(f'{hours_requested:.0f} hours total').classes('text-xs opacity-60')
 
                     ui.icon('arrow_forward').classes('opacity-40')
 
@@ -862,22 +876,18 @@ def request_form_page():
                             ui.icon('check_circle', color='green').classes('text-2xl')
                             ui.label('No balance limit').classes('text-xs opacity-60')
                     else:
-                        _, _, _, available, _ = get_balance_for_type(pto_type.value)
+                        _, _, _, available, _, _ = get_balance_for_type(pto_type.value)
                         remaining = available - hours_requested
                         with ui.column().classes('items-center'):
                             if remaining < 0:
                                 remaining_display, remaining_tooltip = format_days_hours(remaining)
-                                ui.label(remaining_display).classes('text-2xl font-bold text-red-600').tooltip(remaining_tooltip)
-                                ui.label('OVER LIMIT').classes('text-xs text-red-600 font-bold')
+                                ui.label(remaining_display).classes('text-2xl font-bold text-amber-600').tooltip(remaining_tooltip)
+                                ui.label('over balance').classes('text-xs text-amber-600')
                             else:
                                 color = 'text-green-600' if remaining >= 16 else 'text-amber-600'
                                 remaining_display, remaining_tooltip = format_days_hours(remaining)
                                 ui.label(remaining_display).classes(f'text-2xl font-bold {color}').tooltip(remaining_tooltip)
                                 ui.label('remaining').classes('text-xs opacity-60')
-
-            # Initialize the date mode buttons
-            single_day_btn.props('color=primary')
-            range_btn.props('color=grey')
 
         # ============ STEP 3: NOTES ============
         # Define which types have private notes (other leave types)
@@ -952,7 +962,7 @@ def request_form_page():
                     total_days = (state['end_date'] - state['start_date']).days + 1
                 hours_requested = total_days * 8
                 is_wfh = pto_type.value == 'work_from_home'
-                _, _, _, available, balance_allocated = get_balance_for_type(pto_type.value)
+                _, _, _, available, balance_allocated, _ = get_balance_for_type(pto_type.value)
                 target_year = state['start_date'].year
 
                 with warning_container:
@@ -967,16 +977,27 @@ def request_form_page():
                                         ui.label('WFH requests limited to within 1 week').classes('text-red-500 font-medium')
                                         ui.label('Work From Home must be submitted within 7 days. For advance requests, contact your manager.').classes('text-sm opacity-70')
 
+                    # Personal leave: 24hr advance notice warning (informational, not blocking)
+                    if pto_type.value == 'personal':
+                        hours_until_start = (datetime.combine(state['start_date'], datetime.min.time()) - datetime.now()).total_seconds() / 3600
+                        if hours_until_start < 24:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-blue-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('schedule', color='blue').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label('Personal time - 24hr notice preferred').classes('text-blue-500 font-medium')
+                                        ui.label('When possible, please request personal time at least 24 hours in advance.').classes('text-sm opacity-70')
+
                     # Skip balance-related warnings for WFH (no balance system)
                     if not is_wfh:
                         # Warning for unallocated future year balance
                         if not balance_allocated and target_year != date.today().year:
                             with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
                                 with ui.row().classes('items-start'):
-                                    ui.icon('info', color='amber').classes('mr-2 mt-1')
+                                    ui.icon('schedule', color='amber').classes('mr-2 mt-1')
                                     with ui.column().classes('gap-0'):
-                                        ui.label(f'{target_year} PTO balance not yet allocated').classes('text-amber-600 font-medium')
-                                        ui.label('Your request will be submitted for manager approval. Balance will be deducted once allocated.').classes('text-sm opacity-70')
+                                        ui.label(f'Planning ahead for {target_year}').classes('text-amber-600 font-medium')
+                                        ui.label(f"Your {target_year} balance will be allocated in January. This request will count against that allocation.").classes('text-sm opacity-70')
 
                         # Warning for cross-year requests
                         if state['start_date'].year != state['end_date'].year:
@@ -1002,12 +1023,12 @@ def request_form_page():
                                             ui.label('Per Chicago ordinance, you can only use time that has been accrued.').classes('text-sm opacity-70 mt-1')
                             else:
                                 state['chicago_blocked'] = False
-                                with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500'):
+                                with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
                                     with ui.row().classes('items-start'):
-                                        ui.icon('warning', color='red').classes('mr-2 mt-1')
+                                        ui.icon('info', color='amber').classes('mr-2 mt-1')
                                         with ui.column().classes('gap-0'):
-                                            ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)}').classes('text-red-500 font-medium')
-                                            ui.label('You may still submit - approval is at manager discretion.').classes('text-sm opacity-70')
+                                            ui.label(f'This will use {fmt_days((hours_requested - available)/8)} more than currently available').classes('text-amber-600 font-medium')
+                                            ui.label('Your manager can approve requests that exceed your current balance.').classes('text-sm opacity-70')
                         else:
                             state['chicago_blocked'] = False
 
@@ -1164,7 +1185,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                             ui.label('Insufficient Accrued Time').classes('text-lg font-bold')
                         with ui.column().classes('p-4 gap-3'):
                             ui.label(f'{leave_name} can only be used after it has been accrued.').classes('text-base')
-                            ui.label(f'Requested: {total_days} days ({hours_requested:.0f} hours)').classes('text-sm')
+                            ui.label(f'Requested: {fmt_days(total_days)} ({hours_requested:.0f} hours)').classes('text-sm')
                             ui.label(f'Available: {chicago_available:.0f} hours').classes('text-sm font-semibold')
                             ui.label('Per Chicago ordinance, you accrue 1 hour for every 40 hours worked.').classes('text-sm opacity-70 mt-2')
                             with ui.row().classes('w-full justify-end mt-2'):

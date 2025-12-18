@@ -228,6 +228,50 @@ def create_test_balance(
     return balance
 
 
+def get_next_working_day(from_date: date = None, skip_days: int = 0) -> date:
+    """
+    Get the next working day (Mon-Fri) from a given date.
+
+    Args:
+        from_date: Starting date (default: today)
+        skip_days: Number of working days to skip forward
+
+    Returns:
+        Next working day date
+    """
+    if from_date is None:
+        from_date = date.today()
+
+    current = from_date
+    working_days_skipped = 0
+
+    while working_days_skipped <= skip_days:
+        # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+        if current.weekday() < 5:  # It's a working day
+            if working_days_skipped == skip_days:
+                return current
+            working_days_skipped += 1
+        current += timedelta(days=1)
+
+    return current
+
+
+def get_working_day_range(start_skip: int = 1, num_days: int = 5) -> tuple[date, date]:
+    """
+    Get a range of working days for testing.
+
+    Args:
+        start_skip: Number of working days from today to start
+        num_days: Number of working days in the range
+
+    Returns:
+        Tuple of (start_date, end_date) that are both working days
+    """
+    start = get_next_working_day(skip_days=start_skip)
+    end = get_next_working_day(start, skip_days=num_days - 1)
+    return start, end
+
+
 def approve_request(db: Session, request: PTORequest, approver: User) -> PTORequest:
     """
     Helper to approve a PTO request.

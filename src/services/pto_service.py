@@ -2,16 +2,23 @@
 PTO service for managing PTO requests in the PTO and Market Calendar System.
 """
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from ..models.pto_request import PTORequest
 from ..models.user import User
+from ..models.carryover_request import CarryoverRequest
+from ..models.leave_type import LeaveType
 from ..schemas.pto_schemas import PTORequestCreate
 from .balance_service import BalanceService
+from ..utils.working_days import (
+    validate_start_date,
+    validate_end_date,
+    count_working_days,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +66,53 @@ class PTOService:
         if user is None:
             raise ValueError(f"User with ID {request_data.user_id} not found")
 
-        # Validate start_date is not in the past
-        if request_data.start_date < datetime.now().date():
-            raise ValueError("Start date cannot be in the past")
+        # Validate start_date is not more than 7 days in the past
+        # Allow 7-day retroactive window for late submissions (e.g., unexpected sick days)
+        min_allowed_date = datetime.now().date() - timedelta(days=7)
+        if request_data.start_date < min_allowed_date:
+            raise ValueError("Start date cannot be more than 7 days in the past")
 
         # Validate start_date <= end_date
         if request_data.start_date > request_data.end_date:
             raise ValueError("Start date must be before or equal to end date")
+
+        # Validate start_date is not a weekend or holiday
+        is_valid, error_msg = validate_start_date(request_data.start_date, self.db)
+        if not is_valid:
+            raise ValueError(error_msg)
+
+        # Validate end_date is not a weekend or holiday
+        is_valid, error_msg = validate_end_date(request_data.end_date, self.db)
+        if not is_valid:
+            raise ValueError(error_msg)
+
+        # Server-side recalculation of total_days to verify client calculation
+        # This ensures we don't trust potentially manipulated client data
+        server_calculated_days = count_working_days(
+            request_data.start_date,
+            request_data.end_date,
+            db_session=self.db
+        )
+
+        # Account for half-day if total_days is fractional (ends in .5)
+        client_days = float(request_data.total_days)
+        is_half_day = (client_days % 1) == 0.5
+
+        if is_half_day and server_calculated_days == 1:
+            # Client submitted half day for a single day - valid
+            expected_days = 0.5
+        else:
+            expected_days = server_calculated_days
+
+        # Log warning if client calculation differs significantly from server
+        if abs(client_days - expected_days) > 0.1:
+            logger.warning(
+                f"PTO CALCULATION MISMATCH: User {request_data.user_id} submitted {client_days} days, "
+                f"server calculated {expected_days} days for {request_data.start_date} to {request_data.end_date}. "
+                f"Using server calculation."
+            )
+            # Use server calculation (trust the server, not the client)
+            request_data.total_days = Decimal(str(expected_days))
 
         # Extract year from start_date
         year = request_data.start_date.year
@@ -102,18 +149,10 @@ class PTOService:
                 f"Please cancel or modify that request first."
             )
 
-        # Validate vacation balance - employees cannot request more than available
-        # Managers/admins can exceed since they have approval authority
-        # This prevents regular employees from submitting over-limit requests
+        # NOTE: Vacation balance validation is NOT a hard block per business rules.
+        # Employees can submit requests exceeding available balance - manager decides whether to approve.
+        # Only sick/personal have hard limits enforced below.
         hours_requested_check = float(request_data.total_days) * 8
-        if request_data.pto_type == 'vacation':
-            vacation_available = float(balance.vacation_total or 0) - float(balance.vacation_used or 0) - float(balance.vacation_pending or 0)
-            # Only enforce for non-managers/admins - they have discretion to exceed
-            if user.role == 'employee' and hours_requested_check > vacation_available:
-                raise ValueError(
-                    f"Insufficient vacation time. Requesting {request_data.total_days} days "
-                    f"but only {vacation_available / 8:.1f} days available."
-                )
 
         # Determine if auto-approve applies
         # BUSINESS RULE: The following users can self-approve standard PTO types:
@@ -189,22 +228,57 @@ class PTOService:
             )
 
         # Handle balance adjustments based on auto-approval status
+        hours_requested = Decimal(str(request_data.total_days)) * Decimal('8')
+
         if is_auto_approve:
             # For auto-approved requests, directly deduct from used (not pending)
             if request_data.pto_type == 'vacation':
-                self.balance_service.adjust_vacation_used(
-                    balance.id,
-                    request_data.total_days,
-                    is_pending=False
+                # Check for carryover from previous year first
+                # NOTE: allow_implicit_carryover=False means only explicit CarryoverRequest is honored
+                # This prevents managers/trusted employees from auto-granting themselves carryover
+                hours_from_carryover, hours_from_current = PTOService._apply_vacation_with_carryover(
+                    self.db, request_data.user_id, year, hours_requested, is_pending=False,
+                    allow_implicit_carryover=False
                 )
+                # Apply remaining to current year balance
+                if hours_from_current > 0:
+                    self.balance_service.adjust_vacation_used(
+                        balance.id,
+                        hours_from_current / Decimal('8'),  # Convert back to days
+                        is_pending=False
+                    )
+                # Track carryover usage - if hours came from previous year, record it
+                if hours_from_carryover > 0:
+                    request.carryover_from_year = year - 1
+                    self.db.commit()
             elif request_data.pto_type == 'sick':
                 self.balance_service.adjust_sick_used(balance.id, request_data.total_days)
             elif request_data.pto_type == 'personal':
                 self.balance_service.adjust_personal_used(balance.id, request_data.total_days)
+            elif request_data.pto_type == 'chicago_leave':
+                self.balance_service.adjust_chicago_leave_used(balance.id, request_data.total_days)
         else:
             # For regular employees, add to pending
             if request_data.pto_type == 'vacation':
                 self.balance_service.adjust_vacation_used(
+                    balance.id,
+                    request_data.total_days,
+                    is_pending=True
+                )
+            elif request_data.pto_type == 'sick':
+                self.balance_service.adjust_sick_used(
+                    balance.id,
+                    request_data.total_days,
+                    is_pending=True
+                )
+            elif request_data.pto_type == 'personal':
+                self.balance_service.adjust_personal_used(
+                    balance.id,
+                    request_data.total_days,
+                    is_pending=True
+                )
+            elif request_data.pto_type == 'chicago_leave':
+                self.balance_service.adjust_chicago_leave_used(
                     balance.id,
                     request_data.total_days,
                     is_pending=True
@@ -345,7 +419,46 @@ class PTOService:
         ).order_by(PTORequest.submitted_at.desc())
 
         return list(db.execute(stmt).scalars().all())
-    
+
+    @staticmethod
+    def get_team_approved_requests(db: Session, department_id: int, exclude_user_id: int = None):
+        """Get approved PTO requests for a department (team view for managers).
+
+        Args:
+            db: Database session
+            department_id: Department ID to filter by
+            exclude_user_id: Optional user ID to exclude (e.g., the manager themselves)
+
+        Returns:
+            List of approved requests with employee info
+        """
+        from ..models.pto_request import PTORequest
+        from ..models.user import User
+
+        stmt = select(
+            PTORequest,
+            (User.first_name + ' ' + User.last_name).label('employee_name')
+        ).join(User, PTORequest.user_id == User.id
+        ).where(
+            PTORequest.status == 'approved',
+            User.department_id == department_id
+        )
+
+        if exclude_user_id:
+            stmt = stmt.where(PTORequest.user_id != exclude_user_id)
+
+        stmt = stmt.order_by(PTORequest.approved_at.desc())
+        results = db.execute(stmt).all()
+
+        # Attach employee_name to each request object for easy access
+        requests_with_names = []
+        for row in results:
+            request = row[0]
+            request.employee_name = row[1]
+            requests_with_names.append(request)
+
+        return requests_with_names
+
     @staticmethod
     def get_request_detail(db: Session, request_id: int):
         """Get detailed request info with employee data"""
@@ -377,6 +490,8 @@ class PTOService:
             'employee_email': user.email,
             'employee_department_id': user.department_id,
             'employee_department_name': user.department.name if user.department else 'No Department',
+            'employee_hire_date': user.hire_date,
+            'employee_location_city': user.location_city,
             'balance': balance
         }
 
@@ -453,30 +568,62 @@ class PTOService:
         balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
 
         # Validate sick/personal days don't exceed available balance before approving
+        # Note: Request is already in pending, so we check total - used (pending is already reserved)
         hours_requested = float(request.total_days) * 8
         if request.pto_type == 'sick':
-            available = float(balance.sick_total or 0) - float(balance.sick_used or 0)
+            # Available = total + carryover - used (pending already deducted when request was created)
+            available = (float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+                        - float(balance.sick_used or 0))
             if hours_requested > available:
                 raise ValueError(
                     f"Cannot approve: insufficient sick time. Request is for {request.total_days} days "
                     f"but only {available / 8:.1f} days available."
                 )
         elif request.pto_type == 'personal':
-            available = float(balance.personal_total or 0) - float(balance.personal_used or 0)
+            # Available = total + carryover - used (pending already deducted when request was created)
+            available = (float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
+                        - float(balance.personal_used or 0))
             if hours_requested > available:
                 raise ValueError(
                     f"Cannot approve: insufficient personal time. Request is for {request.total_days} days "
+                    f"but only {available / 8:.1f} days available."
+                )
+        elif request.pto_type == 'chicago_leave':
+            # Available = total + carryover - used (pending already deducted when request was created)
+            available = (float(balance.chicago_paid_leave_total or 0) + float(balance.chicago_paid_leave_carryover or 0)
+                        - float(balance.chicago_paid_leave_used or 0))
+            if hours_requested > available:
+                raise ValueError(
+                    f"Cannot approve: insufficient Chicago Leave time. Request is for {request.total_days} days "
                     f"but only {available / 8:.1f} days available."
                 )
 
         try:
             # Adjust balances based on PTO type (don't commit - part of transaction)
             if request.pto_type == 'vacation':
-                balance_service.move_pending_to_used(balance.id, request.total_days, commit=False)
-            elif request.pto_type == 'sick':
-                balance_service.adjust_sick_used(balance.id, request.total_days, commit=False)
-            elif request.pto_type == 'personal':
-                balance_service.adjust_personal_used(balance.id, request.total_days, commit=False)
+                # First remove from pending
+                balance_service.remove_pending(
+                    balance.id, request.total_days, pto_type='vacation', commit=False
+                )
+                # Then apply with carryover logic - use carryover from previous year first
+                hours_requested = Decimal(str(request.total_days)) * Decimal('8')
+                hours_from_carryover, hours_from_current = PTOService._apply_vacation_with_carryover(
+                    db, request.user_id, year, hours_requested, is_pending=False
+                )
+                # Apply remaining to current year balance
+                if hours_from_current > 0:
+                    balance.vacation_used = (
+                        (balance.vacation_used or Decimal('0')) +
+                        (hours_from_current / Decimal('8'))
+                    )
+                # Track carryover usage - if hours came from previous year, record it
+                if hours_from_carryover > 0:
+                    request.carryover_from_year = year - 1
+            elif request.pto_type in ('sick', 'personal', 'chicago_leave'):
+                # Move from pending to used
+                balance_service.move_pending_to_used(
+                    balance.id, request.total_days, pto_type=request.pto_type, commit=False
+                )
 
             # Update request
             request.status = 'approved'
@@ -528,11 +675,13 @@ class PTOService:
             # Get year from start_date
             year = request.start_date.year
 
-            # Remove pending vacation days if needed (don't commit - part of transaction)
-            if request.pto_type == 'vacation':
+            # Remove pending days for tracked PTO types (don't commit - part of transaction)
+            if request.pto_type in ('vacation', 'sick', 'personal', 'chicago_leave'):
                 balance_service = BalanceService(db)
                 balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
-                balance_service.remove_pending(balance.id, request.total_days, commit=False)
+                balance_service.remove_pending(
+                    balance.id, request.total_days, pto_type=request.pto_type, commit=False
+                )
 
             # Update request
             request.status = 'denied'
@@ -581,10 +730,12 @@ class PTOService:
             # Get year from start_date
             year = request.start_date.year
 
-            # Remove pending vacation days if needed (don't commit - part of transaction)
-            if request.pto_type == 'vacation':
+            # Remove pending days for tracked PTO types (don't commit - part of transaction)
+            if request.pto_type in ('vacation', 'sick', 'personal', 'chicago_leave'):
                 balance = self.balance_service.get_or_create_balance(request.user_id, year, commit=False)
-                self.balance_service.remove_pending(balance.id, request.total_days, commit=False)
+                self.balance_service.remove_pending(
+                    balance.id, request.total_days, pto_type=request.pto_type, commit=False
+                )
 
             # Update request
             request.status = 'cancelled'
@@ -701,3 +852,180 @@ class PTOService:
                 })
 
         return conflict_details
+
+    @staticmethod
+    def _apply_vacation_with_carryover(
+        db: Session,
+        user_id: int,
+        request_year: int,
+        hours_to_apply: Decimal,
+        is_pending: bool = False,
+        allow_implicit_carryover: bool = True
+    ) -> Tuple[Decimal, Decimal]:
+        """
+        Apply vacation hours, using previous year's balance when current year is insufficient.
+
+        Logic:
+        1. If explicit CarryoverRequest exists, use that tracking
+        2. If allow_implicit_carryover=True AND current year has no/insufficient balance,
+           deduct from previous year (this is implicit carryover - manager approved another employee's request)
+        3. Otherwise use current year balance normally
+
+        Args:
+            db: Database session
+            user_id: Employee's user ID
+            request_year: Year the request is for (e.g., 2026)
+            hours_to_apply: Total vacation hours being used
+            is_pending: If True, add to pending; if False, add to used
+            allow_implicit_carryover: If True, allow using previous year balance without explicit
+                CarryoverRequest (for manager-approved requests). If False (for auto-approved own PTO),
+                only explicit CarryoverRequest is honored.
+
+        Returns:
+            Tuple of (hours_from_previous_year, hours_from_current_year)
+        """
+        from ..models.pto_balance import PTOBalance
+
+        hours_from_carryover = Decimal('0')
+        hours_from_current = hours_to_apply
+        previous_year = request_year - 1
+
+        # Get current year's balance to check if it has allocation
+        stmt = select(PTOBalance).where(
+            PTOBalance.user_id == user_id,
+            PTOBalance.year == request_year
+        )
+        current_balance = db.execute(stmt).scalar_one_or_none()
+
+        current_year_available = Decimal('0')
+        if current_balance:
+            current_year_available = (
+                (current_balance.vacation_total or Decimal('0')) +
+                (current_balance.vacation_carryover or Decimal('0')) -
+                (current_balance.vacation_used or Decimal('0')) -
+                (current_balance.vacation_pending or Decimal('0'))
+            )
+
+        # Check for approved vacation carryover from previous year (explicit CarryoverRequest)
+        stmt = select(LeaveType).where(LeaveType.code == 'VACATION')
+        vacation_type = db.execute(stmt).scalar_one_or_none()
+        if not vacation_type:
+            return (hours_from_carryover, hours_from_current)
+
+        stmt = select(CarryoverRequest).where(
+            CarryoverRequest.employee_id == user_id,
+            CarryoverRequest.from_year == previous_year,
+            CarryoverRequest.to_year == request_year,
+            CarryoverRequest.leave_type_id == vacation_type.id,
+            CarryoverRequest.status == 'approved'
+        )
+        carryover = db.execute(stmt).scalar_one_or_none()
+
+        # Case 1: Explicit CarryoverRequest exists - use it
+        if carryover and carryover.hours_remaining > 0:
+            # Use carryover first (up to remaining amount)
+            hours_from_carryover = min(carryover.hours_remaining, hours_to_apply)
+            hours_from_current = hours_to_apply - hours_from_carryover
+
+            # Update carryover hours_used
+            carryover.hours_used = (carryover.hours_used or Decimal('0')) + hours_from_carryover
+
+            # Deduct from FROM year's balance (previous year)
+            stmt = select(PTOBalance).where(
+                PTOBalance.user_id == user_id,
+                PTOBalance.year == previous_year
+            )
+            prev_balance = db.execute(stmt).scalar_one_or_none()
+
+            if prev_balance:
+                # Add to vacation_used in the FROM year
+                prev_balance.vacation_used = (
+                    (prev_balance.vacation_used or Decimal('0')) +
+                    (hours_from_carryover / Decimal('8'))  # Convert hours to days
+                )
+                logger.info(
+                    f"Vacation carryover used: {hours_from_carryover}hrs from {previous_year} "
+                    f"for user {user_id} (request year: {request_year})"
+                )
+            return (hours_from_carryover, hours_from_current)
+
+        # Case 2: No explicit CarryoverRequest, but current year has no/insufficient balance
+        # This is "implicit carryover" - only allowed when manager explicitly approves another employee's request
+        # NOT allowed for auto-approved requests (managers/trusted employees approving their own PTO)
+        if allow_implicit_carryover and current_year_available < hours_to_apply:
+            # Get previous year's balance
+            stmt = select(PTOBalance).where(
+                PTOBalance.user_id == user_id,
+                PTOBalance.year == previous_year
+            )
+            prev_balance = db.execute(stmt).scalar_one_or_none()
+
+            if prev_balance:
+                prev_year_available = (
+                    (prev_balance.vacation_total or Decimal('0')) +
+                    (prev_balance.vacation_carryover or Decimal('0')) -
+                    (prev_balance.vacation_used or Decimal('0')) -
+                    (prev_balance.vacation_pending or Decimal('0'))
+                )
+
+                if prev_year_available > Decimal('0'):
+                    # Determine how much to take from each year
+                    # If current year has NO allocation (total=0), use ALL from previous year
+                    # Otherwise, use current year first, then previous year for remainder
+                    current_total = current_balance.vacation_total if current_balance else Decimal('0')
+
+                    if current_total <= Decimal('0'):
+                        # No allocation in current year - use previous year entirely
+                        hours_from_carryover = min(prev_year_available, hours_to_apply)
+                        hours_from_current = hours_to_apply - hours_from_carryover
+                    else:
+                        # Current year has some allocation - use it first, then previous year
+                        hours_from_current = min(max(current_year_available, Decimal('0')), hours_to_apply)
+                        hours_needed_from_prev = hours_to_apply - hours_from_current
+                        hours_from_carryover = min(prev_year_available, hours_needed_from_prev)
+
+                    # Deduct from previous year's balance
+                    if hours_from_carryover > Decimal('0'):
+                        prev_balance.vacation_used = (
+                            (prev_balance.vacation_used or Decimal('0')) +
+                            (hours_from_carryover / Decimal('8'))  # Convert hours to days
+                        )
+                        logger.info(
+                            f"Implicit vacation carryover: {hours_from_carryover}hrs deducted from {previous_year} "
+                            f"for user {user_id} (request year: {request_year}, {previous_year} balance used)"
+                        )
+
+        return (hours_from_carryover, hours_from_current)
+
+    @staticmethod
+    def get_available_vacation_carryover(db: Session, user_id: int, year: int) -> Decimal:
+        """
+        Get available vacation carryover hours from previous year.
+
+        Args:
+            db: Database session
+            user_id: Employee's user ID
+            year: The year to check carryover INTO (e.g., 2026)
+
+        Returns:
+            Remaining carryover hours available
+        """
+        previous_year = year - 1
+
+        stmt = select(LeaveType).where(LeaveType.code == 'VACATION')
+        vacation_type = db.execute(stmt).scalar_one_or_none()
+        if not vacation_type:
+            return Decimal('0')
+
+        stmt = select(CarryoverRequest).where(
+            CarryoverRequest.employee_id == user_id,
+            CarryoverRequest.from_year == previous_year,
+            CarryoverRequest.to_year == year,
+            CarryoverRequest.leave_type_id == vacation_type.id,
+            CarryoverRequest.status == 'approved'
+        )
+        carryover = db.execute(stmt).scalar_one_or_none()
+
+        if carryover:
+            return carryover.hours_remaining
+        return Decimal('0')

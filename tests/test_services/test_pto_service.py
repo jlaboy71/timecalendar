@@ -10,6 +10,7 @@ from src.schemas.pto_schemas import PTORequestCreate
 from src.models.pto_request import PTORequest
 from src.models.pto_balance import PTOBalance
 from src.constants import PTOStatus, PTOType
+from tests.utils import get_next_working_day, get_working_day_range
 
 
 class TestCreateRequest:
@@ -170,12 +171,13 @@ class TestCreateRequest:
         service = PTOService(db)
 
         # Request more days than available (balance has 80 hours = 10 days)
-        # Use dates within current year to avoid year boundary issues
+        # Use working days to avoid weekend validation errors
+        start_date, end_date = get_working_day_range(start_skip=1, num_days=15)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=1),
-            end_date=date.today() + timedelta(days=10),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("15.00")  # More than 10 days available
         )
 
@@ -520,11 +522,13 @@ class TestTrustedEmployeeAutoApprove:
         test_employee.is_trusted = True
         db.commit()
 
+        # Use working days to avoid weekend validation errors
+        start_date, end_date = get_working_day_range(start_skip=3, num_days=2)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.VACATION.value,
-            start_date=date.today() + timedelta(days=7),
-            end_date=date.today() + timedelta(days=8),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("2.00")
         )
 
@@ -540,11 +544,13 @@ class TestTrustedEmployeeAutoApprove:
         test_employee.is_trusted = True
         db.commit()
 
+        # Use working days to avoid weekend validation errors
+        start_date, end_date = get_working_day_range(start_skip=3, num_days=3)
         request_data = PTORequestCreate(
             user_id=test_employee.id,
             pto_type=PTOType.BEREAVEMENT.value,
-            start_date=date.today() + timedelta(days=7),
-            end_date=date.today() + timedelta(days=9),
+            start_date=start_date,
+            end_date=end_date,
             total_days=Decimal("3.00")
         )
 
@@ -552,3 +558,77 @@ class TestTrustedEmployeeAutoApprove:
 
         # Bereavement always requires approval
         assert request.status == PTOStatus.PENDING.value
+
+
+class TestWeekendHolidayValidation:
+    """Tests for server-side weekend and holiday validation."""
+
+    def test_rejects_weekend_start_date(self, db, test_employee, test_balance):
+        """Test that weekend start dates are rejected."""
+        service = PTOService(db)
+
+        # Find a Saturday
+        today = date.today()
+        days_until_saturday = (5 - today.weekday()) % 7
+        if days_until_saturday == 0:
+            days_until_saturday = 7
+        saturday = today + timedelta(days=days_until_saturday)
+
+        request_data = PTORequestCreate(
+            user_id=test_employee.id,
+            pto_type=PTOType.VACATION.value,
+            start_date=saturday,
+            end_date=saturday,
+            total_days=Decimal("1.00")
+        )
+
+        with pytest.raises(ValueError) as excinfo:
+            service.create_request(request_data)
+
+        assert "Saturday" in str(excinfo.value) or "weekend" in str(excinfo.value).lower()
+
+    def test_rejects_weekend_end_date(self, db, test_employee, test_balance):
+        """Test that weekend end dates are rejected."""
+        service = PTOService(db)
+
+        # Find a Friday and following Sunday
+        today = date.today()
+        days_until_friday = (4 - today.weekday()) % 7
+        if days_until_friday == 0:
+            days_until_friday = 7
+        friday = today + timedelta(days=days_until_friday)
+        sunday = friday + timedelta(days=2)
+
+        request_data = PTORequestCreate(
+            user_id=test_employee.id,
+            pto_type=PTOType.VACATION.value,
+            start_date=friday,
+            end_date=sunday,
+            total_days=Decimal("1.00")
+        )
+
+        with pytest.raises(ValueError) as excinfo:
+            service.create_request(request_data)
+
+        assert "Sunday" in str(excinfo.value) or "weekend" in str(excinfo.value).lower()
+
+    def test_server_recalculates_total_days(self, db, test_employee, test_balance):
+        """Test that server recalculates total_days and overrides client value."""
+        service = PTOService(db)
+
+        # Use a 5-day working week (Mon-Fri)
+        start_date, end_date = get_working_day_range(start_skip=1, num_days=5)
+
+        # Client sends wrong total_days
+        request_data = PTORequestCreate(
+            user_id=test_employee.id,
+            pto_type=PTOType.VACATION.value,
+            start_date=start_date,
+            end_date=end_date,
+            total_days=Decimal("10.00")  # Wrong - should be 5
+        )
+
+        request = service.create_request(request_data)
+
+        # Server should have recalculated to 5 days
+        assert request.total_days == Decimal("5.00")
