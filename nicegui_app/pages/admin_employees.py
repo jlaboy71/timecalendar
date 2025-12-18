@@ -17,7 +17,7 @@ def admin_employees_list_page():
     """Admin page for managing employees - list view."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -248,7 +248,7 @@ def admin_employees_add_page():
     """Admin page for adding a new employee."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -540,7 +540,7 @@ def admin_employees_add_page():
                     balance_service.allocate_standard_balance(new_user.id)
 
                     # Set trusted status if checkbox was checked (only for employees)
-                    current_user = app.storage.general.get('user')
+                    current_user = app.storage.user.get('user')
                     if is_trusted_check.value and role_select.value == 'employee':
                         trust_update = UserUpdate(
                             is_trusted=True,
@@ -573,7 +573,7 @@ def admin_employees_edit_page(user_id: int):
     """Admin page for editing an existing employee."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
     current_user_id = current_user.get('id')
     current_department_id = current_user.get('department_id')
@@ -730,7 +730,7 @@ def admin_employees_edit_page(user_id: int):
                                             try:
                                                 user_service = UserService(db)
                                                 if user_service.delete_user(user_id):
-                                                    current_user = app.storage.general.get('user')
+                                                    current_user = app.storage.user.get('user')
                                                     AuditService.log(
                                                         db, action='user_delete',
                                                         user_id=current_user.get('id'),
@@ -882,7 +882,7 @@ def admin_employees_edit_page(user_id: int):
                         updated_user = user_service.update_user(user_id, user_update)
 
                         if updated_user:
-                            logged_user = app.storage.general.get('user')
+                            logged_user = app.storage.user.get('user')
                             AuditService.log_user_update(
                                 db, logged_user.get('id'),
                                 f"{logged_user.get('first_name')} {logged_user.get('last_name')}",

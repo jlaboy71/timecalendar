@@ -8,7 +8,7 @@ def admin_dashboard_page():
     """Admin panel landing page content."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -16,8 +16,8 @@ def admin_dashboard_page():
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title='ADMIN PANEL', show_back=False)
 
-        # Navigation cards
-        with ui.row().classes('w-full gap-6 justify-center'):
+        # Navigation cards (flex-wrap for mobile responsive)
+        with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
             # Manage Departments card
             with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
                 with ui.column().classes('items-center gap-4'):
@@ -42,9 +42,9 @@ def admin_dashboard_page():
                     ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
                     ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
 
-        # Second row - Super Admin only
+        # Second row - Super Admin only (flex-wrap for mobile responsive)
         if user_role == 'superadmin':
-            with ui.row().classes('w-full gap-6 justify-center mt-6'):
+            with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap'):
                 # System Administration card
                 with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-500'):
                     with ui.column().classes('items-center gap-4'):

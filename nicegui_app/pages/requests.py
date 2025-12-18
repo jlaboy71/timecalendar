@@ -4,11 +4,12 @@ from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.realtime_updates import setup_dashboard_updates
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
-from nicegui_app.components.formatting import format_days_hours
+from nicegui_app.components.formatting import format_days_hours, fmt_days
 
 
 def cancel_user_request(request_id: int, pto_type: str, total_days: float, year: int):
@@ -41,7 +42,7 @@ def cancel_user_request(request_id: int, pto_type: str, total_days: float, year:
         db.commit()
 
         # Audit log the cancellation
-        current_user = app.storage.general.get('user', {})
+        current_user = app.storage.user.get('user', {})
         AuditService.log_pto_cancel(
             db=db,
             user_id=current_user.get('id'),
@@ -94,7 +95,7 @@ def cancel_approved_request(request_id: int, pto_type: str, total_days: float, y
         db.commit()
 
         # Audit log the cancellation (manager/admin cancelling)
-        current_user = app.storage.general.get('user', {})
+        current_user = app.storage.user.get('user', {})
         AuditService.log_pto_cancel(
             db=db,
             user_id=current_user.get('id'),
@@ -174,13 +175,17 @@ def show_request_detail_dialog(request, current_user_id: int, user_role: str):
     req_year = request.start_date.year
     req_user_id = request.user_id
     req_status = request.status
+    req_carryover_from_year = getattr(request, 'carryover_from_year', None)
+
+    # Determine title - add (CarryOver) if vacation uses previous year balance
+    title_label = f'{request.pto_type.title()} (CarryOver)' if req_carryover_from_year and pto_type_lower == 'vacation' else request.pto_type.title()
 
     with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
         # Header with colored background
         with ui.row().classes(f'w-full justify-between items-center p-4 bg-{header_color}-500 text-white'):
             with ui.row().classes('gap-2 items-center'):
                 ui.icon(type_icons.get(pto_type_lower, 'event')).classes('text-2xl')
-                ui.label(f'{request.pto_type.title()} Time Off').classes('text-lg font-bold')
+                ui.label(f'{title_label} Time Off').classes('text-lg font-bold')
             ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense color=white')
 
         # Content
@@ -293,27 +298,49 @@ def delete_request_with_balance(request_id: int, pto_type: str, total_days: floa
             manager_email = manager.email
             manager_name = manager.first_name
 
+        # Check for carryover_from_year before cancelling
+        carryover_from_year = getattr(request, 'carryover_from_year', None)
+
         request.status = 'cancelled'
 
         # Restore balance based on PTO type and previous status
+        # IMPORTANT: For carryover requests, restore to the FROM year (carryover_from_year)
         pto_type_lower = pto_type.lower()
         if pto_type_lower in ['vacation', 'sick', 'personal']:
             balance_service = BalanceService(db)
-            balance = balance_service.get_or_create_balance(user_id, year)
             hours_to_restore = total_days * 8
 
             if status == 'pending':
+                balance = balance_service.get_or_create_balance(user_id, year)
                 if pto_type_lower == 'vacation':
                     balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
             else:  # approved
-                if pto_type_lower == 'vacation':
+                # For vacation carryover, restore to the correct year
+                if pto_type_lower == 'vacation' and carryover_from_year:
+                    # Restore to the FROM year (e.g., 2025)
+                    balance = balance_service.get_or_create_balance(user_id, carryover_from_year)
                     balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
-                elif pto_type_lower == 'sick':
-                    balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
-                elif pto_type_lower == 'personal':
-                    balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
+                else:
+                    balance = balance_service.get_or_create_balance(user_id, year)
+                    if pto_type_lower == 'vacation':
+                        balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
+                    elif pto_type_lower == 'sick':
+                        balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
+                    elif pto_type_lower == 'personal':
+                        balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
 
         db.commit()
+
+        # Audit log the cancellation
+        current_user = app.storage.user.get('user', {})
+        AuditService.log_pto_cancel(
+            db=db,
+            user_id=current_user.get('id'),
+            username=current_user.get('username'),
+            request_id=request_id,
+            employee_name=employee_name,
+            cancelled_by_self=(current_user.get('id') == user_id)
+        )
 
         # Send manager notification if this was an approved request
         if was_approved and manager_email:
@@ -343,7 +370,7 @@ def requests_page():
     """User's PTO request history page content."""
     apply_dark_mode()
 
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     user_role = user.get('role', 'employee')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
 
@@ -353,7 +380,7 @@ def requests_page():
     # Year filter state - default to current year, use storage to persist selection
     current_year = date.today().year
     next_year = current_year + 1
-    stored_year = app.storage.general.get('requests_year_filter', current_year)
+    stored_year = app.storage.user.get('requests_year_filter', current_year)
     year_filter = {'value': stored_year if stored_year in [current_year, next_year] else current_year}
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
@@ -613,7 +640,12 @@ def requests_page():
 
                                         with ui.column().classes('gap-1'):
                                             with ui.row().classes('gap-2 items-center'):
-                                                ui.label(type_display.get(pto_type_lower, req.pto_type.title())).classes(f'font-bold text-sm text-{type_color}-500')
+                                                # Check if vacation uses carryover from previous year
+                                                has_carryover = hasattr(req, 'carryover_from_year') and req.carryover_from_year
+                                                base_label = type_display.get(pto_type_lower, req.pto_type.title())
+                                                label_text = f'{base_label} (CarryOver)' if has_carryover and pto_type_lower == 'vacation' else base_label
+                                                label_color = 'text-amber-500' if has_carryover else f'text-{type_color}-500'
+                                                ui.label(label_text).classes(f'font-bold text-sm {label_color}')
                                                 # Show status badge for employees (they have pending/denied)
                                                 if not is_manager_or_admin:
                                                     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
@@ -709,7 +741,7 @@ def requests_page():
             def switch_year(year):
                 """Switch year and refresh page."""
                 year_filter['value'] = year
-                app.storage.general['requests_year_filter'] = year
+                app.storage.user['requests_year_filter'] = year
                 ui.navigate.to('/requests')
 
             with ui.card().classes('w-full mb-4 p-3'):
@@ -745,15 +777,6 @@ def requests_page():
                  'border': 'red', 'text': '#ef4444'},
             ]
 
-            def format_days_verbose(days_value: float) -> str:
-                """Format days as 'x days' or 'x days and y hours'."""
-                hours = days_value * 8
-                whole_days = int(hours // 8)
-                remaining_hours = int(hours % 8)
-                if remaining_hours > 0:
-                    return f"{whole_days} days and {remaining_hours} hours"
-                return f"{whole_days} days"
-
             with ui.element('div').classes('w-full grid grid-cols-5 gap-3 mb-4'):
                 for tile in tile_data:
                     def make_click_handler(t=tile['type']):
@@ -771,7 +794,7 @@ def requests_page():
                             ui.icon(tile['icon']).style(f"color: {tile['text']}")
                             ui.label(tile['label']).classes('font-semibold text-center').style(f"color: {tile['text']}")
                             ui.label(f'{tile["count"]} request{"s" if tile["count"] != 1 else ""}').classes('text-xs opacity-60 text-center')
-                            ui.label(format_days_verbose(tile["days"])).classes('text-sm font-bold text-center')
+                            ui.label(fmt_days(tile["days"])).classes('text-sm font-bold text-center')
 
                 # Total/All tile to reset filters
                 total_count = len(approved_requests)
@@ -785,7 +808,7 @@ def requests_page():
                         ui.icon('list_alt').style('color: #6b7280')
                         ui.label('Total').classes('font-semibold text-center').style('color: #6b7280')
                         ui.label(f'{total_count} request{"s" if total_count != 1 else ""}').classes('text-xs opacity-60 text-center')
-                        ui.label(format_days_verbose(total_days)).classes('text-sm font-bold text-center')
+                        ui.label(fmt_days(total_days)).classes('text-sm font-bold text-center')
 
             # Other types dropdown (if any exist)
             if other_approved:
@@ -821,7 +844,7 @@ def requests_page():
                     ):
                         ui.label('Approved').classes('text-xs opacity-60 uppercase')
                         ui.label(str(len(approved_requests))).classes('text-lg font-bold').style('color: #22c55e')
-                        ui.label(f'{sum(float(r.total_days or 0) for r in approved_requests):.1f} days').classes('text-xs opacity-50')
+                        ui.label(fmt_days(sum(float(r.total_days or 0) for r in approved_requests))).classes('text-xs opacity-50')
                     filter_buttons['approved'] = None
 
                     # Pending
@@ -830,7 +853,7 @@ def requests_page():
                     ):
                         ui.label('Pending').classes('text-xs opacity-60 uppercase')
                         ui.label(str(len(pending_requests))).classes('text-lg font-bold').style('color: #f59e0b')
-                        ui.label(f'{sum(float(r.total_days or 0) for r in pending_requests):.1f} days').classes('text-xs opacity-50')
+                        ui.label(fmt_days(sum(float(r.total_days or 0) for r in pending_requests))).classes('text-xs opacity-50')
                     filter_buttons['pending'] = None
 
                     # Denied
@@ -839,7 +862,7 @@ def requests_page():
                     ):
                         ui.label('Denied').classes('text-xs opacity-60 uppercase')
                         ui.label(str(len(denied_requests))).classes('text-lg font-bold').style('color: #ef4444')
-                        ui.label(f'{sum(float(r.total_days or 0) for r in denied_requests):.1f} days').classes('text-xs opacity-50')
+                        ui.label(fmt_days(sum(float(r.total_days or 0) for r in denied_requests))).classes('text-xs opacity-50')
                     filter_buttons['denied'] = None
 
             # Container for the results list
@@ -847,6 +870,10 @@ def requests_page():
 
             # Default: show all approved requests
             render_requests_by_type(approved_requests, None)
+
+            # ============ REAL-TIME UPDATES ============
+            # Set up automatic refresh when PTO request statuses change (30 second interval)
+            setup_dashboard_updates(db, user['id'], user_role, interval=30.0)
 
         finally:
             db.close()

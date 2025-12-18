@@ -12,6 +12,7 @@ from collections import defaultdict
 from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
+from nicegui_app.components.realtime_updates import setup_calendar_updates
 from src.services.balance_service import BalanceService
 from src.services.audit_service import AuditService
 from datetime import datetime as dt
@@ -23,7 +24,7 @@ def calendar_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -49,7 +50,7 @@ def calendar_page():
     current_month = {'month': today.month, 'year': today.year}
 
     # Load persisted preferences from session or use defaults
-    calendar_prefs = app.storage.general.get('calendar_prefs', {})
+    calendar_prefs = app.storage.user.get('calendar_prefs', {})
 
     # State for filters with persistence
     selected_department = {'id': calendar_prefs.get('department_id', None)}
@@ -73,7 +74,7 @@ def calendar_page():
 
     def save_preferences():
         """Save current filter preferences to session."""
-        app.storage.general['calendar_prefs'] = {
+        app.storage.user['calendar_prefs'] = {
             'department_id': selected_department['id'],
             'employee_id': selected_employee['id'],
             'view_mode': view_mode['mode'],
@@ -502,6 +503,19 @@ def calendar_page():
                                 personal_hours = personal_total - personal_used
                                 personal_display, personal_tooltip = format_days_hours(personal_hours)
                                 ui.label(f'Personal: {personal_display}').classes('font-medium text-purple-600').tooltip(personal_tooltip)
+
+                            # Chicago Paid Leave (only for Chicago employees)
+                            if is_chicago_employee:
+                                chicago_total = float(balance.chicago_paid_leave_total or 0) + float(balance.chicago_paid_leave_carryover or 0)
+                                chicago_used = float(balance.chicago_paid_leave_used or 0)
+                                chicago_pending = float(balance.chicago_paid_leave_pending or 0)
+                                chicago_hours = chicago_total - chicago_used - chicago_pending
+                                if chicago_total > 0:
+                                    ui.element('div').classes('w-px h-6').style('background: rgba(128,128,128,0.3)')
+                                    with ui.row().classes('gap-2 items-center'):
+                                        ui.element('div').classes('w-4 h-4 bg-amber-500 rounded-full')
+                                        chicago_display, chicago_tooltip = format_days_hours(chicago_hours)
+                                        ui.label(f'Leave: {chicago_display}').classes('font-medium text-amber-600').tooltip(chicago_tooltip)
                 finally:
                     db.close()
 
@@ -647,7 +661,7 @@ def calendar_page():
                     # Chicago Leave - filterable (only for Chicago employees)
                     if is_chicago_employee:
                         ui.checkbox(
-                            'Chicago Leave',
+                            'Leave',
                             value=leave_type_filters['chicago_leave'],
                             on_change=create_legend_filter_handler('chicago_leave')
                         ).props('dense').classes('text-sm font-medium text-amber-600')
@@ -739,8 +753,8 @@ def calendar_page():
                                 ui.label('End Date').classes('text-xs opacity-60 uppercase tracking-wide')
                                 ui.label(pto_request.end_date.strftime("%A, %B %d, %Y")).classes('font-medium')
                             with ui.column().classes('gap-1'):
-                                ui.label('Total Days').classes('text-xs opacity-60 uppercase tracking-wide')
-                                ui.label(str(pto_request.total_days)).classes('font-medium text-xl')
+                                ui.label('Duration').classes('text-xs opacity-60 uppercase tracking-wide')
+                                ui.label(fmt_days(float(pto_request.total_days))).classes('font-medium text-xl')
                             with ui.column().classes('gap-1'):
                                 ui.label('Leave Type').classes('text-xs opacity-60 uppercase tracking-wide')
                                 with ui.element('div').classes(f'inline-flex items-center gap-1 bg-{accent_color}-100 text-{accent_color}-700 px-2 py-1 rounded'):
@@ -856,7 +870,7 @@ def calendar_page():
                                     del_db.commit()
 
                                     # Audit log the cancellation
-                                    current_user = app.storage.general.get('user', {})
+                                    current_user = app.storage.user.get('user', {})
                                     AuditService.log_pto_cancel(
                                         db=del_db,
                                         user_id=current_user.get('id'),
@@ -893,7 +907,7 @@ def calendar_page():
                                     cancel_db.commit()
 
                                     # Audit log the cancellation
-                                    current_user = app.storage.general.get('user', {})
+                                    current_user = app.storage.user.get('user', {})
                                     AuditService.log_pto_cancel(
                                         db=cancel_db,
                                         user_id=current_user.get('id'),
@@ -1040,7 +1054,7 @@ def calendar_page():
                 with ui.row().classes('w-full justify-end gap-2'):
                     def go_to_request():
                         dialog.close()
-                        app.storage.general['prefill_pto_date'] = click_date.isoformat()
+                        app.storage.user['prefill_pto_date'] = click_date.isoformat()
                         ui.navigate.to('/submit-request')
 
                     ui.button('Submit Request', on_click=go_to_request).props('color=primary')
@@ -1200,8 +1214,8 @@ def calendar_page():
 
             # Fixed 6-column grid layout (Jan-Jun / Jul-Dec) - full width
             with calendar_container:
-                # 6-column CSS grid that fills full width
-                with ui.element('div').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%;'):
+                # 6-column CSS grid that fills full width (calendar-year-grid class for mobile responsive targeting)
+                with ui.element('div').classes('calendar-year-grid').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%;'):
                     for month_num in range(1, 13):
                         is_current_month = month_num == today.month and year == today.year
 
@@ -1462,7 +1476,7 @@ def calendar_page():
 
                                         def create_day_click_handler(d):
                                             def handler():
-                                                app.storage.general['prefill_pto_date'] = d.isoformat()
+                                                app.storage.user['prefill_pto_date'] = d.isoformat()
                                                 ui.navigate.to('/submit-request')
                                             return handler
 
@@ -1548,3 +1562,7 @@ def calendar_page():
 
         # Initial render
         render_current_view()
+
+        # ============ REAL-TIME UPDATES ============
+        # Set up automatic refresh when PTO requests change (30 second interval)
+        setup_calendar_updates(None, user_id, interval=30.0)

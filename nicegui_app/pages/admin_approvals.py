@@ -12,7 +12,7 @@ def admin_approvals_page():
     """Admin approvals page content."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
 
     if user_role not in ['admin', 'superadmin']:
@@ -183,12 +183,15 @@ def admin_approvals_page():
                             border_color = type_colors.get(pto_type_lower, 'gray')
                             has_conflict = req['request_id'] in request_conflicts
 
-                            with ui.card().classes(f'w-full p-4 border-l-4 border-{border_color}-500'):
+                            request_id = req['request_id']
+
+                            with ui.card().classes(f'w-full p-4 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-lg').on('click', lambda e, rid=request_id: ui.navigate.to(f'/manager/request/{rid}')):
                                 with ui.row().classes('w-full justify-between items-center'):
                                     with ui.row().classes('gap-3 items-center'):
-                                        # Checkbox for selection
+                                        # Checkbox for selection (click is handled separately)
                                         def make_toggle(req_id):
                                             def toggle(e):
+                                                e.args = None  # Prevent event bubbling
                                                 if e.value:
                                                     selected_requests.add(req_id)
                                                 else:
@@ -220,9 +223,6 @@ def admin_approvals_page():
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 days = float(req['total_days'])
                                                 ui.label(fmt_days(days)).classes('text-sm font-medium')
-
-                                    ui.button('Review', icon='visibility',
-                                             on_click=lambda r=req: ui.navigate.to(f"/manager/request/{r['request_id']}")).props('color=primary')
 
                 # Initial render
                 render_requests()

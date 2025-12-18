@@ -10,7 +10,7 @@ def help_page():
     apply_dark_mode()
 
     # Get user role for filtering help content
-    user_role = app.storage.general.get('user', {}).get('role', 'employee')
+    user_role = app.storage.user.get('user', {}).get('role', 'employee')
 
     # State for current view
     current_view = {'chapter': None, 'article': None}

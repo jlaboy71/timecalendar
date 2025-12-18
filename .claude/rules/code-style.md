@@ -12,6 +12,14 @@
 - Use `.props()` for Quasar component properties
 - Dynamic content: Use `container.clear()` then rebuild with `with container:`
 
+### App Restart Required After Code Changes
+**IMPORTANT**: NiceGUI caches page code in memory. After modifying any `.py` file in `nicegui_app/`:
+1. Stop the running app (Ctrl+C)
+2. Restart: `venv\Scripts\python.exe nicegui_app/main.py`
+3. Refresh the browser
+
+Changes will NOT appear until the app is restarted. Always remind the user to restart after UI changes.
+
 ```python
 # Example pattern for dynamic rendering
 def render_content():

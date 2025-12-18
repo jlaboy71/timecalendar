@@ -1,46 +1,60 @@
-# Tracking Your Carryover Requests
+# Understanding Leave Rollover Status
 
-Monitor the status of your carryover requests.
+Monitor your year-end leave rollover status.
 
-## Your Carryover Requests Table
+## Automatic Rollover (No Tracking Needed)
 
-At the bottom of the Carryover page, you'll see:
-- All your requests for the current year
+### Sick Time
+Your sick time rolls over **automatically** - no request or approval needed:
+- Up to 80 hours (10 days) depending on location
+- Calculated automatically during year-end processing
+- Shows on the Leave Rollover page
+
+### Chicago Paid Leave (Chicago Employees)
+Rolls over **automatically** per Chicago ordinance:
+- Up to 16 hours (2 days)
+- No action required
+
+## Vacation Exception Requests
+
+If you've requested vacation exception carryover, you can track it:
+
+### Your Request Table
+
+At the bottom of the Leave Rollover page (non-Chicago employees):
+- All your vacation exception requests for the current year
 - Status of each request
 - Hours requested vs. approved
 
-## Status Meanings
+### Status Meanings
 
 | Status | Meaning |
 |--------|---------|
 | Pending | Awaiting manager review |
-| Approved | Approved - will apply next year |
-| Denied | Not approved - see notes |
+| Approved | Will apply as bonus time next year |
+| Denied | Not approved - see manager notes |
 
-## Approved Requests
+### Approved Vacation Exceptions
 
-When a request is approved:
-- Hours carry over automatically on Jan 1
-- Shows "Approved" amount (may differ from requested)
-- Carryover appears in next year's balance
+When approved:
+- Hours are added as **bonus** time on Jan 1st
+- Separate from your new year vacation allocation
+- Shows in "Other Leave Types" on dashboard
 
-## Denied Requests
+### Denied Requests
 
-If your request is denied:
+If denied:
 - Manager notes explain the reason
-- You can discuss with your manager
-- Unused hours will expire at year-end
+- Discuss with your manager if needed
+- Use the vacation hours before year-end
 
-## Multiple Requests
+## Personal Days Reminder
 
-You can submit multiple carryover requests:
-- Different leave types
-- Additional requests if balance increases
-- Each is tracked separately
+Personal days **cannot** be carried over - no exceptions.
+Use them or lose them by December 31st.
 
 ## Best Practices
 
-- Submit requests early (November/December)
-- Provide clear justification
-- Monitor status and follow up if pending
-- Use denied hours before year-end if possible
+- Check the Leave Rollover page in Q4
+- Use vacation and personal days before year-end
+- Sick time is handled automatically - no action needed

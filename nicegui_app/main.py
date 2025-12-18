@@ -81,7 +81,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             # Get user context if available
             user_context = None
             try:
-                user = app.storage.general.get('user')
+                user = app.storage.user.get('user')
                 if user:
                     user_context = {
                         'user_id': user.get('id'),
@@ -185,6 +185,13 @@ def submit_request():
     if not require_auth():
         return
     request_form_page()
+
+@ui.page('/submit-request/{pto_type}')
+def submit_request_with_type(pto_type: str):
+    """PTO Request submission page with pre-selected type."""
+    if not require_auth():
+        return
+    request_form_page(preselect_type=pto_type)
 
 @ui.page('/calendar')
 def calendar():
@@ -374,7 +381,7 @@ def export_calendar(
     from src.services.ical_export_service import ICalExportService
 
     # Get current user from session
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         return Response(content="Unauthorized", status_code=401)
 
@@ -455,7 +462,7 @@ def export_team_pto_report(
     from io import StringIO
 
     # Get current user from session
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         return Response(content="Unauthorized", status_code=401)
 

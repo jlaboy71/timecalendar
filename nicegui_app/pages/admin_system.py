@@ -9,6 +9,8 @@ from src.database import get_db
 from src.config import config
 from src.services.audit_service import AuditService
 from src.models.audit_log import AuditLog
+from src.models.vacation_accrual_tier import VacationAccrualTier
+from src.models.leave_policy import LeavePolicy
 from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, create_help_button
 
@@ -17,7 +19,7 @@ def admin_system_page():
     """System administration page content."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role != 'superadmin':
         show_error_dialog('Access Denied', 'Super Admin role is required to access this page.')
         ui.navigate.to('/')
@@ -76,6 +78,7 @@ def admin_system_page():
         with ui.tabs().classes('w-full').props('dense active-color=primary indicator-color=primary') as tabs:
             database_tab = ui.tab('Database', icon='storage')
             handbook_tab = ui.tab('Handbook', icon='menu_book')
+            policy_tab = ui.tab('Policy Reference', icon='policy')
             eoy_tab = ui.tab('EOY Processing', icon='event_repeat')
             analytics_tab = ui.tab('Analytics', icon='analytics')
             autonotify_tab = ui.tab('Auto Notify', icon='notifications_active')
@@ -777,6 +780,310 @@ def admin_system_page():
                     finally:
                         db_changes.close()
 
+            # ========== POLICY REFERENCE TAB ==========
+            with ui.tab_panel(policy_tab):
+                # Header with explanation
+                with ui.card().classes('w-full p-4 mb-4 border-l-4').style('border-color: #c9a227'):
+                    with ui.row().classes('items-center gap-2'):
+                        ui.icon('info', color='amber')
+                        ui.label('Policy Quick Reference').classes('text-lg font-semibold')
+                    ui.label(
+                        'Read-only view of current HR policy parameters. '
+                        'Use this as a reference when updating the handbook or answering policy questions.'
+                    ).classes('text-sm opacity-70 mt-2')
+                    ui.label(
+                        'To modify these values, update the Employee Handbook or contact the development team for database changes.'
+                    ).classes('text-xs opacity-50 italic')
+
+                # Fetch data from database
+                db_policy = None
+                vacation_tiers = []
+
+                try:
+                    db_policy = next(get_db())
+                    vacation_tiers = db_policy.query(VacationAccrualTier).order_by(
+                        VacationAccrualTier.min_years_service
+                    ).all()
+                except Exception as e:
+                    ui.label(f'Error loading policy data: {str(e)}').classes('text-red-500')
+                finally:
+                    if db_policy:
+                        db_policy.close()
+
+                # ===== VACATION TIERS SECTION =====
+                with ui.expansion('Vacation Tiers (Tenure-Based)', icon='beach_access').classes('w-full mb-3').props('default-opened'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Annual vacation allocation based on years of service with the company.').classes('text-sm opacity-60 mb-4')
+
+                        # Table header
+                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
+                            ui.label('Years of Service').classes('flex-1')
+                            ui.label('Annual Days').classes('w-28 text-center')
+                            ui.label('Hours').classes('w-24 text-center')
+                            ui.label('Monthly Rate').classes('w-32 text-center')
+
+                        # Data rows from database
+                        if vacation_tiers:
+                            for tier in vacation_tiers:
+                                max_yrs = f"-{tier.max_years_service}" if tier.max_years_service else "+"
+                                hours = int(float(tier.annual_days) * 8)
+                                with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                    ui.label(f'{tier.min_years_service}{max_yrs} years').classes('flex-1')
+                                    ui.label(f'{tier.annual_days}').classes('w-28 text-center font-medium text-blue-400')
+                                    ui.label(f'{hours} hrs').classes('w-24 text-center opacity-70')
+                                    ui.label(f'{tier.monthly_accrual_rate} days/mo').classes('w-32 text-center opacity-60')
+                        else:
+                            # Show defaults if no database records
+                            ui.label('No vacation tiers configured in database. Default values:').classes('text-amber-500 mb-3')
+                            default_tiers = [
+                                ('0-1 years', 10, 80, '0.83'),
+                                ('2-4 years', 12, 96, '1.00'),
+                                ('5-9 years', 15, 120, '1.25'),
+                                ('10+ years', 20, 160, '1.67'),
+                            ]
+                            for label, days, hours, monthly in default_tiers:
+                                with ui.row().classes('w-full py-2 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                    ui.label(label).classes('flex-1')
+                                    ui.label(f'{days}').classes('w-28 text-center font-medium text-blue-400')
+                                    ui.label(f'{hours} hrs').classes('w-24 text-center opacity-70')
+                                    ui.label(f'{monthly} days/mo').classes('w-32 text-center opacity-60')
+
+                        ui.label('Source: VacationAccrualTier database table').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== ANNUAL LEAVE ALLOCATIONS SECTION =====
+                with ui.expansion('Annual Leave Allocations', icon='calendar_today').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Standard annual PTO allocations granted on January 1st each year.').classes('text-sm opacity-60 mb-4')
+
+                        allocations = [
+                            ('Sick Leave', '5 days', '40 hours', 'Annual sick time allocation', 'local_hospital', 'green'),
+                            ('Personal Days', '2 days', '16 hours', 'Use-it-or-lose-it (no carryover)', 'person', 'purple'),
+                            ('Chicago Paid Leave', '5 days', '40 hours', 'Chicago ordinance (if applicable)', 'location_city', 'amber'),
+                        ]
+
+                        # Table header
+                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
+                            ui.label('Leave Type').classes('flex-1')
+                            ui.label('Days').classes('w-24 text-center')
+                            ui.label('Hours').classes('w-24 text-center')
+                            ui.label('Notes').classes('w-48')
+
+                        for name, days, hours, notes, icon, color in allocations:
+                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                with ui.row().classes('flex-1 items-center gap-2'):
+                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
+                                    ui.label(name)
+                                ui.label(days).classes(f'w-24 text-center font-medium text-{color}-400')
+                                ui.label(hours).classes('w-24 text-center opacity-70')
+                                ui.label(notes).classes('w-48 text-xs opacity-60')
+
+                        ui.label('Source: year_end_service.py, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== CARRYOVER LIMITS SECTION =====
+                with ui.expansion('Carryover Limits', icon='sync').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Maximum hours that can be carried over to the next year.').classes('text-sm opacity-60 mb-4')
+
+                        carryover_limits = [
+                            ('Vacation', '0 hours', '0 days', 'Use-it-or-lose-it (exception bonus with approval)', 'beach_access', 'blue'),
+                            ('Sick Leave', '56-80 hours', '7-10 days', 'Auto-carries (varies by location)', 'local_hospital', 'green'),
+                            ('Personal Days', '0 hours', '0 days', 'Use-it-or-lose-it (no carryover)', 'person', 'purple'),
+                            ('Chicago Paid Leave', '16 hours', '2 days', 'Per Chicago ordinance', 'location_city', 'amber'),
+                        ]
+
+                        # Table header
+                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
+                            ui.label('Leave Type').classes('flex-1')
+                            ui.label('Max Carryover').classes('w-28 text-center')
+                            ui.label('Days').classes('w-20 text-center')
+                            ui.label('Notes').classes('w-56')
+
+                        for name, hours, days, notes, icon, color in carryover_limits:
+                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                with ui.row().classes('flex-1 items-center gap-2'):
+                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
+                                    ui.label(name)
+                                ui.label(hours).classes(f'w-28 text-center font-medium text-{color}-400')
+                                ui.label(days).classes('w-20 text-center opacity-70')
+                                ui.label(notes).classes('w-56 text-xs opacity-60')
+
+                        ui.label('Source: LeavePolicy table, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== SPECIAL LEAVE POLICIES SECTION =====
+                with ui.expansion('Special Leave Policies (Non-Accruing)', icon='event_available').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Leave types without balance tracking. Used as needed with appropriate documentation.').classes('text-sm opacity-60 mb-4')
+
+                        special_leaves = [
+                            ('Bereavement - Immediate Family', '5 days', 'Spouse, child, parent, sibling, grandparent', 'sentiment_very_dissatisfied', 'indigo'),
+                            ('Bereavement - Extended Family', '3 days', 'In-laws, aunt, uncle, cousin, close friend', 'sentiment_very_dissatisfied', 'indigo'),
+                            ('FMLA', '12 weeks', 'Unpaid, job-protected family/medical leave', 'family_restroom', 'cyan'),
+                            ('Jury Duty', 'As needed', 'Paid time off for jury service', 'gavel', 'pink'),
+                            ('Voting Time', 'Up to 2 hours', 'If polls not open 4+ hours outside work schedule', 'how_to_vote', 'teal'),
+                            ('Military Leave', 'Per USERRA', 'Job-protected military service leave', 'military_tech', 'grey'),
+                        ]
+
+                        for name, duration, description, icon, color in special_leaves:
+                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                with ui.row().classes('flex-1 items-center gap-2'):
+                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
+                                    ui.label(name)
+                                ui.label(duration).classes(f'w-28 text-center font-medium text-{color}-400')
+                                ui.label(description).classes('flex-1 text-sm opacity-70')
+
+                        ui.label('Source: request_form.py, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== AUTO-APPROVAL RULES SECTION =====
+                with ui.expansion('Auto-Approval Rules', icon='verified').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Rules governing automatic PTO request approval.').classes('text-sm opacity-60 mb-4')
+
+                        # Trusted Employee Section
+                        with ui.card().classes('w-full p-3 mb-4').style('background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e'):
+                            ui.label('Trusted Employee Auto-Approve').classes('font-semibold text-green-500 mb-2')
+                            ui.label('Employees marked as "trusted" have these leave types auto-approved:').classes('text-sm opacity-70 mb-2')
+                            with ui.row().classes('gap-2 flex-wrap'):
+                                for ptype in ['Vacation', 'Sick', 'Personal']:
+                                    ui.badge(ptype, color='green').props('outline')
+                            ui.label('Manager receives notification email when auto-approval occurs.').classes('text-xs opacity-60 mt-2')
+
+                        # Always Requires Approval Section
+                        with ui.card().classes('w-full p-3 mb-4').style('background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b'):
+                            ui.label('Always Requires Manager Approval').classes('font-semibold text-amber-500 mb-2')
+                            ui.label('These leave types always require manual approval regardless of trusted status:').classes('text-sm opacity-70 mb-2')
+                            with ui.row().classes('gap-2 flex-wrap'):
+                                for ptype in ['Bereavement', 'FMLA', 'Jury Duty', 'Voting', 'Military', 'Work From Home']:
+                                    ui.badge(ptype, color='amber').props('outline')
+
+                        # Manager Self-Approval Section
+                        with ui.card().classes('w-full p-3').style('background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6'):
+                            ui.label('Manager/Admin Self-Approval').classes('font-semibold text-blue-500 mb-2')
+                            ui.label('Users with Manager, Admin, or SuperAdmin roles can self-approve:').classes('text-sm opacity-70 mb-2')
+                            with ui.row().classes('gap-2 flex-wrap'):
+                                for ptype in ['Vacation', 'Sick', 'Personal']:
+                                    ui.badge(ptype, color='blue').props('outline')
+                            ui.label('Special leave types still require documentation.').classes('text-xs opacity-60 mt-2')
+
+                        ui.label('Source: pto_service.py (TRUSTED_AUTO_APPROVE_TYPES)').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== FEDERAL HOLIDAYS SECTION =====
+                with ui.expansion('Federal Holidays (Auto-Generated)', icon='celebration').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Standard federal holidays automatically generated during year-end processing.').classes('text-sm opacity-60 mb-4')
+
+                        holidays = [
+                            ("New Year's Day", "January 1", "🎊"),
+                            ("Martin Luther King Jr. Day", "3rd Monday of January", "✊"),
+                            ("Presidents Day", "3rd Monday of February", "🏛️"),
+                            ("Good Friday", "Friday before Easter", "✝️"),
+                            ("Memorial Day", "Last Monday of May", "🎖️"),
+                            ("Juneteenth", "June 19", "✊"),
+                            ("Independence Day", "July 4", "🎆"),
+                            ("Labor Day", "1st Monday of September", "👷"),
+                            ("Thanksgiving", "4th Thursday of November", "🦃"),
+                            ("Christmas Day", "December 25", "🎄"),
+                        ]
+
+                        with ui.row().classes('gap-3 flex-wrap'):
+                            for name, date_rule, emoji in holidays:
+                                with ui.card().classes('p-3 min-w-52').style('background: rgba(201, 162, 39, 0.1)'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.label(emoji).classes('text-lg')
+                                        ui.label(name).classes('font-medium')
+                                    ui.label(date_rule).classes('text-xs opacity-60 mt-1')
+
+                        with ui.row().classes('items-center gap-2 mt-4'):
+                            ui.icon('info', size='xs', color='amber')
+                            ui.label('Weekend holidays are observed on the nearest weekday (Friday or Monday).').classes('text-xs opacity-60 italic')
+
+                        ui.label('Source: year_end_service.py, market_calendar_service.py').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== YEAR-END PROCESSING RULES =====
+                with ui.expansion('Year-End Processing Rules', icon='event_repeat').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Automatic processing that runs on first app access after January 1st.').classes('text-sm opacity-60 mb-4')
+
+                        rules = [
+                            ('1', 'Create new year PTO balances for all active employees', 'Uses vacation tier based on tenure at processing time'),
+                            ('2', 'Auto-carryover unused sick time (no approval needed)', 'Sick carries over automatically up to policy max'),
+                            ('3', 'Apply approved vacation exception carryover as BONUS', 'Only explicit manager-approved exceptions carry over'),
+                            ('4', 'Generate federal and market holidays for new year', 'NYSE, CME, CBOE holiday schedules'),
+                        ]
+
+                        for num, rule, detail in rules:
+                            with ui.row().classes('items-start gap-3 mb-3'):
+                                ui.badge(num, color='primary').classes('mt-1')
+                                with ui.column().classes('gap-1'):
+                                    ui.label(rule).classes('font-medium')
+                                    ui.label(detail).classes('text-xs opacity-60')
+
+                        ui.separator().classes('my-4')
+
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('warning', size='sm', color='amber')
+                            ui.label('Important: Processing runs automatically. Manual trigger available for SuperAdmins in EOY Processing tab.').classes('text-sm opacity-70')
+
+                        ui.label('Source: year_end_service.py').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== LOCATION-BASED POLICIES SECTION =====
+                with ui.expansion('Location-Based Policy Overrides', icon='location_on').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Policy resolution follows a hierarchy based on employee work location.').classes('text-sm opacity-60 mb-4')
+
+                        # Resolution Order
+                        ui.label('Policy Resolution Order:').classes('font-semibold mb-2')
+                        with ui.column().classes('gap-2 mb-4 pl-4'):
+                            with ui.row().classes('items-center gap-2'):
+                                ui.badge('1', color='primary')
+                                ui.label('City-specific policy (e.g., Chicago, IL)').classes('text-sm')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.badge('2', color='secondary')
+                                ui.label('State-specific policy (e.g., Illinois)').classes('text-sm')
+                            with ui.row().classes('items-center gap-2'):
+                                ui.badge('3', color='grey')
+                                ui.label('Default policy (no location restriction)').classes('text-sm')
+
+                        ui.separator().classes('my-4')
+
+                        # Known Location Overrides
+                        ui.label('Active Location Overrides:').classes('font-semibold mb-2')
+
+                        location_overrides = [
+                            ('Chicago, IL', 'Chicago Paid Leave ordinance', 'teal'),
+                            ('Illinois', 'State sick leave requirements', 'blue'),
+                        ]
+
+                        for location, description, color in location_overrides:
+                            with ui.row().classes('items-center gap-3 mb-2'):
+                                ui.icon('place', size='sm').classes(f'text-{color}-500')
+                                ui.label(location).classes('font-medium w-32')
+                                ui.label(description).classes('text-sm opacity-70')
+
+                        ui.label('Source: LeavePolicy table, accrual_service.py').classes('text-xs opacity-40 mt-3 italic')
+
+                # ===== QUICK REFERENCE SUMMARY =====
+                with ui.expansion('Quick Reference Summary', icon='summarize').classes('w-full mb-3'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Common policy questions at a glance.').classes('text-sm opacity-60 mb-4')
+
+                        qa_items = [
+                            ('How much vacation do new employees get?', '10 days (80 hours) for 0-1 years of service'),
+                            ('When do employees get more vacation?', 'At 2, 5, and 10 years of service'),
+                            ('How much sick time per year?', '5 days (40 hours)'),
+                            ('Can vacation roll over?', 'No by default (use-it-or-lose-it). Exception bonus possible with approval'),
+                            ('Can sick time roll over?', 'Yes, automatically up to 56-80 hours by location'),
+                            ('Do personal days roll over?', 'No, use-it-or-lose-it'),
+                            ('Who can self-approve PTO?', 'Managers, Admins, and SuperAdmins'),
+                            ('What is a trusted employee?', 'Employee with auto-approve for vacation/sick/personal'),
+                            ('When does year-end processing run?', 'Automatically on first login after January 1st'),
+                            ('How many federal holidays?', '10 holidays per year'),
+                        ]
+
+                        for question, answer in qa_items:
+                            with ui.row().classes('w-full py-2 items-start').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(question).classes('flex-1 font-medium')
+                                ui.label(answer).classes('flex-1 text-sm opacity-70')
+
             # ========== EOY PROCESSING TAB ==========
             with ui.tab_panel(eoy_tab):
                 # EOY Header Card
@@ -1368,6 +1675,8 @@ def admin_system_page():
                                     query = query.filter(AuditLog.action.like('login%'))
                                 elif filter_val == 'pto':
                                     query = query.filter(AuditLog.action.like('pto%'))
+                                elif filter_val == 'cancellations':
+                                    query = query.filter(AuditLog.action == 'pto_cancel')
                                 elif filter_val == 'user':
                                     query = query.filter(AuditLog.action.like('user%'))
                                 elif filter_val == 'carryover':
@@ -1439,6 +1748,7 @@ def admin_system_page():
                                 'all': 'All Actions',
                                 'login': 'Logins',
                                 'pto': 'PTO Actions',
+                                'cancellations': 'Cancellations',
                                 'user': 'User Changes',
                                 'carryover': 'Carryover'
                             }
@@ -1731,14 +2041,14 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                                     ).first()
                                     if setting:
                                         setting.value = 'true' if e.value else 'false'
-                                        setting.updated_by = app.storage.general.get('user', {}).get('id')
+                                        setting.updated_by = app.storage.user.get('user', {}).get('id')
                                     else:
                                         # Create setting if it doesn't exist
                                         new_setting = SystemSetting(
                                             key='chicago.safe_leave_enabled',
                                             value='true' if e.value else 'false',
                                             description='Enable Chicago Paid Sick and Safe Leave feature for Chicago employees',
-                                            updated_by=app.storage.general.get('user', {}).get('id')
+                                            updated_by=app.storage.user.get('user', {}).get('id')
                                         )
                                         db_session.add(new_setting)
                                     db_session.commit()

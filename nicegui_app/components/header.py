@@ -40,7 +40,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
         show_back: Whether to show back button
         back_url: Optional fallback URL (if provided, uses direct navigation instead of history.back())
     """
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         return
 
@@ -50,7 +50,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
     user_first_name = user.get('first_name', 'User')
     user_last_name = user.get('last_name', '')
     greeting = get_time_based_greeting()
-    is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
+    is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
     greeting_color = '#C9A227' if is_dark else '#5a6a72'
 
     with ui.row().classes('w-full justify-between items-start mb-6 no-print'):
@@ -69,7 +69,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
         # Define logout handler before using it
         def do_logout():
             """Clear user session, log logout, and redirect to login."""
-            current_user = app.storage.general.get('user')
+            current_user = app.storage.user.get('user')
             if current_user:
                 try:
                     db = next(get_db())
@@ -89,7 +89,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
                 ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round dense size=sm aria-label="Help Center"').tooltip('Help Center').style('color: #C9A227 !important;')
 
                 dark_mode = ui.dark_mode()
-                is_dark = app.storage.general.get('dark_mode', True)
+                is_dark = app.storage.user.get('dark_mode', True)
                 if is_dark:
                     dark_mode.enable()
 
@@ -97,9 +97,9 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
                 dark_toggle_btn = ui.button(icon=initial_icon, on_click=lambda: None).props('flat round dense size=sm aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode').style('color: #C9A227 !important;')
 
                 def toggle_dark_mode():
-                    is_currently_dark = app.storage.general.get('dark_mode', True)
+                    is_currently_dark = app.storage.user.get('dark_mode', True)
                     new_dark_mode = not is_currently_dark
-                    app.storage.general['dark_mode'] = new_dark_mode
+                    app.storage.user['dark_mode'] = new_dark_mode
                     if new_dark_mode:
                         dark_mode.enable()
                         dark_toggle_btn.props(f'icon=light_mode')
@@ -152,7 +152,7 @@ def _setup_session_timeout_warning():
 
     async def check_session():
         """Check session status and show warning if needed."""
-        user = app.storage.general.get('user')
+        user = app.storage.user.get('user')
         if not user:
             # No longer logged in, stop checking
             if timer_ref['timer']:

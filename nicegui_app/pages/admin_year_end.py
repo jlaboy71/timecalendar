@@ -11,7 +11,7 @@ def admin_year_end_page():
     """Admin year-end processing status page content."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -56,9 +56,9 @@ It runs **once per year**, triggered by the first user login after January 1st.
                         ui.icon('swap_horiz', color='purple').classes('mt-1')
                         with ui.column().classes('gap-0'):
                             ui.label('2. Apply Carryover Requests (Sick Time Only)').classes('font-medium')
-                            ui.label('Unused sick time can be carried over to the next year (up to policy limits). Vacation and personal days cannot be carried over.').classes('text-sm opacity-70')
+                            ui.label('Unused sick time carries over automatically (up to policy limits). Personal days do not carry over.').classes('text-sm opacity-70')
                             ui.label('• Sick Time: Up to 56-80 hours can roll over depending on location').classes('text-xs opacity-60 ml-4')
-                            ui.label('• Vacation: Use it or lose it - no carryover allowed').classes('text-xs opacity-60 ml-4')
+                            ui.label('• Vacation: Use it or lose it by default (exception carryover with manager approval)').classes('text-xs opacity-60 ml-4')
                             ui.label('• Personal Days: Use it or lose it - no carryover allowed').classes('text-xs opacity-60 ml-4')
 
                     with ui.row().classes('items-start gap-3'):

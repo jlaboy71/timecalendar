@@ -5,6 +5,59 @@
 
 ---
 
+## COMPLETED TASK: Fix Chicago Safe Leave Redundancy
+
+**Date Completed**: December 17, 2024
+
+### Problem Statement
+The `chicago_safe_leave_*` database fields were **REDUNDANT**:
+- **Company Sick Leave = Chicago Sick & Safe Leave** (same bank, stored in `sick_*` fields, 80hr max carryover for Chicago)
+- **Chicago Paid Leave = Separate bank** (stored in `chicago_paid_leave_*` fields, 16hr carryover, any reason)
+
+### Changes Made
+
+#### Phase 1: UI Display Fixes
+- [x] **manager_request_detail.py**: Removed "Chicago Safe" display (it duplicated "Sick")
+- [x] **carryover.py**: Changed "SICK & SAFE LEAVE" card to use `sick_*` fields
+- [x] **dashboard.py**: Already correct (used `chicago_paid_leave_*`), fixed misleading comment
+
+#### Phase 2: Service Layer Fixes
+- [x] **balance_service.py**: Changed to allocate `chicago_paid_leave_*` fields instead of `chicago_safe_leave_*`
+- [x] Renamed `CHICAGO_SAFE_LEAVE_ANNUAL_MAX` to `CHICAGO_PAID_LEAVE_ANNUAL_MAX`
+
+#### Phase 3: Model & Database
+- [x] **PTOBalance model**: Removed all `chicago_safe_leave_*` field definitions and property
+- [x] **Alembic migration**: Created `e5f6g7h8i9j0_remove_chicago_safe_leave.py` to drop deprecated columns
+- [x] **Migration applied successfully**
+
+#### Phase 4: Additional Cleanup
+- [x] **constants.py**: Removed `CHICAGO_SAFE_LEAVE`, added `CHICAGO_LEAVE` for request form compatibility
+- [x] **email_service.py**: Updated PTO type references
+- [x] **test_pto_balance.py**: Removed tests for deprecated fields
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `nicegui_app/pages/manager_request_detail.py` | Removed Chicago Safe display |
+| `nicegui_app/pages/carryover.py` | Uses `sick_*` fields for Sick & Safe card |
+| `nicegui_app/pages/dashboard.py` | Fixed comment |
+| `src/services/balance_service.py` | Allocates to `chicago_paid_leave_*` |
+| `src/models/pto_balance.py` | Removed `chicago_safe_leave_*` fields |
+| `src/constants.py` | Updated PTOType enum |
+| `src/services/email_service.py` | Updated PTO type icons/checks |
+| `tests/test_models/test_pto_balance.py` | Removed deprecated tests |
+| `alembic/versions/e5f6g7h8i9j0_remove_chicago_safe_leave.py` | New migration |
+
+### Review
+The redundant `chicago_safe_leave_*` concept has been completely removed:
+- UI no longer displays duplicate "Chicago Safe" balance
+- Database columns dropped via migration
+- Model updated to reflect correct structure
+- Only `chicago_paid_leave_*` (for Chicago Paid Leave) remains as separate bank
+- Company Sick Leave = Chicago Sick & Safe Leave (uses regular `sick_*` fields)
+
+---
+
 ## Executive Summary
 
 The TJM Time Calendar application is essentially **feature-complete**. All core functionality is implemented and working:

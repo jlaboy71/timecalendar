@@ -100,7 +100,7 @@ def authenticate(username_input, password_input, error_message, login_btn):
                 pass
 
             # Store user in app storage and redirect
-            app.storage.general['user'] = {
+            app.storage.user['user'] = {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,

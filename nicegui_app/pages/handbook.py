@@ -39,11 +39,11 @@ def handbook_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    if not app.storage.general.get('user'):
+    if not app.storage.user.get('user'):
         ui.navigate.to('/')
         return
 
-    user_data = app.storage.general.get('user')
+    user_data = app.storage.user.get('user')
     user_role = user_data.get('role', 'employee')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
 

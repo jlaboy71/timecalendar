@@ -39,17 +39,32 @@
 - Warning shown if future year balance not yet allocated
 
 ## Carryover Rules
-- Employees must request carryover before year-end
-- Manager approval required
-- Maximum carryover varies by state policy
-- Approved carryover added to `vacation_carryover` in new year
+
+### Automatic Carryover (No Approval Required)
+- **Sick Leave**: Unused hours automatically carry over up to policy maximum
+- Applied during year-end processing (no employee action needed)
+
+### Personal Leave (Use-It-Or-Lose-It)
+- All employees receive 2 paid personal days (16 hours) per calendar year
+- Personal days do NOT carry over to next year
+- Request at least 24 hours in advance when possible
+- Prorated based on hire date for new employees
+
+### Vacation Carryover (Use-It-Or-Lose-It by Default)
+- Vacation does NOT automatically carry over
+- **Exception requests**: Manager can approve exceptional carryover as a BONUS
+- **Key behavior**: When carryover is USED, it deducts from the FROM year's balance (e.g., 2025)
+- The new year's allocation (e.g., 2026) remains completely untouched
+- Exception carryover tracked via `CarryoverRequest.hours_used` field
+- Displayed in "Other Leave Types" dropdown on dashboard
+- Employee must request exception before year-end
 
 ## Leave Types
 
 ### Accruing (tracked in PTOBalance)
-- **Vacation**: Primary PTO, pending tracking, carryover eligible
-- **Sick**: No pending tracking, state-specific policies
-- **Personal**: No pending tracking, use-it-or-lose-it
+- **Vacation**: Primary PTO, pending tracking, NO auto-carryover (exception requests only)
+- **Sick**: No pending tracking, AUTO-carryover up to policy max
+- **Personal**: No pending tracking, NO carryover (use-it-or-lose-it), 24hr advance notice preferred
 
 ### Non-Accruing (no balance limits)
 - **Bereavement**: Immediate family 5 days, extended 3 days
@@ -73,8 +88,9 @@
 ## Year-End Processing
 Runs automatically on first app access of new year:
 1. Create new year balances for all active employees
-2. Apply approved carryover from previous year
-3. Generate federal holidays for new year
+2. Auto-carryover unused Sick (up to policy max) - Personal does NOT carry over
+3. Apply approved vacation exception carryover as BONUS
+4. Generate federal holidays for new year
 
 ## Federal Holidays (Auto-Generated)
 - New Year's Day

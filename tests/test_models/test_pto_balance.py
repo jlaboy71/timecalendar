@@ -287,33 +287,11 @@ class TestChicagoLeaveFields:
         db.commit()
         db.refresh(balance)
 
-        # Safe leave defaults
-        assert balance.chicago_safe_leave_total == Decimal("0.00")
-        assert balance.chicago_safe_leave_used == Decimal("0.00")
-        assert balance.chicago_safe_leave_pending == Decimal("0.00")
-        assert balance.chicago_safe_leave_carryover == Decimal("0.00")
-
         # Paid leave defaults
         assert balance.chicago_paid_leave_total == Decimal("0.00")
         assert balance.chicago_paid_leave_used == Decimal("0.00")
         assert balance.chicago_paid_leave_pending == Decimal("0.00")
         assert balance.chicago_paid_leave_carryover == Decimal("0.00")
-
-    def test_chicago_safe_leave_available(self, db, test_employee):
-        """Test Chicago safe leave available calculation."""
-        balance = PTOBalance(
-            user_id=test_employee.id,
-            year=2025,
-            chicago_safe_leave_total=Decimal("40.00"),
-            chicago_safe_leave_used=Decimal("8.00"),
-            chicago_safe_leave_pending=Decimal("8.00"),
-            chicago_safe_leave_carryover=Decimal("16.00")
-        )
-        db.add(balance)
-        db.commit()
-
-        # 40 + 16 - 8 - 8 = 40
-        assert balance.chicago_safe_leave_available == Decimal("40.00")
 
     def test_chicago_paid_leave_available(self, db, test_employee):
         """Test Chicago paid leave available calculation."""

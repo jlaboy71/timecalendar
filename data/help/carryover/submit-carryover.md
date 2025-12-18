@@ -1,43 +1,53 @@
-# Submitting a Carryover Request
+# Leave Rollover Information
 
-Requesting sick time carryover is simple - just one click!
+This page shows your year-end leave rollover status.
 
-**Important:** Only Sick Time can be carried over. Vacation and Personal Days are "use it or lose it."
+## For Chicago Employees
 
-## The Carryover Summary
+**Good news - no action needed!**
 
-When you visit the carryover page, you'll see a clear breakdown:
+Your leave balances roll over automatically per Chicago ordinance:
+- **Sick Leave**: Up to 80 hours (10 days) auto-carries over
+- **Chicago Paid Leave**: Up to 16 hours (2 days) auto-carries over
 
-- **Your Unused Sick Time** - How many hours you have left
-- **Policy Maximum** - The cap on carryover hours (typically 56-80 hours)
-- **Will Carry Over** - The amount that will transfer to next year
-- **Will Expire** - Any hours above the cap that will be lost
+The Leave Rollover page shows you:
+- Your current unused balances
+- How much will roll over to next year
+- The automatic transfer happens on January 1st
 
-## One-Click Request
+## For Non-Chicago Employees
 
-Simply click the **"Request Carryover"** button. The system automatically:
-- Calculates the maximum amount you can carry over
-- Applies your location's policy limits
-- Submits the request for you
+### Sick Time (AUTOMATIC)
+Your unused sick time rolls over automatically:
+- Up to 80 hours (10 days) depending on location
+- No request needed - happens automatically on January 1st
+- The Leave Rollover page shows your rollover calculation
 
-No need to choose an amount or provide justification - the system handles it all.
+### Vacation (USE-IT-OR-LOSE-IT)
+Vacation does NOT automatically carry over. However:
+- You can request an **exception carryover** from your manager
+- Exception carryover is a BONUS separate from your new year allocation
+- Must be approved before year-end
 
-## Auto-Approval
+### Personal Days (NO CARRYOVER)
+Personal days cannot be carried over - use them or lose them.
 
-Most carryover requests are auto-approved:
-- **Managers/Admins**: Always auto-approved
-- **Within policy limit**: Auto-approved immediately
-- **Above limit**: Requires manager approval (rare)
+## The Rollover Summary
 
-## What Happens Next
+When you visit the Leave Rollover page, you'll see:
 
-1. Your request appears in "Your Carryover Requests"
-2. If auto-approved, you're done!
-3. If pending, your manager will review and approve
-4. On January 1st, approved hours transfer to your new balance
+- **Your Unused Balance** - How many hours you have left
+- **Max Carryover** - The policy limit for rollover
+- **Will Roll Over** - Amount transferring to next year
+- **Expires Dec 31** - Any hours above the cap (if applicable)
 
-## Important Notes
+## What Happens on January 1st
 
-- You can only have one pending request at a time
-- Once approved, carryover applies automatically on Jan 1st
-- Use any hours above the cap before year-end or they expire
+1. Sick time automatically carries over (up to policy max)
+2. Approved vacation exceptions are added as bonus time
+3. Personal days reset to zero
+4. New year allocations are applied
+
+## Questions?
+
+Contact HR or your administrator if you have questions about your rollover amounts.

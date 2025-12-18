@@ -24,7 +24,7 @@ def auto_notify_reports_page():
     """Display auto-notify reports for trusted employee auto-approvals."""
     apply_dark_mode()
 
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return

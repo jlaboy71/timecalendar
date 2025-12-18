@@ -1,6 +1,11 @@
 """Theme utilities for the NiceGUI app."""
 from nicegui import ui, app
 
+# Mobile responsive CSS injection
+# REVERT INSTRUCTIONS: If mobile CSS causes issues, remove this import and the
+# inject_mobile_css() call in apply_dark_mode() below. See mobile_responsive.py for details.
+from nicegui_app.components.mobile_responsive import inject_mobile_css
+
 
 def skeleton_loader(rows: int = 3, width: str = '100%'):
     """
@@ -52,6 +57,9 @@ def apply_dark_mode():
     Call this at the start of each page to ensure consistent dark mode behavior.
     Returns the dark_mode object in case the page needs to toggle it.
     """
+    # Inject mobile responsive CSS (REVERT: comment out this line if issues occur)
+    inject_mobile_css()
+
     # TJM Brand Colors
     TJM_GOLD = '#c9a227'
     TJM_GRAY = '#5a6a72'
@@ -133,7 +141,7 @@ def apply_dark_mode():
     ''')
 
     dark_mode = ui.dark_mode()
-    is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
+    is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
     if is_dark:
         dark_mode.enable()
     return dark_mode

@@ -33,7 +33,7 @@ def analytics_page():
     apply_dark_mode()
 
     # Check if user is logged in and has access
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return

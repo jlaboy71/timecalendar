@@ -1,4 +1,8 @@
-"""Manager carryover approval page for reviewing and processing employee carryover requests."""
+"""Manager page for reviewing and processing vacation carryover exception requests.
+
+Note: Sick and Personal leave carryover is AUTOMATIC and does not require approval.
+This page is only for exceptional vacation carryover requests that require manager approval.
+"""
 from nicegui import ui, app
 from sqlalchemy.orm import joinedload
 from src.services.balance_service import BalanceService
@@ -16,12 +20,12 @@ from src.services.audit_service import AuditService
 
 
 def manager_carryover_page():
-    """Manager page for reviewing and approving/denying carryover requests."""
+    """Manager page for reviewing and approving/denying vacation carryover exception requests."""
 
     apply_dark_mode()
 
     # Check if user is logged in and has manager/admin role
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -36,9 +40,19 @@ def manager_carryover_page():
     current_year = date.today().year
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        # Header with greeting
-        page_header(title='CARRYOVER REQUEST APPROVALS', show_back=False)
-        ui.label(f'Review carryover requests from {current_year} to {current_year + 1}').classes('opacity-70 mb-6')
+        # Header
+        page_header(title='VACATION CARRYOVER EXCEPTIONS', show_back=False)
+
+        # Explanation of the carryover rules
+        with ui.card().classes('w-full mb-4 p-4 border-l-4 border-blue-500'):
+            ui.label('Carryover Policy').classes('font-semibold text-blue-400')
+            ui.label('• Sick leave carryover is AUTOMATIC (no approval needed)').classes('text-sm opacity-80')
+            ui.label('• Personal leave does NOT carry over (use-it-or-lose-it)').classes('text-sm opacity-80')
+            ui.label('• Vacation is use-it-or-lose-it by default').classes('text-sm opacity-80')
+            ui.label('• This page is for EXCEPTIONAL vacation carryover requests only').classes('text-sm opacity-80')
+            ui.label('• Approved vacation carryover is a BONUS separate from new year allocation').classes('text-sm opacity-80')
+
+        ui.label(f'Review vacation carryover requests from {current_year} to {current_year + 1}').classes('opacity-70 mb-6')
 
         # Container for pending requests - will be refreshed
         pending_container = ui.column().classes('w-full mb-6')
@@ -60,9 +74,16 @@ def manager_carryover_page():
                 # Get current manager's info to filter by department
                 manager = user_service.get_user_by_id(user['id'])
 
-                # Build query for carryover requests
+                # Get VACATION leave type ID for filtering
+                vacation_leave_type = db.query(LeaveType).filter(LeaveType.code == 'VACATION').first()
+                if not vacation_leave_type:
+                    ui.label('Error: VACATION leave type not found in database').classes('text-red-500')
+                    return
+
+                # Build query for carryover requests - VACATION ONLY
                 query = db.query(CarryoverRequest).filter(
-                    CarryoverRequest.from_year == current_year
+                    CarryoverRequest.from_year == current_year,
+                    CarryoverRequest.leave_type_id == vacation_leave_type.id
                 )
 
                 # If not admin, filter by department
@@ -95,7 +116,7 @@ def manager_carryover_page():
                 # Display pending requests
                 with pending_container:
                     with ui.card().classes('w-full'):
-                        ui.label('Pending Requests').classes('text-xl font-semibold mb-4')
+                        ui.label('Pending Vacation Carryover Exception Requests').classes('text-xl font-semibold mb-4')
 
                         if pending_requests:
                             for req in pending_requests:
@@ -190,11 +211,11 @@ def manager_carryover_page():
                                             color='negative'
                                         )
                         else:
-                            ui.label('No pending carryover requests').classes('opacity-70')
+                            ui.label('No pending vacation carryover exception requests').classes('opacity-70')
 
                 # Display processed requests
                 with processed_container:
-                    with ui.expansion('Recently Processed Requests', icon='history').classes('w-full'):
+                    with ui.expansion('Recently Processed Vacation Exceptions', icon='history').classes('w-full'):
                         if processed_requests:
                             columns = [
                                 {'name': 'employee', 'label': 'Employee', 'field': 'employee', 'align': 'left'},

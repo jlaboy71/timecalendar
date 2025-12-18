@@ -72,8 +72,8 @@ class PTOType(str, Enum):
     JURY_DUTY = 'jury_duty'
     VOTING = 'voting'
     MILITARY = 'military'
-    CHICAGO_SAFE_LEAVE = 'chicago_safe_leave'
-    CHICAGO_PAID_LEAVE = 'chicago_paid_leave'
+    CHICAGO_LEAVE = 'chicago_leave'  # Chicago Paid Leave (request type)
+    CHICAGO_PAID_LEAVE = 'chicago_paid_leave'  # Chicago Paid Leave (balance field reference)
 
     @classmethod
     def accruing_types(cls) -> list['PTOType']:
@@ -86,7 +86,7 @@ class PTOType(str, Enum):
         return [
             cls.BEREAVEMENT, cls.FMLA, cls.JURY_DUTY,
             cls.VOTING, cls.MILITARY,
-            cls.CHICAGO_SAFE_LEAVE, cls.CHICAGO_PAID_LEAVE
+            cls.CHICAGO_LEAVE, cls.CHICAGO_PAID_LEAVE
         ]
 
 
@@ -111,7 +111,7 @@ TYPE_ICONS = {
     PTOType.JURY_DUTY: 'gavel',
     PTOType.VOTING: 'how_to_vote',
     PTOType.MILITARY: 'military_tech',
-    PTOType.CHICAGO_SAFE_LEAVE: 'location_city',
+    PTOType.CHICAGO_LEAVE: 'location_city',
     PTOType.CHICAGO_PAID_LEAVE: 'location_city',
 }
 
@@ -125,7 +125,7 @@ TYPE_COLORS = {
     PTOType.JURY_DUTY: 'indigo',
     PTOType.VOTING: 'cyan',
     PTOType.MILITARY: 'deep-orange',
-    PTOType.CHICAGO_SAFE_LEAVE: 'amber',
+    PTOType.CHICAGO_LEAVE: 'amber',
     PTOType.CHICAGO_PAID_LEAVE: 'amber',
 }
 

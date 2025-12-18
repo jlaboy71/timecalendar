@@ -33,7 +33,7 @@ def carryover_page():
 
     apply_dark_mode()
 
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -72,14 +72,14 @@ def carryover_page():
 def _render_chicago_rollover_view(current_user, balance, current_year, next_year):
     """Render the Chicago employee rollover view - informational, automatic rollover."""
 
-    # Calculate Chicago Safe Leave (80hr max carryover)
-    safe_leave_total = float(balance.chicago_safe_leave_total or 0) + float(balance.chicago_safe_leave_carryover or 0)
-    safe_leave_used = float(balance.chicago_safe_leave_used or 0)
-    safe_leave_pending = float(balance.chicago_safe_leave_pending or 0)
-    safe_leave_unused = max(0, safe_leave_total - safe_leave_used - safe_leave_pending)
-    safe_leave_max_carryover = 80  # Per Chicago ordinance
-    safe_leave_will_rollover = min(safe_leave_unused, safe_leave_max_carryover)
-    safe_leave_will_expire = max(0, safe_leave_unused - safe_leave_will_rollover)
+    # Calculate Sick & Safe Leave (uses sick_* fields - company sick = Chicago Sick & Safe, 80hr max carryover)
+    sick_total = float(balance.sick_total or 0) + float(balance.sick_carryover or 0)
+    sick_used = float(balance.sick_used or 0)
+    sick_pending = float(getattr(balance, 'sick_pending', 0) or 0)
+    sick_unused = max(0, sick_total - sick_used - sick_pending)
+    sick_max_carryover = 80  # Per Chicago ordinance
+    sick_will_rollover = min(sick_unused, sick_max_carryover)
+    sick_will_expire = max(0, sick_unused - sick_will_rollover)
 
     # Calculate Chicago Paid Leave (16hr/2-day max carryover)
     paid_leave_total = float(balance.chicago_paid_leave_total or 0) + float(balance.chicago_paid_leave_carryover or 0)
@@ -103,57 +103,47 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
                         ui.label('Chicago Employee').classes('font-bold')
                         ui.label('Per Chicago ordinance, your leave balances roll over automatically on January 1st.').classes('text-sm opacity-80')
 
-        # ============ CHICAGO LEAVE CARDS (SIDE BY SIDE) ============
+        # ============ CHICAGO LEAVE CARDS (HORIZONTAL LAYOUT) ============
         def build_leave_card(title: str, badge_text: str, color: str, icon: str,
-                             unused_hrs: float, max_carryover: int, will_rollover: float, will_expire: float):
-            """Build a leave card using NiceGUI components."""
+                             unused_hrs: float, max_carryover: int, will_rollover: float):
+            """Build a horizontal leave card: LEFT = icon/title/description, RIGHT = stats cards."""
             unused_display, unused_tooltip = format_days_hours(unused_hrs)
             rollover_display, rollover_tooltip = format_days_hours(will_rollover)
-            expire_display, expire_tooltip = format_days_hours(will_expire)
             max_days = max_carryover // 8
 
-            with ui.card().classes('flex-1').style(f'border-top: 4px solid {color};'):
-                with ui.card_section().classes('p-6'):
-                    # Icon and title centered
-                    with ui.column().classes('w-full items-center gap-2 mb-4'):
-                        ui.icon(icon, size='2.5rem').style(f'color: {color};')
-                        ui.label(title).classes('text-lg font-bold')
-                        ui.label(badge_text).classes('text-xs px-2 py-1 rounded').style(f'border: 1px solid {color}; color: {color};')
+            with ui.card().classes('w-full').style(f'border-left: 4px solid {color};'):
+                with ui.card_section().classes('p-4'):
+                    with ui.row().classes('w-full items-start justify-between gap-6'):
+                        # LEFT SIDE: Icon, Title, Badge/Description
+                        with ui.column().classes('gap-2'):
+                            with ui.row().classes('items-center gap-3'):
+                                ui.icon(icon, size='2rem').style(f'color: {color};')
+                                ui.label(title).classes('text-lg font-bold')
+                            ui.label(badge_text).classes('text-xs px-2 py-1 rounded').style(f'border: 1px solid {color}; color: {color};')
+                            ui.label(f'{max_carryover} hrs ({max_days}d) max carryover').classes('text-xs opacity-50 mt-1')
 
-                    # Data rows
-                    with ui.column().classes('w-full gap-0'):
-                        # Unused row
-                        with ui.row().classes('w-full justify-between items-center py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1);'):
-                            ui.label('Unused').classes('opacity-80')
-                            ui.label(unused_display).classes('font-bold text-lg').tooltip(unused_tooltip)
+                        # RIGHT SIDE: Stats Cards (aligned columns)
+                        with ui.row().classes('gap-3'):
+                            # Unused Card
+                            with ui.card().classes('p-3 text-center').style('width: 90px;'):
+                                ui.label(unused_display).classes('text-xl font-bold').style(f'color: {color};').tooltip(unused_tooltip)
+                                ui.label('UNUSED').classes('text-xs opacity-60')
 
-                        # Max Rollover row
-                        with ui.row().classes('w-full justify-between items-center py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1);'):
-                            ui.label('Max Rollover').classes('opacity-80')
-                            ui.label(f'{max_carryover} hrs ({max_days}d)').classes('font-medium')
+                            # Rollover Card (highlighted)
+                            with ui.card().classes('p-3 text-center').style('width: 90px; background: rgba(34, 197, 94, 0.15);'):
+                                ui.label(rollover_display).classes('text-xl font-bold text-green-500').tooltip(rollover_tooltip)
+                                ui.label(f'→ {next_year}').classes('text-xs opacity-60')
 
-                        # Will rollover row (highlighted)
-                        with ui.row().classes('w-full justify-between items-center py-3 mt-2 px-3 rounded-lg').style(f'background: rgba(34, 197, 94, 0.1);'):
-                            ui.label(f'→ {next_year}').classes('font-medium')
-                            ui.label(rollover_display).classes('font-bold text-xl').style(f'color: {color};').tooltip(rollover_tooltip)
-
-                        # Will expire row (only if > 0)
-                        if will_expire > 0:
-                            with ui.row().classes('w-full justify-between items-center py-2 mt-2'):
-                                ui.label('Lost Dec 31').classes('opacity-80')
-                                ui.label(expire_display).classes('font-bold text-lg text-red-500').tooltip(expire_tooltip)
-
-        with ui.row().classes('w-full gap-4'):
-            # Sick & Safe Leave Card
+        with ui.column().classes('w-full gap-4'):
+            # Sick Leave Card - uses company sick leave balance
             build_leave_card(
-                title='SICK & SAFE LEAVE',
+                title='SICK LEAVE',
                 badge_text='Health Use Only',
                 color='#22c55e',
                 icon='medical_services',
-                unused_hrs=safe_leave_unused,
-                max_carryover=safe_leave_max_carryover,
-                will_rollover=safe_leave_will_rollover,
-                will_expire=safe_leave_will_expire
+                unused_hrs=sick_unused,
+                max_carryover=sick_max_carryover,
+                will_rollover=sick_will_rollover
             )
 
             # Paid Leave Card
@@ -164,8 +154,7 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
                 icon='event_available',
                 unused_hrs=paid_leave_unused,
                 max_carryover=paid_leave_max_carryover,
-                will_rollover=paid_leave_will_rollover,
-                will_expire=paid_leave_will_expire
+                will_rollover=paid_leave_will_rollover
             )
 
         # Info note

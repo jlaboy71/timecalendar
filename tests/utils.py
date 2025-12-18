@@ -84,6 +84,7 @@ def create_test_user(
 def create_test_department(
     db: Session,
     name: Optional[str] = None,
+    code: Optional[str] = None,
     manager_id: Optional[int] = None,
     **kwargs
 ) -> Department:
@@ -93,6 +94,7 @@ def create_test_department(
     Args:
         db: Database session
         name: Department name (auto-generated if not provided)
+        code: Department code (auto-generated if not provided)
         manager_id: Manager user ID
         **kwargs: Additional fields
 
@@ -100,11 +102,15 @@ def create_test_department(
         Created Department object
     """
     import uuid
+    unique_id = str(uuid.uuid4())[:8]
     if name is None:
-        name = f"Test Department {str(uuid.uuid4())[:8]}"
+        name = f"Test Department {unique_id}"
+    if code is None:
+        code = f"TEST_{unique_id.upper()}"
 
     dept = Department(
         name=name,
+        code=code,
         manager_id=manager_id,
         **kwargs
     )

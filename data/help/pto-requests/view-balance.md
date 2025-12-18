@@ -51,10 +51,22 @@ The request form shows:
 
 ## Carryover Hours
 
-If you have sick time carryover from last year:
+### Sick Time (Automatic Carryover)
+- Sick time rolls over **automatically** - no action needed
 - Shows as part of your sick time total
-- Subject to company policy (56-80 hour limit)
-- Note: Only sick time can be carried over; vacation and personal days are "use it or lose it"
+- Up to 80 hours (10 days) depending on location
+
+### Vacation (Exception Carryover)
+- Vacation is use-it-or-lose-it **by default**
+- Exception carryover is possible with manager approval
+- Approved exceptions show in "Other Leave Types"
+
+### Personal Days (No Carryover)
+- Personal days do NOT carry over
+- Use them or lose them by Dec 31st
+
+### Chicago Employees
+Chicago Paid Leave rolls over automatically (up to 16 hours) per ordinance.
 
 ## Questions About Your Balance?
 

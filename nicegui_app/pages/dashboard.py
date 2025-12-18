@@ -7,6 +7,7 @@ from src.services.policy_change_service import PolicyChangeService
 from src.services.audit_service import AuditService
 from nicegui_app.components.policy_change_indicator import whats_new_section
 from src.services.department_service import DepartmentService
+from src.services.email_service import email_service
 from src.models.carryover_request import CarryoverRequest
 from src.models.system_setting import SystemSetting
 from src.database import get_db
@@ -15,22 +16,29 @@ import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
 from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog, show_success_dialog
-from nicegui_app.components.formatting import format_days_hours
+from nicegui_app.components.formatting import format_days_hours, fmt_days
+from nicegui_app.components.realtime_updates import setup_dashboard_updates
 
 
 def format_days(hours: float) -> str:
-    """Convert hours to days in Xd Yh format for consistency."""
-    hours = float(hours)
-    whole_days = int(hours // 8)
-    remaining_hours = int(hours % 8)
-    if remaining_hours > 0:
-        return f"{whole_days}d {remaining_hours}h"
-    return f"{whole_days}d"
+    """Convert hours to readable days/hours format."""
+    return fmt_days(hours / 8)
 
 
 def format_hours_and_days(hours: float) -> str:
     """Format hours with days equivalent - kept for backwards compatibility."""
     return format_days(hours)
+
+
+def get_pto_display_name(pto_type: str) -> str:
+    """Get user-friendly display name for PTO type."""
+    display_names = {
+        'chicago_leave': 'LEAVE',
+        'leave': 'LEAVE',
+        'work_from_home': 'WFH',
+    }
+    lower_type = pto_type.lower()
+    return display_names.get(lower_type, pto_type.replace('_', ' ').title())
 
 
 def dashboard_page():
@@ -39,12 +47,12 @@ def dashboard_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    if not app.storage.general.get('user'):
+    if not app.storage.user.get('user'):
         ui.navigate.to('/')
         return
 
     # Get user info
-    user_data = app.storage.general.get('user')
+    user_data = app.storage.user.get('user')
     user_first_name = user_data.get('first_name', 'User')
     user_last_name = user_data.get('last_name', '')
     user_id = user_data.get('id')
@@ -76,6 +84,9 @@ def dashboard_page():
         approved_requests.sort(key=lambda x: x.approved_at or x.submitted_at, reverse=True)
         recent_requests = approved_requests  # Show all approved requests (scrollable)
 
+        # Get team approved requests for managers (for My/Team toggle)
+        team_approved_requests = []
+
         # Get team pending requests for managers/admins
         team_pending_requests = []
         cancellation_requests = []
@@ -86,6 +97,8 @@ def dashboard_page():
                 manager_user = user_service.get_user_by_id(user_id)
                 if manager_user and manager_user.department_id:
                     cancellation_requests = PTOService.get_cancellation_requests_with_employee_info(db, manager_user.department_id)
+                    # Also get team approved requests for My/Team toggle
+                    team_approved_requests = PTOService.get_team_approved_requests(db, manager_user.department_id, exclude_user_id=user_id)
             else:
                 cancellation_requests = PTOService.get_cancellation_requests_with_employee_info(db)
 
@@ -93,7 +106,7 @@ def dashboard_page():
         with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
 
             # Header with logo, greeting and logout
-            is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
+            is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
             greeting_color = '#C9A227' if is_dark else '#5a6a72'
             with ui.row().classes('w-full justify-between items-start mb-6'):
                 with ui.column().classes('gap-1'):
@@ -112,9 +125,9 @@ def dashboard_page():
 
                         def toggle_dark_mode():
                             # Get current state from storage, default to True (dark mode)
-                            current = app.storage.general.get('dark_mode', True)
+                            current = app.storage.user.get('dark_mode', True)
                             new_state = not current
-                            app.storage.general['dark_mode'] = new_state
+                            app.storage.user['dark_mode'] = new_state
                             if new_state:
                                 dark_mode.enable()
                             else:
@@ -122,7 +135,7 @@ def dashboard_page():
                             dark_toggle.props(f'icon={"light_mode" if new_state else "dark_mode"}')
 
                         # Initialize based on stored preference
-                        is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
+                        is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
                         if is_dark:
                             dark_mode.enable()
 
@@ -146,7 +159,7 @@ def dashboard_page():
 
                 # Header with year dropdown
                 with ui.row().classes('w-full justify-between items-center mb-4'):
-                    balance_title = ui.label(f'PTO Balances ({current_year})').classes('text-lg font-semibold')
+                    balance_title = ui.label('PTO BALANCES').classes('text-lg font-semibold')
 
                     # Year dropdown selector
                     years = [current_year, next_year]
@@ -155,7 +168,7 @@ def dashboard_page():
                         """Switch the displayed year and refresh balances."""
                         year = e.value
                         selected_year['value'] = year
-                        balance_title.set_text(f'PTO Balances ({year})')
+                        # Title stays the same - year is shown in picker
                         render_balances(year)
 
                     ui.select(
@@ -200,8 +213,7 @@ def dashboard_page():
                                             ui.label('• 0-4 years: 10 days (80 hours) per year').classes('text-sm')
                                             ui.label('• 5-9 years: 15 days (120 hours) per year').classes('text-sm')
                                             ui.label('• 10+ years: 20 days (160 hours) per year').classes('text-sm')
-                                        ui.label('Carryover: Up to 40 hours can be carried to next year.').classes('text-sm opacity-70 mt-2')
-                                        ui.label('Use it or lose it - excess hours expire Dec 31.').classes('text-sm opacity-70')
+                                        ui.label('Use-it-or-lose-it by default. Exception carryover possible with manager approval.').classes('text-sm opacity-70 mt-2')
                                         with ui.row().classes('w-full justify-end mt-2'):
                                             ui.button('Got it', on_click=help_dialog.close).props('color=primary')
                                 help_dialog.open()
@@ -216,7 +228,7 @@ def dashboard_page():
                                         with ui.column().classes('pl-4 gap-2'):
                                             ui.label('• 5 days (40 hours) per year').classes('text-sm')
                                             ui.label('• For illness, medical appointments, or caring for family').classes('text-sm')
-                                        ui.label('Carryover: Up to 80 hours (10 days) can be carried over.').classes('text-sm opacity-70 mt-2')
+                                        ui.label('Auto-Carryover: Up to 80 hours (10 days) rolls over automatically - no action needed.').classes('text-sm opacity-70 mt-2')
                                         ui.label('State laws may provide additional protections.').classes('text-sm opacity-70')
                                         with ui.row().classes('w-full justify-end mt-2'):
                                             ui.button('Got it', on_click=help_dialog.close).props('color=green')
@@ -233,7 +245,8 @@ def dashboard_page():
                                             ui.label('• 2 days (16 hours) per year').classes('text-sm')
                                             ui.label('• For any personal matters').classes('text-sm')
                                             ui.label('• No documentation required').classes('text-sm')
-                                        ui.label('Carryover: Up to 16 hours can be carried to next year.').classes('text-sm opacity-70 mt-2')
+                                            ui.label('• 24hr advance notice preferred').classes('text-sm')
+                                        ui.label('Use-it-or-lose-it: Personal time does NOT carry over to next year.').classes('text-sm opacity-70 mt-2')
                                         with ui.row().classes('w-full justify-end mt-2'):
                                             ui.button('Got it', on_click=help_dialog.close).props('color=purple')
                                 help_dialog.open()
@@ -247,11 +260,11 @@ def dashboard_page():
                                 vacation_pending = float(year_balance.vacation_pending)
                                 vacation_used = float(year_balance.vacation_used)
 
-                                with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500').style('min-width: 200px;'):
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition-shadow').style('min-width: 200px;').on('click', lambda: ui.navigate.to('/submit-request/vacation')):
                                     with ui.row().classes('items-center gap-2'):
                                         ui.icon('beach_access').classes('text-blue-600')
                                         ui.label('VACATION').classes('text-lg font-bold text-blue-600')
-                                        ui.button(icon='help_outline', on_click=show_vacation_help).props('flat dense round size=xs').style('color: #3b82f6')
+                                        ui.button(icon='help_outline').on('click.stop', lambda: show_vacation_help()).props('flat dense round size=xs').style('color: #3b82f6')
 
                                     # Show negative balance in red with warning
                                     if vacation_available < 0:
@@ -277,7 +290,8 @@ def dashboard_page():
                                             ui.label(f'{format_days(vacation_allocated)} allocated').tooltip('Annual vacation allocation')
                                             if vacation_carryover > 0:
                                                 ui.label(f'+{format_days(vacation_carryover)} carryover').tooltip('Hours carried over with management approval')
-                                        ui.label('Carryover not allowed (requires approval)').classes('text-xs opacity-50 mt-1')
+                                        ui.label('Carryover not allowed').classes('text-xs opacity-50 mt-1')
+                                        ui.label('(requires approval)').classes('text-xs opacity-50')
 
                                 # Sick
                                 sick_available = float(year_balance.sick_available)
@@ -287,11 +301,11 @@ def dashboard_page():
                                 sick_used = float(year_balance.sick_used)
                                 sick_pending = float(year_balance.sick_pending)
 
-                                with ui.card().classes('flex-1 p-4 border-l-4 border-green-500').style('min-width: 200px;'):
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-green-500 cursor-pointer hover:shadow-lg transition-shadow').style('min-width: 200px;').on('click', lambda: ui.navigate.to('/submit-request/sick')):
                                     with ui.row().classes('items-center gap-2'):
                                         ui.icon('medical_services').classes('text-green-600')
                                         ui.label('SICK').classes('text-lg font-bold text-green-600')
-                                        ui.button(icon='help_outline', on_click=show_sick_help).props('flat dense round size=xs').style('color: #22c55e')
+                                        ui.button(icon='help_outline').on('click.stop', lambda: show_sick_help()).props('flat dense round size=xs').style('color: #22c55e')
 
                                     # Show negative balance in red with warning
                                     if sick_available < 0:
@@ -327,11 +341,11 @@ def dashboard_page():
                                 personal_used = float(year_balance.personal_used)
                                 personal_pending = float(year_balance.personal_pending)
 
-                                with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500').style('min-width: 200px;'):
+                                with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500 cursor-pointer hover:shadow-lg transition-shadow').style('min-width: 200px;').on('click', lambda: ui.navigate.to('/submit-request/personal')):
                                     with ui.row().classes('items-center gap-2'):
                                         ui.icon('person').classes('text-purple-600')
                                         ui.label('PERSONAL').classes('text-lg font-bold text-purple-600')
-                                        ui.button(icon='help_outline', on_click=show_personal_help).props('flat dense round size=xs').style('color: #a855f7')
+                                        ui.button(icon='help_outline').on('click.stop', lambda: show_personal_help()).props('flat dense round size=xs').style('color: #a855f7')
 
                                     # Show negative balance in red with warning
                                     if personal_available < 0:
@@ -352,14 +366,13 @@ def dashboard_page():
                                         ui.linear_progress(value=used_ratio, show_value=False).props('color=purple-5 track-color=grey-3').classes('w-full')
                                         if personal_pending > 0:
                                             ui.label(f'{format_days(personal_pending)} pending').classes('text-xs text-amber-500')
-                                        # Allocated vs carryover breakdown
+                                        # Allocated breakdown (Personal does NOT carry over)
                                         with ui.row().classes('w-full justify-between text-xs mt-1 opacity-50'):
-                                            ui.label(f'{format_days(personal_allocated)} allocated').tooltip('Annual personal time allocation')
-                                            if personal_carryover > 0:
-                                                ui.label(f'+{format_days(personal_carryover)} carryover').tooltip('Hours carried over (exception only)')
-                                        ui.label('Carryover not allowed').classes('text-xs opacity-50 mt-1')
+                                            ui.label(f'{format_days(personal_allocated)} allocated').tooltip('Annual personal time allocation (2 days/year)')
+                                        ui.label('Use-it-or-lose-it (no carryover)').classes('text-xs opacity-50 mt-1')
+                                        ui.label('24hr advance notice preferred').classes('text-xs opacity-50')
 
-                                # Chicago Safe Leave (only for Chicago employees when feature is enabled)
+                                # Chicago Paid Leave (only for Chicago employees when feature is enabled)
                                 chicago_setting = db.query(SystemSetting).filter(
                                     SystemSetting.key == 'chicago.safe_leave_enabled'
                                 ).first()
@@ -392,11 +405,11 @@ def dashboard_page():
                                                     ui.button('Got it', on_click=help_dialog.close).props('color=amber')
                                         help_dialog.open()
 
-                                    with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500').style('min-width: 200px;'):
+                                    with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500 cursor-pointer hover:shadow-lg transition-shadow').style('min-width: 200px;').on('click', lambda: ui.navigate.to('/submit-request/chicago_leave')):
                                         with ui.row().classes('items-center gap-2'):
                                             ui.icon('schedule').classes('text-amber-600')
                                             ui.label('LEAVE').classes('text-lg font-bold text-amber-600')
-                                            ui.button(icon='help_outline', on_click=show_chicago_leave_help).props('flat dense round size=xs').style('color: #f59e0b')
+                                            ui.button(icon='help_outline').on('click.stop', lambda: show_chicago_leave_help()).props('flat dense round size=xs').style('color: #f59e0b')
 
                                         # Show negative balance in red with warning
                                         if chicago_available < 0:
@@ -438,8 +451,28 @@ def dashboard_page():
 
                             total_other_used = sum(other_leave_usage.values())
 
-                            with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used)', icon='more_horiz').classes('w-full'):
+                            # Get vacation carryover balance (from previous year's exception approval)
+                            from src.services.pto_service import PTOService
+                            vacation_carryover_available = PTOService.get_available_vacation_carryover(db, user_id, year)
+                            vacation_carryover_hours = float(vacation_carryover_available)
+                            vacation_carryover_days = vacation_carryover_hours / 8
+
+                            # Include carryover in expansion title if available
+                            carryover_label = f' + {vacation_carryover_days:.1f}d carryover' if vacation_carryover_days > 0 else ''
+                            with ui.expansion(f'Other Leave Types ({total_other_used:.0f} days used{carryover_label})', icon='more_horiz').classes('w-full'):
                                 ui.label(f'Non-accruing leave used in {year}').classes('text-xs opacity-60 mb-3')
+
+                                # Show vacation carryover if available (from previous year exception)
+                                if vacation_carryover_days > 0:
+                                    previous_year = year - 1
+                                    with ui.card().classes('w-full p-4 mb-4 border-l-4 border-amber-500'):
+                                        with ui.row().classes('w-full items-center gap-3'):
+                                            ui.icon('card_giftcard', size='lg').classes('text-amber-500')
+                                            with ui.column().classes('flex-1'):
+                                                ui.label(f'{previous_year} Vacation Carryover').classes('font-semibold text-amber-500')
+                                                ui.label(f'{vacation_carryover_days:.1f} days ({vacation_carryover_hours:.0f} hours) available').classes('text-lg font-bold')
+                                                ui.label(f'Exception approved - use by end of Q1 {year}').classes('text-xs opacity-60')
+                                            ui.badge('BONUS', color='amber').props('outline')
 
                                 # Colors match request_form.py for consistency
                                 leave_info = {
@@ -454,8 +487,10 @@ def dashboard_page():
                                     for leave_type, info in leave_info.items():
                                         days = other_leave_usage.get(leave_type, 0)
                                         hex_color = info['hex']
+                                        # Capture leave_type for lambda closure
+                                        nav_type = leave_type
 
-                                        with ui.card().classes('p-3 flex-1').style(f'border-left: 4px solid {hex_color}; min-width: 120px;'):
+                                        with ui.card().classes('p-3 flex-1 cursor-pointer hover:shadow-lg transition-shadow').style(f'border-left: 4px solid {hex_color}; min-width: 120px;').on('click', lambda e, t=nav_type: ui.navigate.to(f'/submit-request/{t}')):
                                             # Centered icon and title
                                             with ui.column().classes('items-center gap-1 w-full'):
                                                 ui.icon(info['icon'], size='1.5rem').style(f'color: {hex_color};')
@@ -502,14 +537,55 @@ def dashboard_page():
                     type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
                     type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
+                    # Helper function for inline approval
+                    def create_inline_approve_handler(rid, emp_name, emp_email, pto_type, start_dt, end_dt, days_count, card_ref, btn_ref):
+                        async def handle_approve():
+                            btn_ref.props('loading')
+                            btn_ref.disable()
+                            approve_db = None
+                            try:
+                                approve_db = next(get_db())
+                                current_user = app.storage.user.get('user')
+                                user_id = current_user.get('id')
+                                approver_name = f"{current_user.get('first_name')} {current_user.get('last_name')}"
+
+                                if PTOService.approve_request(approve_db, rid, user_id):
+                                    # Log the approval
+                                    AuditService.log_pto_approve(
+                                        approve_db, user_id, approver_name, rid, emp_name
+                                    )
+                                    # Send email notification
+                                    email_service.send_pto_approved(
+                                        emp_email, emp_name, pto_type,
+                                        start_dt, end_dt, float(days_count), approver_name
+                                    )
+                                    # Remove the card with animation
+                                    card_ref.style('opacity: 0; transform: translateX(-20px); transition: all 0.3s;')
+                                    await ui.run_javascript('await new Promise(r => setTimeout(r, 300))')
+                                    card_ref.delete()
+                                    ui.notify(f'Approved {emp_name}\'s request', type='positive')
+                                else:
+                                    btn_ref.props(remove='loading')
+                                    btn_ref.enable()
+                                    ui.notify('Failed to approve request', type='negative')
+                            except Exception as ex:
+                                btn_ref.props(remove='loading')
+                                btn_ref.enable()
+                                ui.notify(f'Error: {str(ex)}', type='negative')
+                            finally:
+                                if approve_db:
+                                    approve_db.close()
+                        return handle_approve
+
                     for req in team_pending_requests[:5]:  # Show first 5
                         pto_type_lower = req['pto_type'].lower()
                         border_color = type_colors.get(pto_type_lower, 'gray')
                         has_conflict = req['request_id'] in request_conflicts
+                        request_id = req['request_id']
 
-                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-lg').on('click', lambda e, rid=request_id: ui.navigate.to(f'/manager/request/{rid}')) as req_card:
                             with ui.row().classes('w-full justify-between items-center'):
-                                with ui.row().classes('gap-3 items-center'):
+                                with ui.row().classes('gap-3 items-center flex-1'):
                                     ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
                                     with ui.column().classes('gap-0'):
                                         with ui.row().classes('items-center gap-2'):
@@ -521,19 +597,23 @@ def dashboard_page():
                                                     f'{conflict_count} other team member(s) off on same date(s)'
                                                 )
                                         with ui.row().classes('gap-2 items-center'):
-                                            ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                            ui.label(get_pto_display_name(req['pto_type'])).classes('text-sm opacity-70')
                                             ui.label('•').classes('text-xs opacity-50')
                                             if req['start_date'] == req['end_date']:
                                                 ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                             else:
                                                 ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
-                                with ui.row().classes('items-center gap-3'):
+                                with ui.row().classes('gap-3 items-center'):
                                     days = float(req['total_days'])
                                     ui.label(format_days(days * 8)).classes('font-medium')
-
-                                    # Use lambda with default arg to capture request_id properly
-                                    ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=indigo size=sm')
+                                    # Approve button - click.stop prevents row navigation
+                                    approve_btn = ui.button('Approve', icon='check').props('dense color=positive size=sm').classes('ml-2')
+                                    approve_btn.on('click.stop', create_inline_approve_handler(
+                                        request_id, req['employee_name'], req.get('employee_email', ''),
+                                        req['pto_type'], req['start_date'], req['end_date'],
+                                        req['total_days'], req_card, approve_btn
+                                    ))
 
                     if len(team_pending_requests) > 5:
                         with ui.row().classes('w-full justify-center mt-2'):
@@ -554,15 +634,16 @@ def dashboard_page():
                     for req in cancellation_requests[:5]:
                         pto_type_lower = req['pto_type'].lower()
                         border_color = type_colors.get(pto_type_lower, 'gray')
+                        request_id = req['request_id']
 
-                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-lg').on('click', lambda e, rid=request_id: ui.navigate.to(f'/manager/request/{rid}')):
                             with ui.row().classes('w-full justify-between items-center'):
                                 with ui.row().classes('gap-3 items-center'):
                                     ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
                                     with ui.column().classes('gap-0'):
                                         ui.label(req['employee_name']).classes('font-medium')
                                         with ui.row().classes('gap-2 items-center'):
-                                            ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                            ui.label(get_pto_display_name(req['pto_type'])).classes('text-sm opacity-70')
                                             ui.label('•').classes('text-xs opacity-50')
                                             if req['start_date'] == req['end_date']:
                                                 ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
@@ -571,12 +652,8 @@ def dashboard_page():
                                         if req.get('cancellation_reason'):
                                             ui.label(f"Reason: {req['cancellation_reason']}").classes('text-xs opacity-60 italic')
 
-                                with ui.row().classes('items-center gap-3'):
-                                    days = float(req['total_days'])
-                                    ui.label(format_days(days * 8)).classes('font-medium')
-
-                                    # Use lambda with default arg to capture request_id properly
-                                    ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=amber size=sm')
+                                days = float(req['total_days'])
+                                ui.label(format_days(days * 8)).classes('font-medium')
 
                     if len(cancellation_requests) > 5:
                         with ui.row().classes('w-full justify-center mt-2'):
@@ -596,7 +673,7 @@ def dashboard_page():
                             with ui.row().classes('w-full justify-between items-center mb-3'):
                                 with ui.row().classes('items-center gap-2'):
                                     ui.icon('groups', color='teal').classes('text-xl')
-                                    ui.label('Team PTO History').classes('text-lg font-semibold')
+                                    ui.label('PTO TEAM HISTORY').classes('text-lg font-semibold')
                                 ui.badge(f'{len(team_members)} members', color='teal').props('outline')
 
                             # Build options for searchable dropdown
@@ -636,7 +713,11 @@ def dashboard_page():
                                     with ui.column().classes('pl-4 gap-2'):
                                         ui.markdown('**Request/Submit Time Off** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
                                         ui.markdown('**My Requests/History** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
-                                        ui.markdown('**Carryover Request** - Request to carry over unused sick time to next year (employees only)').classes('text-sm')
+                                        ui.markdown('**Leave Rollover** - View year-end rollover status:').classes('text-sm')
+                                        ui.markdown('&nbsp;&nbsp;• **Sick**: Auto-rolls over (up to 80 hrs) - no action needed').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Vacation**: Use-it-or-lose-it (exception carryover with manager approval)').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Personal**: Use-it-or-lose-it (no carryover)').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Chicago Paid Leave**: Auto-rolls over (up to 16 hrs)').classes('text-xs opacity-80')
                                     with ui.row().classes('w-full justify-end mt-2'):
                                         ui.button('Got it', on_click=help_dialog.close).props('color=primary')
                             help_dialog.open()
@@ -644,7 +725,7 @@ def dashboard_page():
                         with ui.row().classes('items-center gap-2'):
                             ui.label('My Time Off').classes('text-xs font-semibold uppercase opacity-60')
                             ui.button(icon='help_outline', on_click=show_time_off_help).props('flat dense round size=xs').style('color: #3b82f6')
-                        with ui.row().classes('w-full gap-3 flex-wrap'):
+                        with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
                             # Managers auto-approve, so show "Submit" instead of "Request"
                             time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
                             ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new time off request')
@@ -654,7 +735,7 @@ def dashboard_page():
                             ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
                             # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
                             if user_role != 'manager':
-                                ui.button('Carryover Request', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Request to carry over unused sick time to next year')
+                                ui.button('Leave Rollover', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View leave rollover status')
 
                     # Row 2: Resources (employees only - managers use Manager Tools)
                     if user_role != 'manager':
@@ -679,7 +760,7 @@ def dashboard_page():
                             with ui.row().classes('items-center gap-2'):
                                 ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
                                 ui.button(icon='help_outline', on_click=show_resources_help).props('flat dense round size=xs').style('color: #6b7280')
-                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
                                 ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View your profile and account information')
                                 ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View team calendar with holidays and time off')
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Generate reports on your PTO usage')
@@ -690,13 +771,12 @@ def dashboard_page():
                         ui.separator().classes('my-2')
                         with ui.column().classes('w-full gap-3'):
                             ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
-                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
                                 ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
                                 ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                            with ui.row().classes('w-full gap-3 flex-wrap'):
                                 ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
                                 ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
 
@@ -724,7 +804,7 @@ def dashboard_page():
                                     ui.icon(type_icon).classes(f'text-{border_color}-500')
                                     with ui.column().classes('gap-0'):
                                         with ui.row().classes('gap-2 items-center'):
-                                            ui.label(req.pto_type.title()).classes('font-medium')
+                                            ui.label(get_pto_display_name(req.pto_type)).classes('font-medium')
                                             ui.badge('Pending', color='amber').props('outline')
                                         if req.start_date == req.end_date:
                                             ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
@@ -851,7 +931,7 @@ def dashboard_page():
                                                 ui.label(user_obj.first_name[0]).classes(f'font-bold text-{pto_color}-500')
                                             with ui.column().classes('gap-0 flex-1'):
                                                 ui.label(f'{user_obj.first_name} {user_obj.last_name}').classes('font-medium text-sm')
-                                                ui.label(f"{req.pto_type.title()} • {req.start_date.strftime('%b %d')}").classes('text-xs opacity-60')
+                                                ui.label(f"{get_pto_display_name(req.pto_type)} • {req.start_date.strftime('%b %d')}").classes('text-xs opacity-60')
                         else:
                             with ui.column().classes('w-full items-center py-4 opacity-50'):
                                 ui.icon('event_available', size='xl')
@@ -933,8 +1013,9 @@ def dashboard_page():
                             pto_type_lower = req['pto_type'].lower()
                             border_color = type_colors.get(pto_type_lower, 'gray')
                             has_conflict = req['request_id'] in request_conflicts
+                            request_id = req['request_id']
 
-                            with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500'):
+                            with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-lg').on('click', lambda e, rid=request_id: ui.navigate.to(f'/manager/request/{rid}')):
                                 with ui.row().classes('w-full justify-between items-center'):
                                     with ui.row().classes('gap-3 items-center'):
                                         ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
@@ -951,19 +1032,15 @@ def dashboard_page():
                                                         f'{conflict_count} other team member(s) off on same date(s)'
                                                     )
                                             with ui.row().classes('gap-2 items-center'):
-                                                ui.label(req['pto_type'].title()).classes('text-sm opacity-70')
+                                                ui.label(get_pto_display_name(req['pto_type'])).classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 if req['start_date'] == req['end_date']:
                                                     ui.label(req['start_date'].strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
                                                 else:
                                                     ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
 
-                                    with ui.row().classes('items-center gap-3'):
-                                        days = float(req['total_days'])
-                                        ui.label(format_days(days * 8)).classes('font-medium')
-
-                                        # Use lambda with default arg to capture request_id properly
-                                        ui.button('Review', icon='visibility', on_click=lambda e, rid=req['request_id']: ui.navigate.to(f'/manager/request/{rid}')).props('flat dense color=amber size=sm')
+                                    days = float(req['total_days'])
+                                    ui.label(format_days(days * 8)).classes('font-medium')
 
                         if len(admin_pending_requests) > 5:
                             with ui.row().classes('w-full justify-center mt-2'):
@@ -1038,39 +1115,164 @@ def dashboard_page():
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
               with ui.card().classes('w-full mb-4'):
+                # View state for My/Team toggle (managers only)
+                view_state = {'mode': 'my'}  # 'my' or 'team'
+                view_buttons = {}
+
                 with ui.row().classes('w-full justify-between items-center mb-3'):
-                    ui.label('Recent Approved Time Off').classes('text-lg font-semibold')
-                    if recent_requests:
-                        ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
+                    ui.label('PTO APPROVED').classes('text-lg font-semibold')
+                    with ui.row().classes('gap-2 items-center'):
+                        # My/Team toggle for managers
+                        if user_role == 'manager' and team_approved_requests is not None:
+                            def update_view(mode: str):
+                                view_state['mode'] = mode
+                                # Update button styles
+                                for btn_mode, btn in view_buttons.items():
+                                    if btn_mode == mode:
+                                        btn.style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                                    else:
+                                        btn.style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+                                # Re-render the list
+                                render_filtered_requests()
 
-                if recent_requests:
-                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
+                            view_buttons['my'] = ui.button('My', icon='person', on_click=lambda: update_view('my')).props('dense outline size=sm').style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                            view_buttons['team'] = ui.button('Team', icon='group', on_click=lambda: update_view('team')).props('dense outline size=sm').style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
 
-                    # Scrollable container with max height
-                    with ui.scroll_area().classes('w-full').style('max-height: 300px'):
-                      for req in recent_requests:
-                        pto_type_lower = req.pto_type.lower()
-                        border_color = type_colors.get(pto_type_lower, 'gray')
+                        count_label = ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
 
-                        # Use lambda with default arg to capture req value properly
-                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
-                            with ui.row().classes('w-full justify-between items-center'):
-                                with ui.row().classes('gap-4 items-center'):
-                                    # Type icon
-                                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person'}
-                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                if recent_requests or team_approved_requests:
+                    # Hex colors for inline styling (icon + text)
+                    type_hex_colors = {
+                        'all': '#C9A227',  # TJM Gold
+                        'vacation': '#3b82f6',  # Blue
+                        'sick': '#22c55e',  # Green
+                        'personal': '#a855f7',  # Purple
+                        'work_from_home': '#ef4444',  # Red
+                        'chicago_leave': '#f59e0b',  # Amber
+                        'other': '#6b7280'  # Grey
+                    }
+                    # Tailwind color names for border classes
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red', 'chicago_leave': 'amber', 'leave': 'amber'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work', 'chicago_leave': 'event_available', 'leave': 'event_available'}
 
-                                    with ui.column().classes('gap-0'):
-                                        ui.label(req.pto_type.title()).classes('font-medium')
-                                        if req.start_date == req.end_date:
-                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
-                                        else:
-                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-xs opacity-60')
+                    # Filter state
+                    filter_state = {'type': 'all'}
+                    filter_buttons = {}
+                    button_colors = {}  # Store original colors for each button
 
-                                with ui.row().classes('gap-3 items-center'):
-                                    days_display = float(req.total_days)
-                                    ui.label(format_days(days_display * 8)).classes('text-sm')
-                                    ui.icon('chevron_right').classes('text-gray-400')
+                    def update_filter(new_type: str):
+                        filter_state['type'] = new_type
+                        # Update button styles - selected gets gold border, others get outline with their color
+                        for btn_type, btn in filter_buttons.items():
+                            btn_color = button_colors.get(btn_type, '#6b7280')
+                            if btn_type == new_type:
+                                # Selected: gold border, colored text
+                                btn.style(f'color: {btn_color} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                            else:
+                                # Unselected: subtle border, colored text
+                                btn.style(f'color: {btn_color} !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+                        # Refresh the list
+                        render_filtered_requests()
+
+                    # Check if Chicago employee for Leave filter
+                    is_chicago = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+
+                    # Filter toggle buttons with icons and colors
+                    with ui.row().classes('w-full gap-2 mb-3 flex-wrap'):
+                        # All button - starts selected with gold border
+                        button_colors['all'] = type_hex_colors['all']
+                        filter_buttons['all'] = ui.button('All', icon='list', on_click=lambda: update_filter('all')).props('dense outline size=sm').style(f'color: {type_hex_colors["all"]} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+
+                        # Vacation
+                        button_colors['vacation'] = type_hex_colors['vacation']
+                        filter_buttons['vacation'] = ui.button('Vacation', icon='beach_access', on_click=lambda: update_filter('vacation')).props('dense outline size=sm').style(f'color: {type_hex_colors["vacation"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Sick
+                        button_colors['sick'] = type_hex_colors['sick']
+                        filter_buttons['sick'] = ui.button('Sick', icon='medical_services', on_click=lambda: update_filter('sick')).props('dense outline size=sm').style(f'color: {type_hex_colors["sick"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Personal
+                        button_colors['personal'] = type_hex_colors['personal']
+                        filter_buttons['personal'] = ui.button('Personal', icon='person', on_click=lambda: update_filter('personal')).props('dense outline size=sm').style(f'color: {type_hex_colors["personal"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Leave filter for Chicago employees - always show if Chicago
+                        if is_chicago:
+                            button_colors['chicago_leave'] = type_hex_colors['chicago_leave']
+                            filter_buttons['chicago_leave'] = ui.button('Leave', icon='event_available', on_click=lambda: update_filter('chicago_leave')).props('dense outline size=sm').style(f'color: {type_hex_colors["chicago_leave"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # WFH filter - always show
+                        button_colors['work_from_home'] = type_hex_colors['work_from_home']
+                        filter_buttons['work_from_home'] = ui.button('WFH', icon='home_work', on_click=lambda: update_filter('work_from_home')).props('dense outline size=sm').style(f'color: {type_hex_colors["work_from_home"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Other types (bereavement, fmla, etc.)
+                        other_types = [r for r in recent_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
+                        if other_types:
+                            button_colors['other'] = type_hex_colors['other']
+                            filter_buttons['other'] = ui.button('Other', icon='more_horiz', on_click=lambda: update_filter('other')).props('dense outline size=sm').style(f'color: {type_hex_colors["other"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                    # Container for filtered results
+                    results_container = ui.column().classes('w-full')
+
+                    def render_filtered_requests():
+                        results_container.clear()
+                        with results_container:
+                            # Select base list based on view mode (my vs team)
+                            is_team_view = view_state['mode'] == 'team'
+                            base_requests = team_approved_requests if is_team_view else recent_requests
+
+                            # Filter requests based on selected type
+                            if filter_state['type'] == 'all':
+                                filtered = base_requests
+                            elif filter_state['type'] == 'other':
+                                filtered = [r for r in base_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
+                            elif filter_state['type'] == 'chicago_leave':
+                                # Match both 'chicago_leave' and 'leave' types
+                                filtered = [r for r in base_requests if r.pto_type.lower() in ['chicago_leave', 'leave']]
+                            else:
+                                filtered = [r for r in base_requests if r.pto_type.lower() == filter_state['type']]
+
+                            # Update count label
+                            count_label.set_text(f'{len(filtered)} requests')
+
+                            if filtered:
+                                with ui.scroll_area().classes('w-full').style('max-height: 300px'):
+                                    for req in filtered:
+                                        pto_type_lower = req.pto_type.lower()
+                                        border_color = type_colors.get(pto_type_lower, 'gray')
+
+                                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
+                                            with ui.row().classes('w-full justify-between items-center'):
+                                                with ui.row().classes('gap-4 items-center'):
+                                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                                    with ui.column().classes('gap-0'):
+                                                        # Determine type label - add (CarryOver) for vacation using previous year
+                                                        has_carryover = hasattr(req, 'carryover_from_year') and req.carryover_from_year
+                                                        display_name = get_pto_display_name(req.pto_type)
+                                                        type_label = f"{display_name} (CarryOver)" if has_carryover and pto_type_lower == 'vacation' else display_name
+                                                        # Show employee name in team view
+                                                        if is_team_view and hasattr(req, 'employee_name'):
+                                                            ui.label(req.employee_name).classes('font-medium')
+                                                            ui.label(type_label).classes('text-xs opacity-70 text-amber-500' if has_carryover else 'text-xs opacity-70')
+                                                        else:
+                                                            ui.label(type_label).classes('font-medium text-amber-500' if has_carryover else 'font-medium')
+                                                        if req.start_date == req.end_date:
+                                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
+                                                        else:
+                                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-xs opacity-60')
+                                                with ui.row().classes('gap-3 items-center'):
+                                                    days_display = float(req.total_days)
+                                                    ui.label(format_days(days_display * 8)).classes('text-sm')
+                                                    # Show carryover indicator if vacation used previous year's balance
+                                                    if hasattr(req, 'carryover_from_year') and req.carryover_from_year:
+                                                        ui.badge(f'{req.carryover_from_year}', color='amber').props('outline dense').tooltip(f'Uses {req.carryover_from_year} vacation balance')
+                                                    ui.icon('chevron_right').classes('text-gray-400')
+                            else:
+                                with ui.row().classes('w-full justify-center py-6'):
+                                    view_text = 'team' if is_team_view else ''
+                                    ui.label(f'No {view_text} {filter_state["type"]} time off').classes('opacity-60')
+
+                    # Initial render
+                    render_filtered_requests()
                 else:
                     with ui.row().classes('w-full justify-center py-6'):
                         ui.label('No approved time off yet').classes('opacity-60')
@@ -1147,6 +1349,10 @@ def dashboard_page():
                 else:
                     ui.label('Unable to load user information').classes('text-red-500')
 
+        # ============ REAL-TIME UPDATES ============
+        # Set up automatic refresh when PTO request statuses change (30 second interval)
+        setup_dashboard_updates(db, user_id, user_role, interval=30.0)
+
     finally:
         if db:
             db.close()
@@ -1154,7 +1360,7 @@ def dashboard_page():
 
 def logout():
     """Clear user session and redirect to home."""
-    app.storage.general.pop('user', None)
+    app.storage.user.pop('user', None)
     ui.navigate.to('/')
 
 
@@ -1194,7 +1400,7 @@ def cancel_request(request_id: int):
         db.commit()
 
         # Audit log the cancellation
-        current_user = app.storage.general.get('user', {})
+        current_user = app.storage.user.get('user', {})
         AuditService.log_pto_cancel(
             db=db,
             user_id=current_user.get('id'),
@@ -1258,7 +1464,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                     # Balance Summary Card
                     with ui.card().classes('w-full m-4 p-4'):
                         with ui.row().classes('w-full justify-between items-center mb-3'):
-                            ui.label(f'{selected_year} PTO Summary').classes('text-lg font-semibold')
+                            ui.label('PTO SUMMARY').classes('text-lg font-semibold')
 
                             # Year selector
                             def on_year_change(e):
@@ -1380,7 +1586,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
                                             ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
                                             with ui.column().classes('gap-0'):
                                                 with ui.row().classes('gap-2 items-center'):
-                                                    ui.label(req.pto_type.title()).classes('font-medium')
+                                                    ui.label(get_pto_display_name(req.pto_type)).classes('font-medium')
                                                     ui.badge(req.status.title(), color=status_colors.get(req.status, 'grey')).props('dense')
 
                                                 if req.start_date == req.end_date:
@@ -1423,12 +1629,13 @@ def show_pto_detail_dialog(request_or_id):
     type_colors = {
         'vacation': 'blue', 'sick': 'green', 'personal': 'purple',
         'bereavement': 'brown', 'fmla': 'teal', 'jury_duty': 'indigo',
-        'voting': 'cyan', 'military': 'deep-orange', 'work_from_home': 'red'
+        'voting': 'cyan', 'military': 'deep-orange', 'work_from_home': 'red',
+        'chicago_leave': 'orange', 'leave': 'orange'
     }
     status_colors = {'pending': 'amber', 'approved': 'green', 'denied': 'red', 'cancelled': 'grey'}
 
     # Get current user info for action button permissions
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_id = current_user.get('id')
     user_role = current_user.get('role', 'employee')
     is_trusted = current_user.get('is_trusted', False)
@@ -1461,6 +1668,7 @@ def show_pto_detail_dialog(request_or_id):
         req_cancellation_requested = getattr(request, 'cancellation_requested', False)
         req_employee_name = request.user.full_name if request.user else 'Unknown'
         req_created_at = request.created_at
+        req_carryover_from_year = getattr(request, 'carryover_from_year', None)
     finally:
         db.close()
 
@@ -1469,197 +1677,270 @@ def show_pto_detail_dialog(request_or_id):
     is_own_request = (req_user_id == user_id)
     can_direct_delete = user_role in ['admin', 'superadmin'] or (user_role == 'manager' and is_own_request) or (is_trusted and is_own_request)
 
-    with ui.dialog() as detail_dialog, ui.card().classes('w-full max-w-md p-0'):
+    with ui.dialog() as detail_dialog, ui.card().classes(f'w-full max-w-2xl p-0 border-l-4 border-{header_color}-500'):
+        # Type icons mapping
+        type_icons = {
+            'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
+            'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
+            'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech',
+            'chicago_leave': 'location_city', 'leave': 'location_city', 'work_from_home': 'home_work'
+        }
+        # Display name - rename chicago_leave to LEAVE (uppercase), add (CarryOver) for vacation carryover
+        display_type = 'LEAVE' if req_type_lower in ['chicago_leave', 'leave'] else req_type.replace('_', ' ').upper()
+        type_label = f'{display_type} (CarryOver)' if req_carryover_from_year and req_type_lower == 'vacation' else display_type
+
         # Header
-        with ui.row().classes(f'w-full justify-between items-center p-4 bg-{header_color}-500 text-white'):
-            with ui.row().classes('gap-2 items-center'):
-                type_icons = {
-                    'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person',
-                    'bereavement': 'sentiment_very_dissatisfied', 'fmla': 'family_restroom',
-                    'jury_duty': 'gavel', 'voting': 'how_to_vote', 'military': 'military_tech'
-                }
-                ui.icon(type_icons.get(req_type_lower, 'event')).classes('text-2xl')
-                ui.label(f'{req_type.title()} Time Off').classes('text-lg font-bold')
-            ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense color=white')
+        with ui.row().classes('w-full justify-between items-center p-4'):
+            ui.label('LEAVE TIME OFF').classes('text-lg font-bold')
+            ui.button(icon='close', on_click=detail_dialog.close).props('flat round dense')
 
-        # Content
-        with ui.column().classes('w-full p-4 gap-4'):
-            # Status badge
-            with ui.row().classes('w-full justify-center'):
-                ui.badge(req_status.title(), color=status_colors.get(req_status, 'grey')).classes('text-lg px-4 py-1')
+        # Horizontal layout: Left identity panel + Right details panel
+        with ui.element('div').style('display: flex; flex-direction: row; width: 100%; min-height: 300px;'):
+            # LEFT PANEL - Identity (40%)
+            with ui.element('div').style(f'width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; gap: 0.75rem; background-color: rgba(0,0,0,0.1); border-right: 1px solid rgba(128,128,128,0.3);'):
+                # Employee name
+                ui.label(req_employee_name).classes('font-medium text-xl text-center')
+                # Large colored icon
+                ui.icon(type_icons.get(req_type_lower, 'event'), size='4rem').classes(f'text-{header_color}-500')
+                # Type label under icon
+                ui.label(type_label).classes(f'font-bold text-lg text-{header_color}-500 text-center')
+                # Status badge
+                ui.badge(req_status.title(), color=status_colors.get(req_status, 'grey')).classes('text-sm px-3 py-1')
 
-            # Date info
-            with ui.card().classes('w-full p-3'):
-                ui.label('Dates').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                if req_start_date == req_end_date:
-                    ui.label(req_start_date.strftime('%A, %B %d, %Y')).classes('font-medium')
-                else:
-                    ui.label(f"{req_start_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
-                    ui.label('to').classes('text-xs opacity-60')
-                    ui.label(f"{req_end_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
-
-            # Duration
-            with ui.card().classes('w-full p-3'):
-                ui.label('Duration').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                hours = req_total_days * 8
-                ui.label(format_days(hours)).classes('font-medium')
-
-            # Notes (if any)
-            if req_notes:
+            # RIGHT PANEL - Details (60%)
+            with ui.element('div').style('width: 60%; display: flex; flex-direction: column; padding: 1rem; gap: 0.75rem;'):
+                # Date info
                 with ui.card().classes('w-full p-3'):
-                    ui.label('Notes').classes('text-xs font-semibold uppercase opacity-60 mb-2')
-                    ui.label(req_notes).classes('text-sm')
+                    ui.label('Dates').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                    if req_start_date == req_end_date:
+                        ui.label(req_start_date.strftime('%A, %B %d, %Y')).classes('font-medium')
+                    else:
+                        ui.label(f"{req_start_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
+                        ui.label('to').classes('text-xs opacity-60')
+                        ui.label(f"{req_end_date.strftime('%A, %B %d, %Y')}").classes('font-medium')
 
-            # Denial reason (if denied)
-            if req_status == 'denied' and req_denial_reason:
-                with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
-                    ui.label('Denial Reason').classes('text-xs font-semibold uppercase text-red-500 mb-2')
-                    ui.label(req_denial_reason).classes('text-sm')
+                # Duration
+                with ui.card().classes('w-full p-3'):
+                    ui.label('Duration').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                    hours = req_total_days * 8
+                    ui.label(format_days(hours)).classes('font-medium')
 
-            # Manager Approval info (if approved)
-            if req_status == 'approved' and req_approved_at:
-                with ui.card().classes('w-full p-3 border-l-4 border-green-500'):
-                    ui.label('Manager Approved').classes('text-xs font-semibold uppercase text-green-600 mb-2')
-                    ui.label(req_approved_at.strftime('%A, %B %d, %Y')).classes('font-medium')
+                # Notes (if any)
+                if req_notes:
+                    with ui.card().classes('w-full p-3'):
+                        ui.label('Notes').classes('text-xs font-semibold uppercase opacity-60 mb-2')
+                        ui.label(req_notes).classes('text-sm')
 
-            # Submission info
-            with ui.row().classes('w-full justify-center text-xs opacity-50'):
-                ui.label(f'Submitted: {req_created_at.strftime("%b %d, %Y")}')
+                # Denial reason (if denied)
+                if req_status == 'denied' and req_denial_reason:
+                    with ui.card().classes('w-full p-3 border-l-4 border-red-500'):
+                        ui.label('Denial Reason').classes('text-xs font-semibold uppercase text-red-500 mb-2')
+                        ui.label(req_denial_reason).classes('text-sm')
 
-            # Action buttons section
-            def delete_request_direct():
-                """Direct delete for admin/superadmin/manager's own requests."""
-                del_db = next(get_db())
-                try:
-                    from src.models.pto_request import PTORequest
-                    req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
-                    if not req:
-                        show_error_dialog('Not Found', 'The request was not found.')
-                        return
+                # Manager Approval info (if approved)
+                if req_status == 'approved' and req_approved_at:
+                    with ui.card().classes('w-full p-3 border-l-4 border-green-500'):
+                        ui.label('Manager Approved').classes('text-xs font-semibold uppercase text-green-600 mb-2')
+                        ui.label(req_approved_at.strftime('%A, %B %d, %Y')).classes('font-medium')
 
-                    req.status = 'cancelled'
+                # Carryover info (if vacation used previous year's balance)
+                if req_carryover_from_year and req_type_lower == 'vacation':
+                    with ui.card().classes('w-full p-3 border-l-4 border-amber-500'):
+                        ui.label('Balance Source').classes('text-xs font-semibold uppercase text-amber-500 mb-2')
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('card_giftcard', size='sm').classes('text-amber-500')
+                            ui.label(f'Uses {req_carryover_from_year} unused vacation balance').classes('font-medium')
+                        ui.label(f'This vacation day is deducted from your {req_carryover_from_year} allocation (carryover exception).').classes('text-xs opacity-70 mt-1')
 
-                    # Restore balance based on previous status
-                    if pto_type_lower in ['vacation', 'sick', 'personal']:
-                        balance_service = BalanceService(del_db)
+                # Submission info
+                with ui.row().classes('w-full justify-center text-xs opacity-50'):
+                    ui.label(f'Submitted: {req_created_at.strftime("%b %d, %Y")}')
+
+        # Function definitions (defined inside dialog but outside columns - no UI rendered here)
+        def delete_request_direct():
+            """Direct delete for admin/superadmin/manager's own requests."""
+            del_db = next(get_db())
+            try:
+                from src.models.pto_request import PTORequest
+                req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                if not req:
+                    show_error_dialog('Not Found', 'The request was not found.')
+                    return
+
+                req.status = 'cancelled'
+
+                # Restore balance based on previous status
+                # IMPORTANT: For carryover requests, restore to the FROM year (carryover_from_year)
+                if req_type_lower in ['vacation', 'sick', 'personal']:
+                    balance_service = BalanceService(del_db)
+                    hours_to_restore = req_total_days * 8
+
+                    if req_status == 'pending':
                         balance = balance_service.get_or_create_balance(req_user_id, req_year)
-                        hours_to_restore = req_total_days * 8
-
-                        if req_status == 'pending':
-                            if pto_type_lower == 'vacation':
-                                balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+                        if req_type_lower == 'vacation':
+                            balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+                    else:
+                        # For vacation carryover, restore to the correct year
+                        if req_type_lower == 'vacation' and req_carryover_from_year:
+                            # Restore to the FROM year (e.g., 2025)
+                            balance = balance_service.get_or_create_balance(req_user_id, req_carryover_from_year)
+                            balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
                         else:
-                            if pto_type_lower == 'vacation':
+                            balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                            if req_type_lower == 'vacation':
                                 balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
-                            elif pto_type_lower == 'sick':
+                            elif req_type_lower == 'sick':
                                 balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
-                            elif pto_type_lower == 'personal':
+                            elif req_type_lower == 'personal':
                                 balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
 
-                    del_db.commit()
+                del_db.commit()
 
-                    # Audit log the cancellation
-                    AuditService.log_pto_cancel(
-                        db=del_db,
-                        user_id=current_user.get('id'),
-                        username=current_user.get('username'),
-                        request_id=req_id,
-                        employee_name=req_employee_name,
-                        cancelled_by_self=is_own_request
-                    )
+                # Audit log the cancellation
+                AuditService.log_pto_cancel(
+                    db=del_db,
+                    user_id=current_user.get('id'),
+                    username=current_user.get('username'),
+                    request_id=req_id,
+                    employee_name=req_employee_name,
+                    cancelled_by_self=is_own_request
+                )
 
-                    detail_dialog.close()
-                    show_success_dialog('Success', 'Request deleted and balance restored', on_close=lambda: ui.navigate.to('/dashboard'))
-                finally:
-                    del_db.close()
-
-            def cancel_pending_request():
-                """Cancel pending request for employee."""
-                cancel_db = next(get_db())
-                try:
-                    from src.models.pto_request import PTORequest
-                    req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
-                    if not req:
-                        show_error_dialog('Not Found', 'The request was not found.')
-                        return
-
-                    req.status = 'cancelled'
-
-                    if req_type.lower() == 'vacation':
-                        balance_service = BalanceService(cancel_db)
-                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
-                        hours_to_restore = req_total_days * 8
-                        balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
-
-                    cancel_db.commit()
-
-                    # Audit log the cancellation
-                    AuditService.log_pto_cancel(
-                        db=cancel_db,
-                        user_id=current_user.get('id'),
-                        username=current_user.get('username'),
-                        request_id=req_id,
-                        employee_name=req_employee_name,
-                        cancelled_by_self=True
-                    )
-
-                    detail_dialog.close()
-                    show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
-                finally:
-                    cancel_db.close()
-
-            def show_cancellation_dialog():
-                """Show dialog for employee to request cancellation of approved PTO."""
                 detail_dialog.close()
-                with ui.dialog() as cancel_dialog, ui.card().classes('min-w-[350px] p-4'):
-                    ui.label('Request Cancellation').classes('text-xl font-bold mb-4')
-                    ui.label('Your manager will need to approve this cancellation request.').classes('text-sm opacity-70 mb-4')
+                ui.notify('Request deleted', type='positive')
+                ui.navigate.to('/dashboard')
+            finally:
+                del_db.close()
 
-                    reason_input = ui.textarea(
-                        label='Reason (optional)',
-                        placeholder='Why do you need to cancel this time off?'
-                    ).props('outlined autogrow').classes('w-full mb-4')
+        def cancel_pending_request():
+            """Cancel pending request for employee."""
+            cancel_db = next(get_db())
+            try:
+                from src.models.pto_request import PTORequest
+                req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                if not req:
+                    show_error_dialog('Not Found', 'The request was not found.')
+                    return
 
-                    def submit_cancellation():
-                        req_db = next(get_db())
-                        try:
-                            from src.models.pto_request import PTORequest
-                            req = req_db.query(PTORequest).filter(PTORequest.id == req_id).first()
-                            if not req:
-                                show_error_dialog('Not Found', 'The request was not found.')
-                                return
+                req.status = 'cancelled'
 
-                            req.cancellation_requested = True
-                            req.cancellation_reason = reason_input.value.strip() if reason_input.value else None
-                            req.cancellation_requested_at = datetime.now()
+                if req_type.lower() == 'vacation':
+                    balance_service = BalanceService(cancel_db)
+                    balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                    hours_to_restore = req_total_days * 8
+                    balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
 
-                            req_db.commit()
-                            cancel_dialog.close()
-                            show_success_dialog('Request Submitted', 'Cancellation request submitted to your manager', on_close=lambda: ui.navigate.to('/dashboard'))
-                        finally:
-                            req_db.close()
+                cancel_db.commit()
 
-                    with ui.row().classes('w-full justify-end gap-2'):
-                        ui.button('Cancel', on_click=cancel_dialog.close).props('flat')
-                        ui.button('Submit Request', on_click=submit_cancellation).props('color=amber')
+                # Audit log the cancellation
+                AuditService.log_pto_cancel(
+                    db=cancel_db,
+                    user_id=current_user.get('id'),
+                    username=current_user.get('username'),
+                    request_id=req_id,
+                    employee_name=req_employee_name,
+                    cancelled_by_self=True
+                )
 
-                cancel_dialog.open()
+                detail_dialog.close()
+                ui.notify('Request cancelled', type='positive')
+                ui.navigate.to('/dashboard')
+            finally:
+                cancel_db.close()
 
-            # Show action buttons based on role and status
-            # Don't allow cancellation of PTO that has already occurred
-            is_past_request = req_end_date < date.today()
+        def delete_approved_request_employee():
+            """Employee directly deletes their approved PTO request with manager notification."""
+            del_db = next(get_db())
+            try:
+                from src.models.pto_request import PTORequest
+                req = del_db.query(PTORequest).filter(PTORequest.id == req_id).first()
+                if not req:
+                    show_error_dialog('Not Found', 'The request was not found.')
+                    return
 
-            with ui.row().classes('w-full justify-end gap-2 mt-2'):
-                if not is_past_request and can_direct_delete and req_status in ['pending', 'approved']:
-                    ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
-                elif not is_past_request and is_own_request and req_status == 'pending':
-                    ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
-                elif not is_past_request and is_own_request and req_status == 'approved':
-                    # Check if cancellation already requested
-                    if not req_cancellation_requested:
-                        ui.button('Request Cancellation', icon='cancel_schedule_send', on_click=show_cancellation_dialog).props('color=amber')
+                # Get manager info for notification BEFORE modifying request
+                manager_email = None
+                manager_name = None
+                if req.user and req.user.department and req.user.department.manager:
+                    manager = req.user.department.manager
+                    manager_email = manager.email
+                    manager_name = manager.first_name
+
+                # Store request details for email
+                emp_name = req.user.full_name if req.user else 'Unknown'
+                pto_type_for_email = req.pto_type
+                start_for_email = req.start_date
+                end_for_email = req.end_date
+                days_for_email = float(req.total_days)
+
+                req.status = 'cancelled'
+
+                # Restore balance based on PTO type
+                # IMPORTANT: For carryover requests, restore to the FROM year (carryover_from_year)
+                if req_type_lower in ['vacation', 'sick', 'personal']:
+                    balance_service = BalanceService(del_db)
+                    hours_to_restore = req_total_days * 8
+
+                    # For vacation carryover, restore to the correct year
+                    if req_type_lower == 'vacation' and req_carryover_from_year:
+                        # Restore to the FROM year (e.g., 2025)
+                        balance = balance_service.get_or_create_balance(req_user_id, req_carryover_from_year)
+                        balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
                     else:
-                        ui.label('Cancellation Pending').classes('text-amber-600 text-sm italic')
+                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                        if req_type_lower == 'vacation':
+                            balance.vacation_used = max(0, float(balance.vacation_used or 0) - hours_to_restore)
+                        elif req_type_lower == 'sick':
+                            balance.sick_used = max(0, float(balance.sick_used or 0) - hours_to_restore)
+                        elif req_type_lower == 'personal':
+                            balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
+
+                del_db.commit()
+
+                # Audit log the cancellation
+                AuditService.log_pto_cancel(
+                    db=del_db,
+                    user_id=current_user.get('id'),
+                    username=current_user.get('username'),
+                    request_id=req_id,
+                    employee_name=emp_name,
+                    cancelled_by_self=True
+                )
+
+                # Send manager notification
+                if manager_email:
+                    try:
+                        email_service.send_pto_cancelled_notification(
+                            manager_email=manager_email,
+                            manager_name=manager_name,
+                            employee_name=emp_name,
+                            pto_type=pto_type_for_email,
+                            start_date=start_for_email,
+                            end_date=end_for_email,
+                            total_days=days_for_email
+                        )
+                    except Exception as e:
+                        # Don't fail the deletion if email fails
+                        pass
+
+                detail_dialog.close()
+                ui.notify('Request deleted', type='positive')
+                ui.navigate.to('/dashboard')
+            finally:
+                del_db.close()
+
+        # Show action buttons based on role and status
+        # Don't allow cancellation of PTO that has already occurred
+        is_past_request = req_end_date < date.today()
+
+        with ui.row().classes('w-full justify-end gap-2 mt-2 p-4'):
+            if not is_past_request and can_direct_delete and req_status in ['pending', 'approved']:
+                ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
+            elif not is_past_request and is_own_request and req_status == 'pending':
+                ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
+            elif not is_past_request and is_own_request and req_status == 'approved':
+                # Employee can directly delete approved requests (manager will be notified)
+                ui.button('Delete Request', icon='delete', on_click=delete_approved_request_employee).props('color=negative')
 
     detail_dialog.open()
 
@@ -1713,7 +1994,7 @@ def show_user_profile_dialog(user, _db=None):
         location_text = 'Not Set'
 
     # Use app theme color for header
-    is_dark = app.storage.general.get('dark_mode', True)  # Default to dark mode
+    is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
     header_color = '#C9A227' if is_dark else '#5a6a72'
 
     with ui.dialog() as profile_dialog, ui.card().classes('w-full max-w-md p-0'):

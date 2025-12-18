@@ -29,12 +29,12 @@ def admin_handbook_page():
     """Admin handbook management page with integrated policy change tracking."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
-    current_user = app.storage.general.get('user')
+    current_user = app.storage.user.get('user')
 
     # Ensure upload directory exists
     os.makedirs(UPLOAD_DIR, exist_ok=True)

@@ -11,7 +11,7 @@ def manager_team_page():
     """Manager team management page content."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
     department_id = current_user.get('department_id')
 

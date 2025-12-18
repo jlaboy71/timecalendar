@@ -25,8 +25,8 @@ def _get_pto_type_icon(pto_type: str) -> str:
         'jury_duty': '⚖️',
         'voting': '🗳️',
         'military': '🎖️',
-        'chicago_safe_leave': '📍',
         'chicago_paid_leave': '📍',
+        'chicago_leave': '📍',
     }
     return icons.get(pto_type.lower(), '📅')
 
@@ -192,9 +192,9 @@ class EmailService:
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
 
-        # Chicago Safe Leave indicator
+        # Chicago Paid Leave indicator
         chicago_row = ""
-        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+        if pto_type in ('chicago_leave', 'chicago_paid_leave'):
             chicago_row = """
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Location:</td>
@@ -253,9 +253,9 @@ class EmailService:
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
 
-        # Chicago Safe Leave indicator
+        # Chicago Paid Leave indicator
         chicago_row = ""
-        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+        if pto_type in ('chicago_leave', 'chicago_paid_leave'):
             chicago_row = """
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Location:</td>
@@ -383,9 +383,9 @@ class EmailService:
         # Format days nicely
         days_display = f"{total_days:.1f}" if total_days != int(total_days) else str(int(total_days))
 
-        # Chicago Safe Leave indicator
+        # Chicago Paid Leave indicator
         chicago_row = ""
-        if pto_type in ('chicago_safe_leave', 'chicago_paid_leave'):
+        if pto_type in ('chicago_leave', 'chicago_paid_leave'):
             chicago_row = """
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Location:</td>

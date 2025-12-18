@@ -510,24 +510,34 @@ class PTOService:
         """
         from src.models.user import User
 
+        print(f"[AUTH DEBUG] approver_id={approver_id}, request.user_id={request.user_id}")
+
         stmt = select(User).where(User.id == approver_id)
         approver = db.execute(stmt).scalar_one_or_none()
         if approver is None:
+            print(f"[AUTH DEBUG] FAIL: Approver ID {approver_id} not found!")
             raise ValueError("Approver not found")
+
+        print(f"[AUTH DEBUG] approver={approver.username}, role='{approver.role}', dept={approver.department_id}")
 
         # Admins and superadmins can approve any request
         if approver.role in ['admin', 'superadmin']:
+            print("[AUTH DEBUG] PASS: admin/superadmin")
             return
 
         # Managers can only approve requests from their department
         if approver.role == 'manager':
             stmt = select(User).where(User.id == request.user_id)
             employee = db.execute(stmt).scalar_one_or_none()
+            print(f"[AUTH DEBUG] employee dept={employee.department_id if employee else 'N/A'}")
             if employee and employee.department_id == approver.department_id:
+                print("[AUTH DEBUG] PASS: same department")
                 return
+            print(f"[AUTH DEBUG] FAIL: Different departments")
             raise ValueError("Managers can only approve requests from their own department")
 
         # Regular employees cannot approve requests
+        print(f"[AUTH DEBUG] FAIL: Role '{approver.role}' not manager/admin/superadmin")
         raise ValueError("You are not authorized to approve requests")
 
     @staticmethod
@@ -610,11 +620,11 @@ class PTOService:
                 hours_from_carryover, hours_from_current = PTOService._apply_vacation_with_carryover(
                     db, request.user_id, year, hours_requested, is_pending=False
                 )
-                # Apply remaining to current year balance
+                # Apply remaining to current year balance (vacation_used stores HOURS)
                 if hours_from_current > 0:
                     balance.vacation_used = (
                         (balance.vacation_used or Decimal('0')) +
-                        (hours_from_current / Decimal('8'))
+                        hours_from_current  # Already in hours, no conversion needed
                     )
                 # Track carryover usage - if hours came from previous year, record it
                 if hours_from_carryover > 0:
@@ -938,10 +948,10 @@ class PTOService:
             prev_balance = db.execute(stmt).scalar_one_or_none()
 
             if prev_balance:
-                # Add to vacation_used in the FROM year
+                # Add to vacation_used in the FROM year (vacation_used stores HOURS)
                 prev_balance.vacation_used = (
                     (prev_balance.vacation_used or Decimal('0')) +
-                    (hours_from_carryover / Decimal('8'))  # Convert hours to days
+                    hours_from_carryover  # Already in hours, no conversion needed
                 )
                 logger.info(
                     f"Vacation carryover used: {hours_from_carryover}hrs from {previous_year} "
@@ -984,11 +994,11 @@ class PTOService:
                         hours_needed_from_prev = hours_to_apply - hours_from_current
                         hours_from_carryover = min(prev_year_available, hours_needed_from_prev)
 
-                    # Deduct from previous year's balance
+                    # Deduct from previous year's balance (vacation_used stores HOURS)
                     if hours_from_carryover > Decimal('0'):
                         prev_balance.vacation_used = (
                             (prev_balance.vacation_used or Decimal('0')) +
-                            (hours_from_carryover / Decimal('8'))  # Convert hours to days
+                            hours_from_carryover  # Already in hours, no conversion needed
                         )
                         logger.info(
                             f"Implicit vacation carryover: {hours_from_carryover}hrs deducted from {previous_year} "

@@ -1,40 +1,52 @@
 # Leave Carryover Overview
 
-At the end of the year, you may be able to carry over unused **sick time** into the next year.
+At the end of the year, some leave types automatically roll over while others require action.
 
-## What is Carryover?
+## Carryover Rules by Leave Type
 
-- Unused **sick time only** from the current year
-- Transferred to next year's balance
-- Subject to company policy and approval
-- **Vacation and Personal Days cannot be carried over** (use it or lose it)
+### Sick Leave (AUTOMATIC)
+- **Rolls over automatically** - no action needed
+- Up to 80 hours (10 days) can carry over
+- Applied during year-end processing on January 1st
+- State laws may provide additional protections
 
-## Who Can Request Carryover?
+### Vacation (USE-IT-OR-LOSE-IT by Default)
+- **Does NOT automatically carry over**
+- Exception carryover is possible with manager approval
+- Must request exception before year-end
+- Approved exception carryover is a BONUS separate from new year allocation
 
-All employees can request to carry over unused sick time, but:
-- Some hours may auto-approve based on policy
-- Hours above the limit require manager approval
-- Typical limit: 56-80 hours depending on location
+### Personal Days (USE-IT-OR-LOSE-IT)
+- **Cannot be carried over** - use them or lose them
+- 2 days (16 hours) per year
+- No exceptions
+
+### Chicago Paid Leave (AUTOMATIC for Chicago Employees)
+- **Rolls over automatically** - no action needed
+- Up to 16 hours (2 days) can carry over
+- Per Chicago ordinance - automatic rollover
+
+## Who Needs to Take Action?
+
+### Chicago Employees
+No action needed! Your leave balances (Sick and Paid Leave) roll over automatically on January 1st per Chicago ordinance.
+
+### Non-Chicago Employees
+- **Sick Time**: No action needed - rolls over automatically
+- **Vacation**: Use it or lose it (unless you request and receive exception approval from your manager)
+- **Personal**: Use it or lose it - no carryover allowed
 
 ## Carryover Timeline
 
 **Best Practice:**
-1. Review your unused sick time balance in Q4
-2. Submit carryover requests before year-end
-3. Await manager approval
-4. Carryover applies when new year starts
+1. Review your balances in Q4
+2. Use vacation and personal days before year-end
+3. Sick time will auto-carry over - no action needed
+4. If you need vacation exception carryover, request manager approval before Dec 31st
 
-## Types of Leave That Can Carry Over
-
-**Only Sick Time can be carried over:**
-- Sick Time: Up to 56-80 hours depending on location
-- Vacation: Use it or lose it - no carryover allowed
-- Personal Days: Use it or lose it - no carryover allowed
-
-This is based on company policy in the Haventech Handbook.
-
-## Accessing Carryover Requests
+## Accessing the Leave Rollover Page
 
 From your Dashboard:
-1. Click **"Request Carryover"** quick action
-2. Or navigate to the Carryover page from the menu
+1. Click **"Leave Rollover"** quick action
+2. View your automatic rollover amounts
+3. See what will transfer to next year

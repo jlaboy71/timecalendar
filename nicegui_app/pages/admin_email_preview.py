@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 def email_preview_page():
     """Preview all email templates with sample data."""
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
