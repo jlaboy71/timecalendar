@@ -156,6 +156,49 @@ from src.services.email_service import _get_email_template, _get_pto_type_icon, 
 
 ## General Rules
 
+### Verify Interactive Elements Before Testing
+**CRITICAL**: Before telling the user to test any UI changes:
+1. **Verify syntax** - Run `py_compile` on all modified files
+2. **Review click handlers** - Ensure all buttons/links have proper closures
+3. **Check closure capture** - When using lambdas in loops, use default arguments: `lambda d=dept: handler(d)`
+4. **Trace navigation** - Confirm click handlers navigate to correct destinations
+5. **Test error handling** - Wrap handlers in try/except to prevent silent failures
+
+**Common closure bug pattern:**
+```python
+# BAD - All buttons will reference the last item
+for item in items:
+    ui.button('Click', on_click=lambda: handle(item))
+
+# BAD - Missing event parameter 'e' (NiceGUI passes click event)
+for item in items:
+    ui.button('Click', on_click=lambda i=item: handle(i))
+
+# GOOD - Include 'e' for event AND capture value with default arg
+for item in items:
+    ui.button('Click', on_click=lambda e, i=item: handle(i))
+
+# ALSO GOOD for card.on('click') - same pattern
+for item in items:
+    item_copy = dict(item)
+    card.on('click', lambda e, i=item_copy: handle(i))
+```
+
+**CRITICAL**: NiceGUI click handlers pass an event argument. Always include `e` as the first lambda parameter!
+
+**Nested dialog pattern (opening dialog from dialog):**
+```python
+from nicegui import context
+
+def open_edit_dialog(item):
+    # Use context.client.content to create at root level
+    with context.client.content:
+        with ui.dialog() as dialog, ui.card():
+            # dialog content here
+        dialog.open()
+```
+Without `context.client.content`, the new dialog is created inside the parent dialog's context and gets hidden when the parent closes!
+
 ### Check Existing Patterns First
 **BEFORE proposing any new visual elements (icons, colors, styles, formats):**
 1. Search the codebase for existing usage of similar elements

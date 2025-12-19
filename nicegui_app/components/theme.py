@@ -6,6 +6,237 @@ from nicegui import ui, app
 # inject_mobile_css() call in apply_dark_mode() below. See mobile_responsive.py for details.
 from nicegui_app.components.mobile_responsive import inject_mobile_css
 
+# =============================================================================
+# PROFESSIONAL UI ENHANCEMENT - Phase 0 Foundation
+# REVERT INSTRUCTIONS: If professional styles cause issues, comment out calls to
+# inject_professional_fonts() and inject_global_styles() in apply_dark_mode() below.
+# =============================================================================
+
+# Track if professional styles have been injected (prevents duplicate injection)
+_professional_styles_injected = {'fonts': False, 'styles': False}
+
+
+def inject_professional_fonts():
+    """Inject premium Google Fonts for professional typography.
+
+    Fonts loaded:
+    - Plus Jakarta Sans: Headings (modern, clean)
+    - DM Sans: Body text (readable, professional)
+    - JetBrains Mono: Code/monospace
+    """
+    if _professional_styles_injected['fonts']:
+        return
+    _professional_styles_injected['fonts'] = True
+
+    ui.add_head_html('''
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+                --font-body: 'DM Sans', system-ui, sans-serif;
+                --font-mono: 'JetBrains Mono', monospace;
+            }
+
+            body, .nicegui-content {
+                font-family: var(--font-body);
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+
+            h1, h2, h3, h4, h5, h6, .heading {
+                font-family: var(--font-heading);
+                font-weight: 600;
+                letter-spacing: -0.02em;
+            }
+
+            code, pre, .mono {
+                font-family: var(--font-mono);
+            }
+        </style>
+    ''')
+
+
+def inject_global_styles():
+    """Inject comprehensive global styles for professional appearance.
+
+    Includes: CSS custom properties, card/button/table enhancements, animations.
+    """
+    if _professional_styles_injected['styles']:
+        return
+    _professional_styles_injected['styles'] = True
+
+    ui.add_css('''
+        /* ========== CSS CUSTOM PROPERTIES ========== */
+        :root {
+            /* Shadows */
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            --shadow-gold: 0 4px 14px 0 rgba(201, 162, 39, 0.25);
+
+            /* Transitions */
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+            /* Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+
+            /* TJM Brand */
+            --tjm-gold: #c9a227;
+            --tjm-gray: #5a6a72;
+        }
+
+        /* ========== CARD ENHANCEMENTS ========== */
+        .q-card {
+            border-radius: var(--radius-lg) !important;
+            transition: all var(--transition-base);
+        }
+
+        /* ========== BUTTON ENHANCEMENTS ========== */
+        .q-btn {
+            border-radius: var(--radius-md) !important;
+            font-weight: 500 !important;
+        }
+
+        /* Gold button class */
+        .btn-gold {
+            background: linear-gradient(135deg, #c9a227 0%, #d4af37 100%) !important;
+            color: white !important;
+            box-shadow: var(--shadow-gold) !important;
+        }
+
+        .btn-gold:hover {
+            background: linear-gradient(135deg, #d4af37 0%, #c9a227 100%) !important;
+        }
+
+        /* ========== INPUT ENHANCEMENTS ========== */
+        .q-field__control {
+            border-radius: var(--radius-md) !important;
+        }
+
+        .q-field--outlined.q-field--focused .q-field__control:after {
+            border-color: var(--tjm-gold) !important;
+            border-width: 2px !important;
+        }
+
+        /* ========== TABLE ENHANCEMENTS ========== */
+        .q-table {
+            border-radius: var(--radius-lg) !important;
+            overflow: hidden;
+        }
+
+        .q-table thead tr {
+            background: linear-gradient(135deg, #5a6a72 0%, #4a5a62 100%);
+        }
+
+        .q-table thead th {
+            color: white !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .q-table tbody tr:hover {
+            background: rgba(201, 162, 39, 0.05) !important;
+        }
+
+        /* ========== BADGE ENHANCEMENTS ========== */
+        .q-badge {
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            border-radius: 9999px;
+        }
+
+        /* ========== DIALOG ENHANCEMENTS ========== */
+        .q-dialog__inner > .q-card {
+            border-radius: var(--radius-xl) !important;
+            box-shadow: var(--shadow-xl) !important;
+        }
+
+        /* ========== ANIMATIONS ========== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes pulse-gold {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(201, 162, 39, 0); }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .animate-pulse-gold {
+            animation: pulse-gold 2s infinite;
+        }
+
+        /* Stagger children animations */
+        .stagger-children > * {
+            opacity: 0;
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+
+        .stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+        .stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+        .stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+        .stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+        .stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+        .stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+
+        /* ========== DARK MODE TABLE OVERRIDE ========== */
+        body.body--dark .q-table thead tr {
+            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+        }
+
+        /* ========== SCROLLBAR STYLING ========== */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        body.body--dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+    ''')
+
 
 def skeleton_loader(rows: int = 3, width: str = '100%'):
     """
@@ -59,6 +290,11 @@ def apply_dark_mode():
     """
     # Inject mobile responsive CSS (REVERT: comment out this line if issues occur)
     inject_mobile_css()
+
+    # Inject professional fonts and global styles (Phase 0 Foundation)
+    # REVERT: comment out these lines if professional styles cause issues
+    inject_professional_fonts()
+    inject_global_styles()
 
     # TJM Brand Colors
     TJM_GOLD = '#c9a227'
@@ -384,3 +620,174 @@ def create_help_button(title: str, message: str):
         show_help_dialog(title, message)
 
     return ui.button(icon='help_outline', on_click=on_click).props('flat dense round size=sm').style('color: #f59e0b')
+
+
+# =============================================================================
+# PROFESSIONAL UI COMPONENTS - Reusable UI elements
+# =============================================================================
+
+def stat_card(title: str, value, icon: str = 'analytics', color: str = 'blue', subtitle: str = None):
+    """Create a stat card with icon, value, and title.
+
+    Args:
+        title: Card title (e.g., 'Departments')
+        value: Main value to display (number or string)
+        icon: Material icon name
+        color: Tailwind color name (blue, green, amber, purple, red, gray)
+        subtitle: Optional subtitle text
+
+    Returns:
+        The card element
+    """
+    # Map color names to hex for icon styling
+    color_map = {
+        'blue': '#3b82f6',
+        'green': '#22c55e',
+        'amber': '#f59e0b',
+        'gold': '#c9a227',
+        'purple': '#a855f7',
+        'red': '#ef4444',
+        'gray': '#6b7280',
+        'indigo': '#6366f1',
+    }
+    icon_color = color_map.get(color, color_map['blue'])
+
+    with ui.card().classes('p-5 hover:shadow-lg transition-all') as card:
+        with ui.row().classes('items-center gap-4'):
+            # Icon container with background
+            with ui.element('div').classes(f'w-12 h-12 rounded-xl bg-{color}-100 flex items-center justify-center'):
+                ui.icon(icon, size='md').style(f'color: {icon_color};')
+
+            with ui.column().classes('gap-0'):
+                ui.label(str(value)).classes('text-2xl font-bold')
+                ui.label(title).classes('text-sm opacity-60')
+                if subtitle:
+                    ui.label(subtitle).classes('text-xs opacity-40')
+
+    return card
+
+
+def status_badge(status: str):
+    """Create a professionally styled status badge.
+
+    Args:
+        status: Status key (active, inactive, needs_manager, empty, pending, approved, denied)
+
+    Returns:
+        The badge row element
+    """
+    status_config = {
+        'active': {
+            'bg': 'bg-emerald-100',
+            'text': 'text-emerald-800',
+            'icon': 'check_circle',
+            'label': 'Active'
+        },
+        'inactive': {
+            'bg': 'bg-gray-100',
+            'text': 'text-gray-600',
+            'icon': 'block',
+            'label': 'Inactive'
+        },
+        'needs_manager': {
+            'bg': 'bg-amber-100',
+            'text': 'text-amber-800',
+            'icon': 'warning',
+            'label': 'Needs Manager'
+        },
+        'empty': {
+            'bg': 'bg-blue-100',
+            'text': 'text-blue-800',
+            'icon': 'group_off',
+            'label': 'No Employees'
+        },
+        'pending': {
+            'bg': 'bg-amber-100',
+            'text': 'text-amber-800',
+            'icon': 'pending',
+            'label': 'Pending'
+        },
+        'approved': {
+            'bg': 'bg-emerald-100',
+            'text': 'text-emerald-800',
+            'icon': 'check_circle',
+            'label': 'Approved'
+        },
+        'denied': {
+            'bg': 'bg-red-100',
+            'text': 'text-red-800',
+            'icon': 'cancel',
+            'label': 'Denied'
+        },
+    }
+
+    config = status_config.get(status.lower(), status_config['active'])
+
+    with ui.row().classes(f'items-center gap-1.5 px-3 py-1 rounded-full {config["bg"]}') as badge:
+        ui.icon(config['icon'], size='xs').classes(config['text'])
+        ui.label(config['label']).classes(f'{config["text"]} text-sm font-medium')
+
+    return badge
+
+
+def empty_state(icon: str, title: str, description: str, action_label: str = None, action_click=None):
+    """Create an empty state placeholder with icon, text, and optional action.
+
+    Args:
+        icon: Material icon name
+        title: Main title text
+        description: Description text
+        action_label: Optional button label
+        action_click: Optional button click handler
+
+    Returns:
+        The column element
+    """
+    with ui.column().classes('w-full items-center py-12 gap-4') as container:
+        with ui.element('div').classes('w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center'):
+            ui.icon(icon, size='xl').classes('text-gray-400')
+
+        ui.label(title).classes('text-xl font-semibold text-gray-600')
+        ui.label(description).classes('text-sm text-gray-400 text-center max-w-md')
+
+        if action_label and action_click:
+            ui.button(action_label, icon='add', on_click=action_click).classes('btn-gold mt-4')
+
+    return container
+
+
+def action_button_group(buttons: list):
+    """Create a row of action buttons.
+
+    Args:
+        buttons: List of button configs, each with:
+            - label (optional): Button text
+            - icon: Material icon name
+            - variant: 'flat', 'outline', or 'filled' (default: 'flat')
+            - color: Button color (default: 'primary')
+            - on_click: Click handler
+
+    Returns:
+        The row element
+    """
+    with ui.row().classes('w-full justify-end gap-2') as row:
+        for btn in buttons:
+            label = btn.get('label')
+            icon = btn.get('icon')
+            variant = btn.get('variant', 'flat')
+            color = btn.get('color', 'primary')
+            on_click = btn.get('on_click')
+
+            if label:
+                button = ui.button(label, icon=icon, on_click=on_click)
+            else:
+                button = ui.button(icon=icon, on_click=on_click)
+
+            if variant == 'flat':
+                button.props(f'flat color={color}')
+            elif variant == 'outline':
+                button.props(f'outline color={color}')
+            else:
+                button.props(f'color={color}')
+
+    return row
