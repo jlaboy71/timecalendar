@@ -19,13 +19,49 @@ def admin_system_page():
     """System administration page content."""
     apply_dark_mode()
 
+    # Add custom CSS for pulse animation and hover effects
+    ui.add_head_html('''
+    <style>
+        @keyframes pulse-attention {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        }
+        .pulse-attention {
+            animation: pulse-attention 2s ease-in-out infinite;
+        }
+        .nav-hub-card {
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        .nav-hub-card:hover {
+            border-color: #C9A227 !important;
+            transform: translateY(-2px);
+        }
+        .stat-card {
+            transition: all 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: scale(1.02);
+        }
+        .activity-item {
+            transition: background-color 0.2s ease;
+        }
+        .activity-item:hover {
+            background-color: rgba(201, 162, 39, 0.1);
+        }
+    </style>
+    ''')
+
+    # Track page load time for "last refreshed" display
+    page_load_time = datetime.now()
+
     user_role = app.storage.user.get('user', {}).get('role')
     if user_role != 'superadmin':
         show_error_dialog('Access Denied', 'Super Admin role is required to access this page.')
         ui.navigate.to('/')
         return
 
-    with ui.column().classes('w-full max-w-6xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-6xl mx-auto p-4 animate-fade-in'):
         # Header
         page_header(title='SYSTEM ADMINISTRATION', show_back=False)
 
@@ -37,13 +73,14 @@ def admin_system_page():
         else:
             db_path = Path(__file__).parent.parent.parent / 'tjm_calendar.db'
         db_exists = db_path.exists()
+        db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0
 
         smtp_configured = os.getenv('SMTP_HOST') is not None
         ai_configured = os.getenv('ANTHROPIC_API_KEY') is not None
         logs_dir = Path(__file__).parent.parent.parent / 'logs'
         has_errors = (logs_dir / 'tjm_calendar_errors.log').exists() and (logs_dir / 'tjm_calendar_errors.log').stat().st_size > 0
 
-        with ui.card().classes('w-full p-4 mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900'):
+        with ui.card().classes('w-full p-4 mb-4').style('background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid #C9A227;'):
             with ui.row().classes('w-full items-center justify-between'):
                 with ui.row().classes('items-center gap-3'):
                     ui.icon('monitor_heart', size='md', color='blue')
@@ -74,21 +111,156 @@ def admin_system_page():
                         ui.label('Errors').classes('text-sm')
                         ui.badge('Check Logs' if has_errors else 'None', color='red' if has_errors else 'green')
 
-        # Tabs for different sections (logical order: data, policies, operations, reporting, config)
+        # Tabs for different sections (consolidated: 4 logical groups)
         with ui.tabs().classes('w-full').props('dense active-color=primary indicator-color=primary') as tabs:
-            database_tab = ui.tab('Database', icon='storage')
-            handbook_tab = ui.tab('Handbook', icon='menu_book')
-            policy_tab = ui.tab('Policy Reference', icon='policy')
-            eoy_tab = ui.tab('EOY Processing', icon='event_repeat')
-            analytics_tab = ui.tab('Analytics', icon='analytics')
-            autonotify_tab = ui.tab('Auto Notify', icon='notifications_active')
-            email_tab = ui.tab('Email Config', icon='email')
-            logs_tab = ui.tab('System Logs', icon='description')
-            settings_tab = ui.tab('Settings', icon='tune')
+            overview_tab = ui.tab('Overview', icon='dashboard')
+            data_tab = ui.tab('Data', icon='storage')
+            comms_tab = ui.tab('Communications', icon='email')
+            system_tab = ui.tab('System', icon='settings')
 
-        with ui.tab_panels(tabs, value=database_tab).classes('w-full'):
-            # ========== DATABASE TAB ==========
-            with ui.tab_panel(database_tab):
+        with ui.tab_panels(tabs, value=overview_tab).classes('w-full'):
+            # ========== OVERVIEW TAB (Command Center Dashboard) ==========
+            with ui.tab_panel(overview_tab):
+                # Quick Stats Row
+                from src.models.pto_request import PTORequest
+                from src.models.user import User
+                from src.services.backup_service import BackupService
+
+                db_overview = next(get_db())
+                try:
+                    active_employees = db_overview.query(User).filter(User.is_active == True).count()
+                    pending_requests = db_overview.query(PTORequest).filter(PTORequest.status == 'pending').count()
+                    backups = BackupService.list_backups()
+                    last_backup = backups[0]['date'] if backups else 'Never'
+                except Exception:
+                    active_employees = 0
+                    pending_requests = 0
+                    last_backup = 'Unknown'
+                finally:
+                    db_overview.close()
+
+                with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;'):
+                    # Card 1: Active Employees
+                    with ui.card().classes('p-4 stat-card').style('border-left: 4px solid #C9A227;'):
+                        with ui.row().classes('items-center gap-3'):
+                            ui.icon('people', size='lg', color='primary')
+                            with ui.column().classes('gap-0'):
+                                ui.label(str(active_employees)).classes('text-3xl font-bold')
+                                ui.label('Active Employees').classes('text-xs opacity-60 uppercase')
+                        ui.tooltip('Total active user accounts in the system')
+
+                    # Card 2: Pending Requests (with pulse animation when > 0)
+                    pending_classes = 'p-4 stat-card cursor-pointer'
+                    if pending_requests > 0:
+                        pending_classes += ' pulse-attention'
+                    with ui.card().classes(pending_classes).style('border-left: 4px solid #ef4444;').on('click', lambda: ui.navigate.to('/admin/approvals')):
+                        with ui.row().classes('items-center gap-3'):
+                            ui.icon('pending_actions', size='lg', color='red')
+                            with ui.column().classes('gap-0'):
+                                ui.label(str(pending_requests)).classes('text-3xl font-bold text-red-500')
+                                ui.label('Pending Approvals').classes('text-xs opacity-60 uppercase')
+                        ui.tooltip('Click to review pending PTO requests')
+
+                    # Card 3: Database Size
+                    with ui.card().classes('p-4 stat-card').style('border-left: 4px solid #22c55e;'):
+                        with ui.row().classes('items-center gap-3'):
+                            ui.icon('storage', size='lg', color='green')
+                            with ui.column().classes('gap-0'):
+                                ui.label(f'{db_size:.2f} MB' if db_exists else 'N/A').classes('text-3xl font-bold')
+                                ui.label('Database Size').classes('text-xs opacity-60 uppercase')
+                        db_tooltip = f'SQLite database: {db_path.name}' if db_exists else 'Database not found'
+                        ui.tooltip(db_tooltip)
+
+                    # Card 4: Last Backup
+                    with ui.card().classes('p-4 stat-card').style('border-left: 4px solid #3b82f6;'):
+                        with ui.row().classes('items-center gap-3'):
+                            ui.icon('backup', size='lg', color='blue')
+                            with ui.column().classes('gap-0'):
+                                ui.label(last_backup if isinstance(last_backup, str) else last_backup.strftime('%b %d')).classes('text-3xl font-bold')
+                                ui.label('Last Backup').classes('text-xs opacity-60 uppercase')
+                        ui.tooltip('Most recent database backup date')
+
+                # Alerts & Quick Actions Row
+                with ui.row().classes('w-full gap-4 mb-6'):
+                    # Alerts Card
+                    with ui.card().classes('flex-1 p-4'):
+                        ui.label('Alerts & Warnings').classes('text-lg font-semibold mb-4')
+                        if pending_requests > 0:
+                            with ui.element('div').classes('w-full p-3 rounded-lg mb-2').style('background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b;'):
+                                with ui.row().classes('w-full items-center justify-between'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('warning', color='amber')
+                                        ui.label(f'{pending_requests} PTO request(s) pending review')
+                                    ui.button('Review', on_click=lambda: ui.navigate.to('/admin/approvals')).props('flat dense color=amber')
+                        if has_errors:
+                            with ui.element('div').classes('w-full p-3 rounded-lg mb-2').style('background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444;'):
+                                with ui.row().classes('w-full items-center justify-between'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('error', color='red')
+                                        ui.label('Error log contains entries')
+                                    ui.button('View Logs', on_click=lambda: tabs.set_value(system_tab)).props('flat dense color=red')
+                        if not pending_requests and not has_errors:
+                            with ui.element('div').classes('w-full p-3 rounded-lg').style('background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e;'):
+                                with ui.row().classes('w-full items-center gap-2'):
+                                    ui.icon('check_circle', color='green')
+                                    ui.label('All clear - no pending items or errors')
+
+                    # Quick Actions Card
+                    with ui.card().classes('flex-1 p-4'):
+                        ui.label('Quick Actions').classes('text-lg font-semibold mb-4')
+                        with ui.column().classes('w-full gap-3'):
+                            with ui.row().classes('w-full gap-3'):
+                                ui.button('Create Backup', icon='backup', on_click=lambda: tabs.set_value(data_tab)).props('outline color=primary').classes('flex-1')
+                                ui.button('Send Test Email', icon='send', on_click=lambda: tabs.set_value(comms_tab)).props('outline color=primary').classes('flex-1')
+                            with ui.row().classes('w-full gap-3'):
+                                ui.button('View Audit Log', icon='security', on_click=lambda: tabs.set_value(system_tab)).props('outline color=primary').classes('flex-1')
+                                ui.button('Sync Holidays', icon='sync', on_click=lambda: tabs.set_value(data_tab)).props('outline color=primary').classes('flex-1')
+
+                # Navigation Hub
+                with ui.card().classes('w-full p-4'):
+                    with ui.row().classes('items-center justify-between mb-4'):
+                        ui.label('Administration Hub').classes('text-lg font-semibold')
+                        ui.label(f'Last refreshed: {page_load_time.strftime("%I:%M %p")}').classes('text-xs opacity-50')
+                    with ui.element('div').classes('grid grid-cols-4 gap-4 w-full'):
+                        nav_items = [
+                            ('people', 'Employees', 'Manage employee accounts', '/admin/employees'),
+                            ('business', 'Departments', 'Organizational structure', '/admin/departments'),
+                            ('menu_book', 'Handbook', 'Policy documents', '/admin/handbook'),
+                            ('event_repeat', 'Year-End', 'EOY processing status', '/admin/year-end'),
+                            ('analytics', 'Analytics', 'Usage insights', '/analytics'),
+                            ('assessment', 'Reports', 'Generate reports', '/reports'),
+                            ('approval', 'Approvals', 'Pending requests', '/admin/approvals'),
+                            ('help_outline', 'Help Center', 'Documentation', '/help'),
+                        ]
+                        for icon, title, desc, url in nav_items:
+                            with ui.card().classes('w-full p-3 cursor-pointer nav-hub-card').on('click', lambda u=url: ui.navigate.to(u)):
+                                with ui.row().classes('w-full items-center gap-3'):
+                                    ui.icon(icon, size='md').style('color: #C9A227;')
+                                    with ui.column().classes('flex-1 gap-0'):
+                                        ui.label(title).classes('font-semibold')
+                                        ui.label(desc).classes('text-xs opacity-60')
+
+                # System Info Footer
+                with ui.element('div').classes('w-full mt-6 pt-4').style('border-top: 1px solid rgba(255,255,255,0.1);'):
+                    with ui.row().classes('w-full justify-between items-center'):
+                        with ui.row().classes('items-center gap-4'):
+                            # Python version
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('code', size='xs').classes('opacity-40')
+                                ui.label(f'Python {platform.python_version()}').classes('text-xs opacity-40')
+                            # Platform
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('computer', size='xs').classes('opacity-40')
+                                ui.label(f'{platform.system()} {platform.release()}').classes('text-xs opacity-40')
+                            # App version
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('info', size='xs').classes('opacity-40')
+                                ui.label('TJM Calendar v1.0').classes('text-xs opacity-40')
+                        # Refresh button
+                        ui.button('Refresh Dashboard', icon='refresh', on_click=lambda: ui.navigate.to('/admin/system')).props('flat dense size=sm').style('color: #C9A227 !important;')
+
+            # ========== DATA TAB (Database + EOY + Market Calendar) ==========
+            with ui.tab_panel(data_tab):
                 db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0  # MB
 
                 # Database Status Card
@@ -653,572 +825,8 @@ def admin_system_page():
 
                     refresh_holiday_stats()
 
-            # ========== HANDBOOK TAB ==========
-            with ui.tab_panel(handbook_tab):
-                # Handbook Management Header Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('menu_book', size='sm', color='amber')
-                        ui.label('Handbook Management').classes('text-lg font-semibold')
-                        create_help_button(
-                            'Handbook Management',
-                            'Manage your employee handbook and track policy changes over time.<br><br>'
-                            '<b>Features:</b><br>'
-                            '• View current handbook content<br>'
-                            '• Upload new handbook versions<br>'
-                            '• AI-powered policy extraction<br>'
-                            '• Version history with rollback<br>'
-                            '• 30-day change indicators<br><br>'
-                            '<i>Changes are tracked and communicated to all employees.</i>'
-                        )
-
-                    ui.label('View and manage your employee handbook. Policy changes are automatically tracked and communicated.').classes('text-sm opacity-70')
-
-                # Action buttons
-                with ui.row().classes('w-full gap-4 mb-4'):
-                    ui.button('View Handbook', icon='visibility', on_click=lambda: ui.navigate.to('/admin/handbook')).props('color=primary')
-                    ui.button('Upload New Version', icon='upload_file', on_click=lambda: ui.navigate.to('/admin/handbook?action=upload')).props('color=secondary outline')
-
-                # Current Handbook Status
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('article', size='sm', color='blue')
-                        ui.label('Current Handbook').classes('text-lg font-semibold')
-                        create_help_button(
-                            'Current Handbook',
-                            'Shows the currently active handbook version.<br><br>'
-                            '<b>Version:</b> The handbook version identifier<br>'
-                            '<b>Published:</b> When this version became active<br>'
-                            '<b>Sections:</b> Number of policy sections defined<br><br>'
-                            '<i>Click "View Handbook" to see the full content.</i>'
-                        )
-
-                    # Get current handbook info
-                    from src.models.handbook_upload import HandbookUpload
-                    db_handbook = next(get_db())
-                    try:
-                        current_handbook = db_handbook.query(HandbookUpload).filter(
-                            HandbookUpload.status == 'published'
-                        ).order_by(HandbookUpload.published_at.desc()).first()
-
-                        # Use CSS grid for status cards
-                        with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;'):
-                            # Version
-                            with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
-                                ui.label('Version').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                if current_handbook:
-                                    ui.label(current_handbook.version).classes('font-mono text-lg font-semibold')
-                                else:
-                                    ui.label('v1.0 (Default)').classes('font-mono text-lg font-semibold')
-
-                            # Published Date
-                            with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
-                                ui.label('Published').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                if current_handbook and current_handbook.published_at:
-                                    ui.label(current_handbook.published_at.strftime('%b %d, %Y')).classes('text-lg font-semibold')
-                                else:
-                                    ui.label('Built-in').classes('text-lg font-semibold')
-
-                            # Status
-                            with ui.card().classes('p-4 bg-green-50 dark:bg-green-900/20'):
-                                ui.label('Status').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                with ui.row().classes('items-center gap-2'):
-                                    ui.icon('check_circle', color='green', size='sm')
-                                    ui.label('Active').classes('text-lg font-semibold')
-                    finally:
-                        db_handbook.close()
-
-                # Recent Policy Changes
-                with ui.card().classes('w-full p-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('history', size='sm', color='purple')
-                        ui.label('Recent Policy Changes').classes('text-lg font-semibold')
-                        create_help_button(
-                            'Recent Policy Changes',
-                            'Shows policy changes from the last 30 days.<br><br>'
-                            '<b>Change indicators:</b><br>'
-                            '• <span style="color: #22c55e;">Green badge</span> - New or increased value<br>'
-                            '• <span style="color: #f59e0b;">Amber badge</span> - Reverted change<br><br>'
-                            'These changes are displayed throughout the app with tooltips showing the old and new values.<br><br>'
-                            '<i>Indicators automatically expire after 30 days.</i>'
-                        )
-
-                    # Get recent changes
-                    from src.models.policy_change_log import PolicyChangeLog
-                    db_changes = next(get_db())
-                    try:
-                        from datetime import timedelta
-                        thirty_days_ago = datetime.now() - timedelta(days=30)
-                        recent_changes = db_changes.query(PolicyChangeLog).filter(
-                            PolicyChangeLog.created_at >= thirty_days_ago
-                        ).order_by(PolicyChangeLog.created_at.desc()).limit(5).all()
-
-                        if recent_changes:
-                            for change in recent_changes:
-                                days_left = (change.expires_at - datetime.now()).days if change.expires_at else 0
-                                with ui.card().classes('w-full p-3 mb-2 bg-gray-50 dark:bg-gray-800'):
-                                    with ui.row().classes('w-full items-center justify-between'):
-                                        with ui.row().classes('items-center gap-3'):
-                                            icon_name = 'undo' if change.is_revert else 'update'
-                                            icon_color = 'amber' if change.is_revert else 'green'
-                                            ui.icon(icon_name, color=icon_color)
-                                            with ui.column().classes('gap-0'):
-                                                ui.label(change.policy_type.replace('_', ' ').title()).classes('font-semibold')
-                                                ui.label(change.ai_summary or 'Policy updated').classes('text-sm opacity-70')
-                                        with ui.column().classes('items-end gap-1'):
-                                            with ui.row().classes('items-center gap-2'):
-                                                ui.label(change.old_value_display).classes('line-through opacity-50 text-sm')
-                                                ui.icon('arrow_forward', size='xs')
-                                                ui.label(change.new_value_display).classes('font-bold text-green-500')
-                                            ui.label(f'{days_left}d left').classes('text-xs opacity-50')
-                        else:
-                            with ui.row().classes('w-full justify-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg'):
-                                with ui.column().classes('items-center gap-2'):
-                                    ui.icon('check_circle', size='lg', color='green')
-                                    ui.label('No recent changes').classes('text-gray-500')
-                                    ui.label('Policy changes from the last 30 days will appear here').classes('text-sm text-gray-400')
-                    finally:
-                        db_changes.close()
-
-            # ========== POLICY REFERENCE TAB ==========
-            with ui.tab_panel(policy_tab):
-                # Header with explanation
-                with ui.card().classes('w-full p-4 mb-4 border-l-4').style('border-color: #c9a227'):
-                    with ui.row().classes('items-center gap-2'):
-                        ui.icon('info', color='amber')
-                        ui.label('Policy Quick Reference').classes('text-lg font-semibold')
-                    ui.label(
-                        'Read-only view of current HR policy parameters. '
-                        'Use this as a reference when updating the handbook or answering policy questions.'
-                    ).classes('text-sm opacity-70 mt-2')
-                    ui.label(
-                        'To modify these values, update the Employee Handbook or contact the development team for database changes.'
-                    ).classes('text-xs opacity-50 italic')
-
-                # Fetch data from database
-                db_policy = None
-                vacation_tiers = []
-
-                try:
-                    db_policy = next(get_db())
-                    vacation_tiers = db_policy.query(VacationAccrualTier).order_by(
-                        VacationAccrualTier.min_years_service
-                    ).all()
-                except Exception as e:
-                    ui.label(f'Error loading policy data: {str(e)}').classes('text-red-500')
-                finally:
-                    if db_policy:
-                        db_policy.close()
-
-                # ===== VACATION TIERS SECTION =====
-                with ui.expansion('Vacation Tiers (Tenure-Based)', icon='beach_access').classes('w-full mb-3').props('default-opened'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Annual vacation allocation based on years of service with the company.').classes('text-sm opacity-60 mb-4')
-
-                        # Table header
-                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
-                            ui.label('Years of Service').classes('flex-1')
-                            ui.label('Annual Days').classes('w-28 text-center')
-                            ui.label('Hours').classes('w-24 text-center')
-                            ui.label('Monthly Rate').classes('w-32 text-center')
-
-                        # Data rows from database
-                        if vacation_tiers:
-                            for tier in vacation_tiers:
-                                max_yrs = f"-{tier.max_years_service}" if tier.max_years_service else "+"
-                                hours = int(float(tier.annual_days) * 8)
-                                with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                    ui.label(f'{tier.min_years_service}{max_yrs} years').classes('flex-1')
-                                    ui.label(f'{tier.annual_days}').classes('w-28 text-center font-medium text-blue-400')
-                                    ui.label(f'{hours} hrs').classes('w-24 text-center opacity-70')
-                                    ui.label(f'{tier.monthly_accrual_rate} days/mo').classes('w-32 text-center opacity-60')
-                        else:
-                            # Show defaults if no database records
-                            ui.label('No vacation tiers configured in database. Default values:').classes('text-amber-500 mb-3')
-                            default_tiers = [
-                                ('0-1 years', 10, 80, '0.83'),
-                                ('2-4 years', 12, 96, '1.00'),
-                                ('5-9 years', 15, 120, '1.25'),
-                                ('10+ years', 20, 160, '1.67'),
-                            ]
-                            for label, days, hours, monthly in default_tiers:
-                                with ui.row().classes('w-full py-2 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                    ui.label(label).classes('flex-1')
-                                    ui.label(f'{days}').classes('w-28 text-center font-medium text-blue-400')
-                                    ui.label(f'{hours} hrs').classes('w-24 text-center opacity-70')
-                                    ui.label(f'{monthly} days/mo').classes('w-32 text-center opacity-60')
-
-                        ui.label('Source: VacationAccrualTier database table').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== ANNUAL LEAVE ALLOCATIONS SECTION =====
-                with ui.expansion('Annual Leave Allocations', icon='calendar_today').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Standard annual PTO allocations granted on January 1st each year.').classes('text-sm opacity-60 mb-4')
-
-                        allocations = [
-                            ('Sick Leave', '5 days', '40 hours', 'Annual sick time allocation', 'local_hospital', 'green'),
-                            ('Personal Days', '2 days', '16 hours', 'Use-it-or-lose-it (no carryover)', 'person', 'purple'),
-                            ('Chicago Paid Leave', '5 days', '40 hours', 'Chicago ordinance (if applicable)', 'location_city', 'amber'),
-                        ]
-
-                        # Table header
-                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
-                            ui.label('Leave Type').classes('flex-1')
-                            ui.label('Days').classes('w-24 text-center')
-                            ui.label('Hours').classes('w-24 text-center')
-                            ui.label('Notes').classes('w-48')
-
-                        for name, days, hours, notes, icon, color in allocations:
-                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                with ui.row().classes('flex-1 items-center gap-2'):
-                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
-                                    ui.label(name)
-                                ui.label(days).classes(f'w-24 text-center font-medium text-{color}-400')
-                                ui.label(hours).classes('w-24 text-center opacity-70')
-                                ui.label(notes).classes('w-48 text-xs opacity-60')
-
-                        ui.label('Source: year_end_service.py, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== CARRYOVER LIMITS SECTION =====
-                with ui.expansion('Carryover Limits', icon='sync').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Maximum hours that can be carried over to the next year.').classes('text-sm opacity-60 mb-4')
-
-                        carryover_limits = [
-                            ('Vacation', '0 hours', '0 days', 'Use-it-or-lose-it (exception bonus with approval)', 'beach_access', 'blue'),
-                            ('Sick Leave', '56-80 hours', '7-10 days', 'Auto-carries (varies by location)', 'local_hospital', 'green'),
-                            ('Personal Days', '0 hours', '0 days', 'Use-it-or-lose-it (no carryover)', 'person', 'purple'),
-                            ('Chicago Paid Leave', '16 hours', '2 days', 'Per Chicago ordinance', 'location_city', 'amber'),
-                        ]
-
-                        # Table header
-                        with ui.row().classes('w-full py-2 font-semibold opacity-70').style('border-bottom: 2px solid rgba(201, 162, 39, 0.3)'):
-                            ui.label('Leave Type').classes('flex-1')
-                            ui.label('Max Carryover').classes('w-28 text-center')
-                            ui.label('Days').classes('w-20 text-center')
-                            ui.label('Notes').classes('w-56')
-
-                        for name, hours, days, notes, icon, color in carryover_limits:
-                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                with ui.row().classes('flex-1 items-center gap-2'):
-                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
-                                    ui.label(name)
-                                ui.label(hours).classes(f'w-28 text-center font-medium text-{color}-400')
-                                ui.label(days).classes('w-20 text-center opacity-70')
-                                ui.label(notes).classes('w-56 text-xs opacity-60')
-
-                        ui.label('Source: LeavePolicy table, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== SPECIAL LEAVE POLICIES SECTION =====
-                with ui.expansion('Special Leave Policies (Non-Accruing)', icon='event_available').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Leave types without balance tracking. Used as needed with appropriate documentation.').classes('text-sm opacity-60 mb-4')
-
-                        special_leaves = [
-                            ('Bereavement - Immediate Family', '5 days', 'Spouse, child, parent, sibling, grandparent', 'sentiment_very_dissatisfied', 'indigo'),
-                            ('Bereavement - Extended Family', '3 days', 'In-laws, aunt, uncle, cousin, close friend', 'sentiment_very_dissatisfied', 'indigo'),
-                            ('FMLA', '12 weeks', 'Unpaid, job-protected family/medical leave', 'family_restroom', 'cyan'),
-                            ('Jury Duty', 'As needed', 'Paid time off for jury service', 'gavel', 'pink'),
-                            ('Voting Time', 'Up to 2 hours', 'If polls not open 4+ hours outside work schedule', 'how_to_vote', 'teal'),
-                            ('Military Leave', 'Per USERRA', 'Job-protected military service leave', 'military_tech', 'grey'),
-                        ]
-
-                        for name, duration, description, icon, color in special_leaves:
-                            with ui.row().classes('w-full py-3 items-center').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                with ui.row().classes('flex-1 items-center gap-2'):
-                                    ui.icon(icon, size='sm').classes(f'text-{color}-500')
-                                    ui.label(name)
-                                ui.label(duration).classes(f'w-28 text-center font-medium text-{color}-400')
-                                ui.label(description).classes('flex-1 text-sm opacity-70')
-
-                        ui.label('Source: request_form.py, business-rules.md').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== AUTO-APPROVAL RULES SECTION =====
-                with ui.expansion('Auto-Approval Rules', icon='verified').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Rules governing automatic PTO request approval.').classes('text-sm opacity-60 mb-4')
-
-                        # Trusted Employee Section
-                        with ui.card().classes('w-full p-3 mb-4').style('background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e'):
-                            ui.label('Trusted Employee Auto-Approve').classes('font-semibold text-green-500 mb-2')
-                            ui.label('Employees marked as "trusted" have these leave types auto-approved:').classes('text-sm opacity-70 mb-2')
-                            with ui.row().classes('gap-2 flex-wrap'):
-                                for ptype in ['Vacation', 'Sick', 'Personal']:
-                                    ui.badge(ptype, color='green').props('outline')
-                            ui.label('Manager receives notification email when auto-approval occurs.').classes('text-xs opacity-60 mt-2')
-
-                        # Always Requires Approval Section
-                        with ui.card().classes('w-full p-3 mb-4').style('background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b'):
-                            ui.label('Always Requires Manager Approval').classes('font-semibold text-amber-500 mb-2')
-                            ui.label('These leave types always require manual approval regardless of trusted status:').classes('text-sm opacity-70 mb-2')
-                            with ui.row().classes('gap-2 flex-wrap'):
-                                for ptype in ['Bereavement', 'FMLA', 'Jury Duty', 'Voting', 'Military', 'Work From Home']:
-                                    ui.badge(ptype, color='amber').props('outline')
-
-                        # Manager Self-Approval Section
-                        with ui.card().classes('w-full p-3').style('background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6'):
-                            ui.label('Manager/Admin Self-Approval').classes('font-semibold text-blue-500 mb-2')
-                            ui.label('Users with Manager, Admin, or SuperAdmin roles can self-approve:').classes('text-sm opacity-70 mb-2')
-                            with ui.row().classes('gap-2 flex-wrap'):
-                                for ptype in ['Vacation', 'Sick', 'Personal']:
-                                    ui.badge(ptype, color='blue').props('outline')
-                            ui.label('Special leave types still require documentation.').classes('text-xs opacity-60 mt-2')
-
-                        ui.label('Source: pto_service.py (TRUSTED_AUTO_APPROVE_TYPES)').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== FEDERAL HOLIDAYS SECTION =====
-                with ui.expansion('Federal Holidays (Auto-Generated)', icon='celebration').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Standard federal holidays automatically generated during year-end processing.').classes('text-sm opacity-60 mb-4')
-
-                        holidays = [
-                            ("New Year's Day", "January 1", "🎊"),
-                            ("Martin Luther King Jr. Day", "3rd Monday of January", "✊"),
-                            ("Presidents Day", "3rd Monday of February", "🏛️"),
-                            ("Good Friday", "Friday before Easter", "✝️"),
-                            ("Memorial Day", "Last Monday of May", "🎖️"),
-                            ("Juneteenth", "June 19", "✊"),
-                            ("Independence Day", "July 4", "🎆"),
-                            ("Labor Day", "1st Monday of September", "👷"),
-                            ("Thanksgiving", "4th Thursday of November", "🦃"),
-                            ("Christmas Day", "December 25", "🎄"),
-                        ]
-
-                        with ui.row().classes('gap-3 flex-wrap'):
-                            for name, date_rule, emoji in holidays:
-                                with ui.card().classes('p-3 min-w-52').style('background: rgba(201, 162, 39, 0.1)'):
-                                    with ui.row().classes('items-center gap-2'):
-                                        ui.label(emoji).classes('text-lg')
-                                        ui.label(name).classes('font-medium')
-                                    ui.label(date_rule).classes('text-xs opacity-60 mt-1')
-
-                        with ui.row().classes('items-center gap-2 mt-4'):
-                            ui.icon('info', size='xs', color='amber')
-                            ui.label('Weekend holidays are observed on the nearest weekday (Friday or Monday).').classes('text-xs opacity-60 italic')
-
-                        ui.label('Source: year_end_service.py, market_calendar_service.py').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== YEAR-END PROCESSING RULES =====
-                with ui.expansion('Year-End Processing Rules', icon='event_repeat').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Automatic processing that runs on first app access after January 1st.').classes('text-sm opacity-60 mb-4')
-
-                        rules = [
-                            ('1', 'Create new year PTO balances for all active employees', 'Uses vacation tier based on tenure at processing time'),
-                            ('2', 'Auto-carryover unused sick time (no approval needed)', 'Sick carries over automatically up to policy max'),
-                            ('3', 'Apply approved vacation exception carryover as BONUS', 'Only explicit manager-approved exceptions carry over'),
-                            ('4', 'Generate federal and market holidays for new year', 'NYSE, CME, CBOE holiday schedules'),
-                        ]
-
-                        for num, rule, detail in rules:
-                            with ui.row().classes('items-start gap-3 mb-3'):
-                                ui.badge(num, color='primary').classes('mt-1')
-                                with ui.column().classes('gap-1'):
-                                    ui.label(rule).classes('font-medium')
-                                    ui.label(detail).classes('text-xs opacity-60')
-
-                        ui.separator().classes('my-4')
-
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('warning', size='sm', color='amber')
-                            ui.label('Important: Processing runs automatically. Manual trigger available for SuperAdmins in EOY Processing tab.').classes('text-sm opacity-70')
-
-                        ui.label('Source: year_end_service.py').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== LOCATION-BASED POLICIES SECTION =====
-                with ui.expansion('Location-Based Policy Overrides', icon='location_on').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Policy resolution follows a hierarchy based on employee work location.').classes('text-sm opacity-60 mb-4')
-
-                        # Resolution Order
-                        ui.label('Policy Resolution Order:').classes('font-semibold mb-2')
-                        with ui.column().classes('gap-2 mb-4 pl-4'):
-                            with ui.row().classes('items-center gap-2'):
-                                ui.badge('1', color='primary')
-                                ui.label('City-specific policy (e.g., Chicago, IL)').classes('text-sm')
-                            with ui.row().classes('items-center gap-2'):
-                                ui.badge('2', color='secondary')
-                                ui.label('State-specific policy (e.g., Illinois)').classes('text-sm')
-                            with ui.row().classes('items-center gap-2'):
-                                ui.badge('3', color='grey')
-                                ui.label('Default policy (no location restriction)').classes('text-sm')
-
-                        ui.separator().classes('my-4')
-
-                        # Known Location Overrides
-                        ui.label('Active Location Overrides:').classes('font-semibold mb-2')
-
-                        location_overrides = [
-                            ('Chicago, IL', 'Chicago Paid Leave ordinance', 'teal'),
-                            ('Illinois', 'State sick leave requirements', 'blue'),
-                        ]
-
-                        for location, description, color in location_overrides:
-                            with ui.row().classes('items-center gap-3 mb-2'):
-                                ui.icon('place', size='sm').classes(f'text-{color}-500')
-                                ui.label(location).classes('font-medium w-32')
-                                ui.label(description).classes('text-sm opacity-70')
-
-                        ui.label('Source: LeavePolicy table, accrual_service.py').classes('text-xs opacity-40 mt-3 italic')
-
-                # ===== QUICK REFERENCE SUMMARY =====
-                with ui.expansion('Quick Reference Summary', icon='summarize').classes('w-full mb-3'):
-                    with ui.card().classes('w-full p-4'):
-                        ui.label('Common policy questions at a glance.').classes('text-sm opacity-60 mb-4')
-
-                        qa_items = [
-                            ('How much vacation do new employees get?', '10 days (80 hours) for 0-1 years of service'),
-                            ('When do employees get more vacation?', 'At 2, 5, and 10 years of service'),
-                            ('How much sick time per year?', '5 days (40 hours)'),
-                            ('Can vacation roll over?', 'No by default (use-it-or-lose-it). Exception bonus possible with approval'),
-                            ('Can sick time roll over?', 'Yes, automatically up to 56-80 hours by location'),
-                            ('Do personal days roll over?', 'No, use-it-or-lose-it'),
-                            ('Who can self-approve PTO?', 'Managers, Admins, and SuperAdmins'),
-                            ('What is a trusted employee?', 'Employee with auto-approve for vacation/sick/personal'),
-                            ('When does year-end processing run?', 'Automatically on first login after January 1st'),
-                            ('How many federal holidays?', '10 holidays per year'),
-                        ]
-
-                        for question, answer in qa_items:
-                            with ui.row().classes('w-full py-2 items-start').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
-                                ui.label(question).classes('flex-1 font-medium')
-                                ui.label(answer).classes('flex-1 text-sm opacity-70')
-
-            # ========== EOY PROCESSING TAB ==========
-            with ui.tab_panel(eoy_tab):
-                # EOY Header Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('event_repeat', size='sm', color='red')
-                        ui.label('End of Year Processing').classes('text-lg font-semibold')
-                        create_help_button(
-                            'End of Year Processing',
-                            'Year-end processing manages PTO balance transitions between calendar years.<br><br>'
-                            '<b>What happens during EOY:</b><br>'
-                            '• Sick time carryover is calculated per policy limits<br>'
-                            '• Vacation balances reset to new allocations<br>'
-                            '• Unused personal time is forfeited<br>'
-                            '• Historical records are preserved<br><br>'
-                            '<b>Important:</b> Create a database backup before running EOY processing!'
-                        )
-
-                    ui.label('Manage year-end balance transitions, carryover calculations, and new year allocations.').classes('text-sm opacity-70')
-
-                # Quick Actions
-                with ui.row().classes('w-full gap-4 mb-4'):
-                    ui.button('Go to EOY Processing', icon='open_in_new', on_click=lambda: ui.navigate.to('/admin/year-end')).props('color=primary')
-                    ui.button('Go to Carryover', icon='sync', on_click=lambda: ui.navigate.to('/carryover')).props('color=secondary outline')
-
-                # Current Status Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('assessment', size='sm', color='blue')
-                        ui.label('Processing Status').classes('text-lg font-semibold')
-
-                    current_year = datetime.now().year
-                    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;'):
-                        with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
-                            ui.label('Current Year').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                            ui.label(str(current_year)).classes('text-2xl font-bold')
-                        with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
-                            ui.label('Next EOY').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                            ui.label(f'Dec 31, {current_year}').classes('font-semibold')
-
-                    ui.label('Use the EOY Processing page to run year-end balance transitions when ready.').classes('text-sm opacity-70 mt-4')
-
-            # ========== ANALYTICS TAB ==========
-            with ui.tab_panel(analytics_tab):
-                # Analytics Header Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('analytics', size='sm', color='green')
-                        ui.label('Analytics & Insights').classes('text-lg font-semibold')
-                        create_help_button(
-                            'Analytics & Insights',
-                            'View usage patterns and insights about PTO across the organization.<br><br>'
-                            '<b>Available analytics:</b><br>'
-                            '• Department-level PTO usage<br>'
-                            '• Trending request patterns<br>'
-                            '• Approval rate metrics<br>'
-                            '• Balance distribution<br><br>'
-                            '<i>Use these insights to improve workforce planning.</i>'
-                        )
-
-                    ui.label('Explore PTO usage trends, department patterns, and organizational insights.').classes('text-sm opacity-70')
-
-                # Quick Actions
-                with ui.row().classes('w-full gap-4 mb-4'):
-                    ui.button('Go to Analytics', icon='open_in_new', on_click=lambda: ui.navigate.to('/analytics')).props('color=primary')
-                    ui.button('Go to Reports', icon='summarize', on_click=lambda: ui.navigate.to('/reports')).props('color=secondary outline')
-
-                # Analytics Summary Card
-                with ui.card().classes('w-full p-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('trending_up', size='sm', color='blue')
-                        ui.label('Quick Stats').classes('text-lg font-semibold')
-
-                    from src.models.pto_request import PTORequest
-                    from src.models.user import User
-                    db_analytics = next(get_db())
-                    try:
-                        total_requests = db_analytics.query(PTORequest).count()
-                        pending_requests = db_analytics.query(PTORequest).filter(PTORequest.status == 'pending').count()
-                        total_employees = db_analytics.query(User).filter(User.role.in_(['employee', 'manager'])).count()
-
-                        with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;'):
-                            with ui.card().classes('p-4 bg-blue-50 dark:bg-blue-900/20'):
-                                ui.label('Total Requests').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                ui.label(str(total_requests)).classes('text-2xl font-bold')
-                            with ui.card().classes('p-4 bg-amber-50 dark:bg-amber-900/20'):
-                                ui.label('Pending').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                ui.label(str(pending_requests)).classes('text-2xl font-bold')
-                            with ui.card().classes('p-4 bg-green-50 dark:bg-green-900/20'):
-                                ui.label('Employees').classes('text-xs text-gray-500 uppercase tracking-wide mb-2')
-                                ui.label(str(total_employees)).classes('text-2xl font-bold')
-                    except Exception:
-                        ui.label('Unable to load analytics').classes('text-sm opacity-70')
-                    finally:
-                        db_analytics.close()
-
-            # ========== AUTO NOTIFY TAB ==========
-            with ui.tab_panel(autonotify_tab):
-                # Auto Notify Header Card
-                with ui.card().classes('w-full p-4 mb-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('notifications_active', size='sm', color='amber')
-                        ui.label('Auto Notify Reports').classes('text-lg font-semibold')
-                        create_help_button(
-                            'Auto Notify Reports',
-                            'Configure automatic report delivery to department heads and administrators.<br><br>'
-                            '<b>Features:</b><br>'
-                            '• Schedule daily/weekly report emails<br>'
-                            '• Select recipients by department<br>'
-                            '• Choose which reports to include<br>'
-                            '• View delivery history<br><br>'
-                            '<i>Reports are sent based on configured schedules.</i>'
-                        )
-
-                    ui.label('Manage automated report scheduling and delivery preferences.').classes('text-sm opacity-70')
-
-                # Quick Actions
-                with ui.row().classes('w-full gap-4 mb-4'):
-                    ui.button('Go to Auto Notify Settings', icon='open_in_new', on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('color=primary')
-
-                # Scheduled Reports Card
-                with ui.card().classes('w-full p-4'):
-                    with ui.row().classes('items-center gap-2 mb-4'):
-                        ui.icon('schedule', size='sm', color='blue')
-                        ui.label('Report Scheduling').classes('text-lg font-semibold')
-
-                    with ui.row().classes('w-full justify-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg'):
-                        with ui.column().classes('items-center gap-2'):
-                            ui.icon('schedule_send', size='lg', color='amber')
-                            ui.label('Auto Notify Reports').classes('font-semibold')
-                            ui.label('Configure automated report delivery to department heads').classes('text-sm text-gray-400')
-                            ui.label('Click the button above to manage schedules').classes('text-xs opacity-60 mt-2')
-
-            # ========== EMAIL CONFIG TAB ==========
-            with ui.tab_panel(email_tab):
+            # ========== COMMUNICATIONS TAB (Email Config + Auto Notify) ==========
+            with ui.tab_panel(comms_tab):
                 # Current config values
                 smtp_host = os.getenv('SMTP_HOST', '')
                 smtp_port = os.getenv('SMTP_PORT', '')
@@ -1511,8 +1119,8 @@ def admin_system_page():
 
                         ui.button('Send Test', icon='send', on_click=send_test_email).props('color=primary')
 
-            # ========== LOGS TAB ==========
-            with ui.tab_panel(logs_tab):
+            # ========== SYSTEM TAB (Logs + Settings + Policy) ==========
+            with ui.tab_panel(system_tab):
                 # Log file paths (reuse logs_dir from status overview)
                 main_log_path = logs_dir / 'tjm_calendar.log'
                 error_log_path = logs_dir / 'tjm_calendar_errors.log'
@@ -1935,9 +1543,12 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                                     ui.label(f'Error: {str(e)}').classes('text-sm')
                             show_error_dialog('Analysis Failed', f'Error during log analysis: {str(e)}')
 
-            # ========== SETTINGS TAB ==========
-            with ui.tab_panel(settings_tab):
-                # Security Settings Card
+                # ========== SETTINGS SECTION ==========
+                ui.separator().classes('my-6')
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.icon('settings', size='md', color='primary')
+                    ui.label('System Settings').classes('text-lg font-semibold')
+
                 with ui.card().classes('w-full p-4 mb-4'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('security', size='sm', color='blue')
@@ -2160,6 +1771,187 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                                 ui.label('NiceGUI').classes('font-semibold')
                             ui.label(nicegui_version).classes('font-mono text-lg')
 
-        # Back button
+                # ========== POLICY REFERENCE SECTION ==========
+                ui.separator().classes('my-6')
+                with ui.row().classes('items-center gap-2 mb-4'):
+                    ui.icon('policy', size='md', color='amber')
+                    ui.label('Policy Quick Reference').classes('text-lg font-semibold')
+
+                # 1. Vacation Tiers
+                with ui.expansion('Vacation Tiers (Tenure-Based)', icon='beach_access').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Annual vacation allocation based on years of service:').classes('text-sm opacity-70 mb-3')
+                        tiers = [
+                            ('0-1 years', '10 days (80 hrs)'),
+                            ('2-4 years', '12 days (96 hrs)'),
+                            ('5-9 years', '15 days (120 hrs)'),
+                            ('10+ years', '20 days (160 hrs)'),
+                        ]
+                        for years, days in tiers:
+                            with ui.row().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(years).classes('flex-1 font-medium')
+                                ui.label(days).classes('text-sm opacity-70')
+
+                # 2. Annual Leave Allocations
+                with ui.expansion('Annual Leave Allocations', icon='calendar_today').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Front-loaded allocation on January 1st each year:').classes('text-sm opacity-70 mb-3')
+                        allocations = [
+                            ('Vacation', 'Based on tenure tier (see above)'),
+                            ('Sick', '5 days (40 hrs) per year'),
+                            ('Personal', '2 days (16 hrs) per year'),
+                        ]
+                        for leave_type, amount in allocations:
+                            with ui.row().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(leave_type).classes('w-24 font-medium')
+                                ui.label(amount).classes('flex-1 text-sm opacity-70')
+                        ui.label('No monthly accrual - employees get full balance upfront.').classes('text-xs opacity-50 italic mt-3')
+
+                # 3. Carryover Rules
+                with ui.expansion('Carryover Rules', icon='sync').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        carryover_rules = [
+                            ('Vacation', 'NO auto-carryover (use-it-or-lose-it)', 'Exception requests may be approved by manager as BONUS'),
+                            ('Sick', 'AUTO-carryover', 'Up to 56-80 hrs based on location policy'),
+                            ('Personal', 'NO carryover', 'Use-it-or-lose-it, does not roll over'),
+                        ]
+                        for leave_type, rule, detail in carryover_rules:
+                            with ui.column().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                with ui.row().classes('w-full items-center'):
+                                    ui.label(leave_type).classes('w-24 font-medium')
+                                    ui.label(rule).classes('font-semibold')
+                                ui.label(detail).classes('text-sm opacity-70 pl-24')
+
+                # 4. Leave Types (Accruing vs Non-Accruing)
+                with ui.expansion('Leave Types & Policies', icon='event_available').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Accruing Leave (tracked in balance):').classes('font-semibold mb-2')
+                        accruing = [
+                            ('Vacation', 'Primary PTO, requires approval, pending tracking'),
+                            ('Sick', 'No pending tracking, auto-carryover up to policy max'),
+                            ('Personal', '24hr advance notice preferred when possible'),
+                        ]
+                        for leave_type, desc in accruing:
+                            with ui.row().classes('w-full py-1'):
+                                ui.label(f'• {leave_type}:').classes('w-24 font-medium')
+                                ui.label(desc).classes('flex-1 text-sm opacity-70')
+
+                        ui.separator().classes('my-3')
+                        ui.label('Non-Accruing Leave (no balance limits):').classes('font-semibold mb-2')
+                        non_accruing = [
+                            ('Bereavement', 'Immediate family: 5 days | Extended family: 3 days'),
+                            ('FMLA', 'Up to 12 weeks unpaid, job-protected'),
+                            ('Jury Duty', 'Paid time for service'),
+                            ('Voting', 'Up to 2 hours if needed'),
+                            ('Military', 'Per USERRA requirements'),
+                        ]
+                        for leave_type, desc in non_accruing:
+                            with ui.row().classes('w-full py-1'):
+                                ui.label(f'• {leave_type}:').classes('w-28 font-medium')
+                                ui.label(desc).classes('flex-1 text-sm opacity-70')
+
+                # 5. Request Workflow & Auto-Approval
+                with ui.expansion('Request Workflow & Approvals', icon='approval').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Employee Requests:').classes('font-semibold mb-2')
+                        employee_flow = [
+                            '1. Employee submits request (status: pending)',
+                            '2. Vacation hours added to pending balance',
+                            '3. Manager reviews and approves/denies',
+                            '4. On approval: pending moves to used',
+                            '5. On denial: pending hours returned',
+                        ]
+                        for step in employee_flow:
+                            ui.label(step).classes('text-sm opacity-70 py-1')
+
+                        ui.separator().classes('my-3')
+                        ui.label('Auto-Approval (No Manager Review):').classes('font-semibold mb-2')
+                        ui.label('The following roles can self-approve their own PTO:').classes('text-sm opacity-70 mb-2')
+                        auto_approve_roles = ['Managers', 'Admins', 'SuperAdmins']
+                        for role in auto_approve_roles:
+                            ui.label(f'• {role}').classes('text-sm opacity-70 pl-4')
+                        ui.label('Hours go directly to used (no pending state).').classes('text-xs opacity-50 italic mt-2')
+
+                # 6. Federal Holidays
+                with ui.expansion('Federal Holidays (10 per year)', icon='celebration').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Auto-generated each year. Weekend holidays observed on nearest weekday.').classes('text-sm opacity-70 mb-3')
+                        with ui.row().classes('w-full gap-8'):
+                            with ui.column().classes('flex-1'):
+                                holidays_col1 = ["New Year's Day", 'MLK Day', 'Presidents Day', 'Good Friday', 'Memorial Day']
+                                for holiday in holidays_col1:
+                                    ui.label(f'• {holiday}').classes('text-sm py-1')
+                            with ui.column().classes('flex-1'):
+                                holidays_col2 = ['Juneteenth', 'Independence Day', 'Labor Day', 'Thanksgiving', 'Christmas Day']
+                                for holiday in holidays_col2:
+                                    ui.label(f'• {holiday}').classes('text-sm py-1')
+
+                # 7. Year-End Processing
+                with ui.expansion('Year-End Processing', icon='event_repeat').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Runs automatically on first app access of new year:').classes('text-sm opacity-70 mb-3')
+                        year_end_steps = [
+                            ('1. Create new year balances', 'For all active employees'),
+                            ('2. Auto-carryover sick leave', 'Up to policy maximum (varies by location)'),
+                            ('3. Apply exception carryover', 'Approved vacation carryover as BONUS'),
+                            ('4. Generate federal holidays', 'For the new year'),
+                        ]
+                        for step, desc in year_end_steps:
+                            with ui.row().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(step).classes('w-48 font-medium')
+                                ui.label(desc).classes('flex-1 text-sm opacity-70')
+                        ui.label('Note: Personal days do NOT carry over.').classes('text-xs opacity-50 italic mt-3')
+
+                # 8. Location-Based Policies
+                with ui.expansion('Location-Based Policy Overrides', icon='location_on').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        ui.label('Policy Resolution Order (highest to lowest priority):').classes('text-sm opacity-70 mb-3')
+                        policy_order = [
+                            ('1. City-specific', 'e.g., Chicago, IL'),
+                            ('2. State-specific', 'e.g., IL'),
+                            ('3. Default', 'No location specified'),
+                        ]
+                        for priority, example in policy_order:
+                            with ui.row().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(priority).classes('w-32 font-medium')
+                                ui.label(example).classes('flex-1 text-sm opacity-70')
+
+                        ui.separator().classes('my-3')
+                        ui.label('Key State Variations:').classes('font-semibold mb-2')
+                        variations = [
+                            'Different sick leave accrual rates',
+                            'Different carryover maximums',
+                            'Different waiting periods for new employees',
+                        ]
+                        for v in variations:
+                            ui.label(f'• {v}').classes('text-sm opacity-70 py-1')
+
+                # 9. Quick FAQ
+                with ui.expansion('Quick FAQ', icon='help_outline').classes('w-full mb-2'):
+                    with ui.card().classes('w-full p-4'):
+                        qa_items = [
+                            ('Who can self-approve PTO?', 'Managers, Admins, and SuperAdmins'),
+                            ('When does year-end processing run?', 'Automatically on first login after January 1st'),
+                            ('How many federal holidays are there?', '10 per year'),
+                            ('Can I request time off for next year?', 'Yes, up to 5 years in advance'),
+                            ('What if my request exceeds my balance?', 'Warning shown, but submission NOT blocked - manager discretion'),
+                            ('How does vacation carryover work?', 'Exception only - must be approved by manager as a BONUS'),
+                            ('Does sick leave carry over?', 'Yes, automatically up to the location policy maximum'),
+                        ]
+                        for q, a in qa_items:
+                            with ui.column().classes('w-full py-2').style('border-bottom: 1px solid rgba(255,255,255,0.1)'):
+                                ui.label(q).classes('font-medium')
+                                ui.label(a).classes('text-sm opacity-70 mt-1')
+
+                ui.label('For full policy details, see the Employee Handbook.').classes('text-xs opacity-50 italic mt-4')
+
+        # Back button - returns to Overview tab first, then to previous page
+        def handle_back():
+            """If on a non-Overview tab, go to Overview first. Otherwise use browser history."""
+            if tabs.value != overview_tab:
+                tabs.set_value(overview_tab)
+            else:
+                go_back()
+
         with ui.row().classes('w-full mt-6'):
-            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=handle_back).props('outline')

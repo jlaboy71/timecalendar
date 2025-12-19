@@ -1,4 +1,7 @@
 """Admin page for managing departments with row-based UI and professional styling."""
+import re
+import json
+from datetime import datetime
 from nicegui import ui, app, context
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
@@ -14,7 +17,10 @@ from nicegui_app.components.theme import (
 )
 from src.services.department_service import DepartmentService
 from src.services.user_service import UserService
+from src.services.balance_service import BalanceService
+from src.services.audit_service import AuditService
 from src.models.user import User
+from src.schemas.user_schemas import UserCreate, UserUpdate
 
 # TJM Brand Colors
 TJM_GOLD = "#c9a227"
@@ -103,9 +109,13 @@ def admin_departments_page():
         """Load all department data with members."""
         db = next(get_db())
         try:
+            # Include managers, admins, and superadmins as potential department managers
             managers = UserService.get_users_by_role(db, 'manager')
+            admins = UserService.get_users_by_role(db, 'admin')
+            superadmins = UserService.get_users_by_role(db, 'superadmin')
+            all_managers = list(managers) + list(admins) + list(superadmins)
             manager_options = {0: 'No Manager'}
-            manager_options.update({m.id: f'{m.first_name} {m.last_name}' for m in managers})
+            manager_options.update({m.id: f'{m.first_name} {m.last_name}' for m in all_managers})
             departments = DepartmentService.get_all_departments(db)
 
             dept_data = []
@@ -193,8 +203,8 @@ def admin_departments_page():
                         ui.label('Add Department').classes('text-xs opacity-60')
                 ui.tooltip('Create a new department')
 
-            # Add Employee - action card
-            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {TJM_GOLD};').on('click', lambda: ui.navigate.to('/admin/employees/add')):
+            # Add Employee - action card (opens slide-out panel)
+            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {TJM_GOLD};').on('click', lambda: show_add_employee_panel()):
                 with ui.row().classes('items-center gap-3'):
                     with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {TJM_GOLD}, #b8922a);'):
                         ui.icon('person_add', color='white').classes('text-xl')
@@ -222,7 +232,7 @@ def admin_departments_page():
                         render_department_row(dept)
 
         def render_department_row(dept: dict):
-            """Render a single department as a horizontal row - clickable to view team."""
+            """Render a single department as a horizontal row with action buttons."""
             # Determine border color based on status
             if not dept['is_active']:
                 border_color = '#64748b'  # Gray - inactive
@@ -238,7 +248,7 @@ def admin_departments_page():
             # Make a copy for closure
             dept_copy = dict(dept)
 
-            with ui.card().classes('w-full p-4 hover:shadow-lg transition-all cursor-pointer').style(f'border-left: 4px solid {border_color};') as card:
+            with ui.card().classes('w-full p-4 hover:shadow-lg transition-all').style(f'border-left: 4px solid {border_color};'):
                 with ui.row().classes('w-full items-center'):
                     # LEFT: Icon + Name and Code
                     with ui.row().classes('items-center gap-3').style('width: 280px; flex-shrink: 0;'):
@@ -265,14 +275,11 @@ def admin_departments_page():
                             count = dept['employee_count']
                             ui.label(f"{count} Employee{'s' if count != 1 else ''}").classes('text-sm')
 
-                    # RIGHT: Edit and Delete buttons only (row click shows team)
+                    # RIGHT: Action buttons (view team, edit, delete)
                     with ui.row().classes('gap-2 flex-shrink-0'):
-                        ui.button(icon='edit', on_click=lambda e, d=dept: open_edit_dialog(d)).props('flat dense').tooltip('Edit Department')
-                        ui.button(icon='delete', on_click=lambda e, d=dept: open_delete_dialog(d)).props('flat color=red dense').tooltip('Delete Department')
-
-                # Make entire card clickable to view team (e for event)
-                card.on('click', lambda e, d=dept_copy: show_team_panel(d))
-                card.tooltip('Click to view team')
+                        ui.button(icon='visibility', on_click=lambda e, d=dept_copy: show_team_panel(d)).props('flat dense').tooltip('View Team')
+                        ui.button(icon='edit', on_click=lambda e, d=dept_copy: open_edit_dialog(d)).props('flat dense').tooltip('Edit Department')
+                        ui.button(icon='delete', on_click=lambda e, d=dept_copy: open_delete_dialog(d)).props('flat color=red dense').tooltip('Delete Department')
 
         # ============ STAT TILE DETAIL DIALOGS ============
 
@@ -537,9 +544,8 @@ def admin_departments_page():
             dialog.open()
 
         def open_edit_dialog(dept: dict):
-            """Open edit department dialog - uses context.client.content to ensure proper rendering."""
-            # Use context.client.content to create dialog at root level (fixes nested dialog issue)
-            with context.client.content:
+            """Open edit department dialog."""
+            try:
                 with ui.dialog() as dialog, ui.card().classes('p-6 w-96 animate-fade-in-up'):
                     with ui.row().classes('w-full items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700'):
                         ui.label(f"Edit: {dept['name']}").classes('text-xl font-semibold')
@@ -547,7 +553,9 @@ def admin_departments_page():
 
                     edit_name = ui.input('Department Name', value=dept['name']).props('outlined').classes('w-full mb-4')
                     edit_code = ui.input('Department Code', value=dept['code']).props('outlined').classes('w-full mb-4')
-                    edit_manager = ui.select(manager_options, label='Manager', value=dept['manager_id']).props('outlined').classes('w-full mb-6')
+                    # Use 0 as default if manager_id not in options
+                    mgr_value = dept['manager_id'] if dept['manager_id'] in manager_options else 0
+                    edit_manager = ui.select(manager_options, label='Manager', value=mgr_value).props('outlined').classes('w-full mb-6')
 
                     def save_changes():
                         valid = True
@@ -575,6 +583,8 @@ def admin_departments_page():
                         ui.button('Save Changes', icon='save', on_click=save_changes).classes('btn-gold')
 
                 dialog.open()
+            except Exception as e:
+                ui.notify(f'Error creating dialog: {str(e)}', type='negative')
 
         def open_delete_dialog(dept: dict):
             """Open delete confirmation dialog."""
@@ -641,12 +651,7 @@ def admin_departments_page():
                             with ui.row().classes('items-center gap-2'):
                                 ui.icon('warning', color='amber')
                                 ui.label('No manager assigned').classes('text-amber-600')
-
-                            def assign_handler():
-                                panel.close()
-                                open_edit_dialog(dept)
-
-                            ui.button('Assign Manager', icon='person_add', on_click=assign_handler).props('outline dense color=amber').classes('mt-3')
+                            ui.label('Use the edit button to assign a manager').classes('text-xs opacity-50 mt-1')
 
                     # Team members list
                     with ui.scroll_area().classes('flex-1'):
@@ -677,13 +682,280 @@ def admin_departments_page():
                                                 with ui.element('div').classes('flex-shrink-0').style('width: 80px;'):
                                                     ui.badge(emp['role'].title(), color=role_colors.get(emp['role'], 'gray')).props('dense')
 
+            panel.open()
+
+        def show_add_employee_panel():
+            """Show slide-out panel for adding a new employee."""
+            # Load department options
+            db = next(get_db())
+            try:
+                departments = DepartmentService.get_all_departments(db)
+                panel_dept_options = {None: 'Select Department'}
+                panel_dept_options.update({dept.id: dept.name for dept in departments})
+            finally:
+                db.close()
+
+            with ui.dialog().props('position=right full-height') as panel:
+                with ui.card().classes('h-full p-0 animate-fade-in').style('width: 500px;'):
+                    # Panel header
+                    with ui.element('div').classes('p-5 border-b').style(f'background: linear-gradient(135deg, {TJM_GOLD} 0%, #b8922a 100%)'):
+                        with ui.row().classes('w-full justify-between items-center'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('w-10 h-10 rounded-lg flex items-center justify-center').style('background: rgba(255,255,255,0.2);'):
+                                    ui.icon('person_add', color='white', size='sm')
+                                with ui.column().classes('gap-1'):
+                                    ui.label('Add New Employee').classes('text-xl font-semibold text-white')
+                                    ui.label('Quick create from this page').classes('text-sm text-white opacity-70')
+                            ui.button(icon='close', on_click=panel.close).props('flat round').classes('text-white')
+
+                    # Scrollable form content
+                    with ui.scroll_area().classes('flex-1'):
+                        with ui.element('div').classes('p-5'):
+                            # Basic Information
+                            ui.label('BASIC INFORMATION').classes('text-xs font-medium uppercase tracking-wide opacity-50 mb-3')
+                            with ui.column().classes('w-full gap-3 mb-6'):
+                                with ui.row().classes('w-full gap-3'):
+                                    first_name_input = ui.input('First Name').props('outlined dense').classes('flex-1')
+                                    last_name_input = ui.input('Last Name').props('outlined dense').classes('flex-1')
+
+                                with ui.row().classes('w-full gap-3'):
+                                    username_input = ui.input('Username').props('outlined dense').classes('flex-1')
+                                    email_input = ui.input('Email').props('outlined dense').classes('flex-1')
+
+                                # Password fields
+                                password_visible = {'value': False}
+                                with ui.row().classes('w-full gap-3'):
+                                    password_input = ui.input('Password', password=True).props('outlined dense').classes('flex-1')
+                                    confirm_password_input = ui.input('Confirm Password', password=True).props('outlined dense').classes('flex-1')
+
+                                with ui.row().classes('items-center gap-2'):
+                                    def toggle_password():
+                                        password_visible['value'] = not password_visible['value']
+                                        password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                                        confirm_password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                                        vis_icon.props(f'name={"visibility_off" if password_visible["value"] else "visibility"}')
+
+                                    vis_icon = ui.icon('visibility', size='xs').classes('cursor-pointer opacity-60 hover:opacity-100')
+                                    vis_icon.on('click', toggle_password)
+                                    ui.label('Show passwords').classes('text-xs opacity-60')
+
+                            # Employment Details
+                            ui.label('EMPLOYMENT DETAILS').classes('text-xs font-medium uppercase tracking-wide opacity-50 mb-3')
+                            with ui.column().classes('w-full gap-3 mb-6'):
+                                # Hire Date - full width row
+                                with ui.input('Hire Date').props('outlined dense readonly').classes('w-full') as hire_date_input:
+                                    with ui.menu().props('no-parent-event') as date_menu:
+                                        with ui.date(mask='YYYY-MM-DD').bind_value(hire_date_input):
+                                            with ui.row().classes('justify-end'):
+                                                ui.button('Close', on_click=date_menu.close).props('flat dense')
+                                    with hire_date_input.add_slot('append'):
+                                        ui.icon('event').on('click', date_menu.open).classes('cursor-pointer')
+
+                                # Department - full width with + button
+                                with ui.row().classes('w-full items-end gap-2'):
+                                    emp_dept_select = ui.select(panel_dept_options, label='Department', value=None).props('outlined dense').classes('flex-grow')
+
+                                    # Quick create department button
+                                    def open_quick_dept_dialog():
+                                        with context.client.content:
+                                            with ui.dialog() as dept_dialog, ui.card().classes('p-5').style('background-color: #1f2937; min-width: 400px;'):
+                                                with ui.row().classes('items-center gap-2 mb-4'):
+                                                    ui.icon('add_business', size='sm').style(f'color: {TJM_GOLD};')
+                                                    ui.label('Quick Create Department').classes('text-lg font-bold')
+
+                                                with ui.row().classes('w-full items-center gap-3'):
+                                                    quick_dept_icon = ui.icon('business', size='lg').style(f'color: {TJM_GOLD};')
+                                                    quick_dept_name = ui.input('Department Name').props('outlined dense').classes('flex-grow')
+
+                                                def update_quick_icon():
+                                                    if quick_dept_name.value:
+                                                        icon = get_dept_icon(quick_dept_name.value)
+                                                        quick_dept_icon.props(f'name={icon}')
+                                                    else:
+                                                        quick_dept_icon.props('name=business')
+
+                                                quick_dept_name.on('update:model-value', lambda e: update_quick_icon())
+                                                quick_dept_code = ui.input('Code', placeholder='e.g., ACCT').props('outlined dense').classes('w-full mt-2')
+
+                                                with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                                                    ui.button('Cancel', on_click=dept_dialog.close).props('flat')
+
+                                                    def create_quick_dept():
+                                                        if not quick_dept_name.value or not quick_dept_code.value:
+                                                            ui.notify('Name and code required', type='warning')
+                                                            return
+                                                        qdb = next(get_db())
+                                                        try:
+                                                            new_dept = DepartmentService.create_department(
+                                                                qdb, name=quick_dept_name.value.strip(),
+                                                                code=quick_dept_code.value.strip().upper()
+                                                            )
+                                                            if new_dept:
+                                                                panel_dept_options[new_dept.id] = new_dept.name
+                                                                emp_dept_select.options = panel_dept_options
+                                                                emp_dept_select.value = new_dept.id
+                                                                emp_dept_select.update()
+                                                                dept_dialog.close()
+                                                                ui.notify(f'Department "{new_dept.name}" created!', type='positive')
+                                                        except Exception as ex:
+                                                            ui.notify(f'Error: {str(ex)}', type='negative')
+                                                        finally:
+                                                            qdb.close()
+
+                                                    ui.button('Create', on_click=create_quick_dept).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+
+                                            dept_dialog.open()
+
+                                    ui.button(icon='add', on_click=open_quick_dept_dialog).props('flat dense').tooltip('Quick Create Department')
+
+                                # Department preview
+                                dept_preview = ui.row().classes('w-full')
+
+                                def update_dept_preview():
+                                    dept_preview.clear()
+                                    d_id = emp_dept_select.value
+                                    if d_id and d_id in panel_dept_options:
+                                        d_name = panel_dept_options[d_id]
+                                        d_icon = get_dept_icon(d_name)
+                                        d_color = get_dept_color(d_id)
+                                        with dept_preview:
+                                            with ui.card().classes('w-full p-2').style(f'border-left: 3px solid {d_color["bg"]}; background: {d_color["light"]}15;'):
+                                                with ui.row().classes('items-center gap-2'):
+                                                    with ui.element('div').classes('w-7 h-7 rounded flex items-center justify-center').style(f'background: {d_color["bg"]};'):
+                                                        ui.icon(d_icon, size='xs', color='white')
+                                                    ui.label(d_name).classes('text-sm font-medium')
+
+                                emp_dept_select.on('update:model-value', lambda e: update_dept_preview())
+
+                                with ui.row().classes('w-full gap-3'):
+                                    role_opts = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
+                                    role_select = ui.select(role_opts, label='Role', value='employee').props('outlined dense').classes('flex-1')
+
+                                with ui.row().classes('gap-4'):
+                                    is_active_check = ui.checkbox('Active', value=True)
+                                    is_trusted_check = ui.checkbox('Trusted', value=False)
+                                    with ui.element('div').classes('self-center'):
+                                        with ui.tooltip():
+                                            ui.label('Auto-approves Vacation, Sick, Personal PTO').classes('text-xs')
+                                        ui.icon('help_outline', size='xs').classes('opacity-50')
+
+                            # Work Location
+                            ui.label('WORK LOCATION').classes('text-xs font-medium uppercase tracking-wide opacity-50 mb-3')
+                            with ui.column().classes('w-full gap-3 mb-6'):
+                                state_opts = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
+                                city_opts = {None: 'Select City'}
+
+                                with ui.row().classes('w-full gap-3'):
+                                    state_select = ui.select(state_opts, label='State', value=None).props('outlined dense').classes('flex-1')
+                                    city_select = ui.select(city_opts, label='City', value=None).props('outlined dense').classes('flex-1')
+
+                                def update_cities():
+                                    st = state_select.value
+                                    city_map = {'IL': {'Chicago': 'Chicago'}, 'NY': {'New York': 'New York'}, 'CT': {'Rowayton': 'Rowayton'}, 'FL': {'Boca': 'Boca'}}
+                                    city_select.options = {None: 'Select City', **city_map.get(st, {})}
+                                    city_select.value = None
+                                    city_select.update()
+
+                                state_select.on('update:model-value', lambda e: update_cities())
+
+                            # Remote Work
+                            ui.label('REMOTE SCHEDULE').classes('text-xs font-medium uppercase tracking-wide opacity-50 mb-3')
+                            with ui.row().classes('w-full gap-4 justify-center'):
+                                mon_check = ui.checkbox('Mon')
+                                tue_check = ui.checkbox('Tue')
+                                wed_check = ui.checkbox('Wed')
+                                thu_check = ui.checkbox('Thu')
+                                fri_check = ui.checkbox('Fri')
+
                     # Panel footer
                     with ui.element('div').classes('p-4 border-t'):
-                        def edit_handler():
-                            panel.close()
-                            open_edit_dialog(dept)
+                        def create_employee():
+                            # Validation
+                            missing = []
+                            if not first_name_input.value: missing.append('First Name')
+                            if not last_name_input.value: missing.append('Last Name')
+                            if not username_input.value: missing.append('Username')
+                            if not email_input.value: missing.append('Email')
+                            if not password_input.value: missing.append('Password')
+                            elif len(password_input.value) < 8: missing.append('Password (min 8 chars)')
+                            if password_input.value != confirm_password_input.value: missing.append('Passwords must match')
+                            if not hire_date_input.value: missing.append('Hire Date')
+                            if not emp_dept_select.value: missing.append('Department')
+                            if not state_select.value: missing.append('State')
+                            if not city_select.value: missing.append('City')
 
-                        ui.button('Edit Department', icon='edit', on_click=edit_handler).props('outline').classes('w-full')
+                            if missing:
+                                ui.notify(f'Missing: {", ".join(missing)}', type='warning')
+                                return
+
+                            try:
+                                hire_date = datetime.strptime(hire_date_input.value, '%Y-%m-%d').date()
+                            except ValueError:
+                                ui.notify('Invalid date format', type='negative')
+                                return
+
+                            remote_schedule = {
+                                "monday": mon_check.value, "tuesday": tue_check.value, "wednesday": wed_check.value,
+                                "thursday": thu_check.value, "friday": fri_check.value
+                            }
+
+                            cdb = next(get_db())
+                            try:
+                                user_data = UserCreate(
+                                    username=username_input.value,
+                                    password=password_input.value,
+                                    email=email_input.value,
+                                    first_name=first_name_input.value,
+                                    last_name=last_name_input.value,
+                                    department_id=emp_dept_select.value,
+                                    role=role_select.value,
+                                    hire_date=hire_date,
+                                    remote_schedule=json.dumps(remote_schedule),
+                                    is_active=is_active_check.value,
+                                    location_state=state_select.value,
+                                    location_city=city_select.value
+                                )
+
+                                user_service = UserService(cdb)
+                                new_user = user_service.create_user(user_data)
+
+                                # Allocate PTO balance
+                                balance_service = BalanceService(cdb)
+                                balance_service.allocate_standard_balance(new_user.id)
+
+                                # Set trusted if needed
+                                current_user = app.storage.user.get('user', {})
+                                if is_trusted_check.value and role_select.value == 'employee':
+                                    trust_update = UserUpdate(
+                                        is_trusted=True,
+                                        trusted_by_id=current_user.get('id'),
+                                        trusted_at=datetime.now()
+                                    )
+                                    user_service.update_user(new_user.id, trust_update)
+
+                                # Audit log
+                                AuditService.log_user_create(
+                                    cdb, current_user.get('id'),
+                                    f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                    new_user.id, new_user.username
+                                )
+
+                                panel.close()
+                                ui.notify(f'Employee "{new_user.first_name} {new_user.last_name}" created!', type='positive')
+
+                                # Refresh department data
+                                nonlocal dept_data
+                                dept_data, _ = load_department_data()
+                                render_department_rows()
+
+                            except Exception as ex:
+                                ui.notify(f'Error: {str(ex)}', type='negative')
+                            finally:
+                                cdb.close()
+
+                        with ui.row().classes('w-full gap-3'):
+                            ui.button('Cancel', on_click=panel.close).props('flat').classes('flex-1')
+                            ui.button('Create', icon='person_add', on_click=create_employee).classes('flex-1').style(f'background-color: {TJM_GOLD} !important; color: white !important;')
 
             panel.open()
 
