@@ -116,17 +116,32 @@ class PTOService:
 
         # Extract year from start_date
         year = request_data.start_date.year
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+
+        # Detect vacation rollover: vacation for January next year, submitted in December
+        # Rollover uses CURRENT year's balance, not the request year
+        is_vacation_rollover = (
+            request_data.pto_type.lower() == 'vacation' and
+            year > current_year and
+            current_month == 12 and
+            request_data.start_date.month == 1 and
+            request_data.end_date.month == 1
+        )
+
+        # For vacation rollover, use current year for balance operations
+        balance_year = current_year if is_vacation_rollover else year
 
         # Validate request is within reasonable future range (5 years ahead max)
         # This allows long-term planning while preventing accidental far-future requests
-        current_year = datetime.now().year
         max_future_years = 5
         if year > current_year + max_future_years:
             raise ValueError(f"Cannot request time off more than {max_future_years} years in advance. Maximum year: {current_year + max_future_years}")
 
         # Get/create balance WITH LOCK to prevent concurrent request race conditions
         # This serializes all PTO requests for the same user
-        balance = self.balance_service.get_or_create_balance(request_data.user_id, year)
+        # For vacation rollover, use current year balance (not the January request year)
+        balance = self.balance_service.get_or_create_balance(request_data.user_id, balance_year)
 
         # Lock the balance row to serialize concurrent requests for this user
         # This prevents two concurrent requests from both passing the overlap check
@@ -177,6 +192,26 @@ class PTOService:
             is_auto_approve = True
             auto_approve_reason = "Auto-approved (trusted employee)"
 
+        # VACATION ROLLOVER: Never auto-approve - requires manager approval
+        # Even managers must have their rollover approved (they can't self-approve rollover)
+        if is_vacation_rollover:
+            is_auto_approve = False
+            auto_approve_reason = None
+            logger.info(
+                f"Vacation rollover request: User {request_data.user_id} requesting "
+                f"{request_data.start_date} to {request_data.end_date} (rollover from {current_year})"
+            )
+
+        # BACKDATED REQUESTS: Never auto-approve - requires manager approval
+        # Even managers/trusted employees must have backdated requests approved
+        if request_data.start_date < datetime.now().date():
+            is_auto_approve = False
+            auto_approve_reason = None
+            logger.info(
+                f"Backdated request: User {request_data.user_id} requesting "
+                f"{request_data.start_date} to {request_data.end_date} (backdated, requires approval)"
+            )
+
         # All other combinations: requires approval
         # - Non-trusted employees: always pending
         # - Bereavement, FMLA, Jury Duty, Voting, Military, WFH: always pending
@@ -200,6 +235,7 @@ class PTOService:
                 )
 
         # Create PTORequest
+        # For vacation rollover, set carryover_from_year to current year at creation time
         request = PTORequest(
             user_id=request_data.user_id,
             pto_type=request_data.pto_type,
@@ -211,7 +247,8 @@ class PTOService:
             status='approved' if is_auto_approve else 'pending',
             submitted_at=datetime.now(),
             approved_by=user.id if is_auto_approve else None,
-            approved_at=datetime.now() if is_auto_approve else None
+            approved_at=datetime.now() if is_auto_approve else None,
+            carryover_from_year=current_year if is_vacation_rollover else None
         )
 
         self.db.add(request)
@@ -570,12 +607,15 @@ class PTOService:
         # Verify approver is authorized
         PTOService._verify_approval_authorization(db, request, approved_by)
 
-        # Get year from start_date
+        # Get year from start_date, OR from carryover_from_year if this is a rollover
+        # Vacation rollover: carryover_from_year is set at creation, use that for balance
         year = request.start_date.year
+        balance_year = request.carryover_from_year if request.carryover_from_year else year
 
         # Get balance (don't commit yet - part of transaction)
+        # For vacation rollover, this gets the FROM year's balance (e.g., 2025)
         balance_service = BalanceService(db)
-        balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
+        balance = balance_service.get_or_create_balance(request.user_id, balance_year, commit=False)
 
         # Validate sick/personal days don't exceed available balance before approving
         # Note: Request is already in pending, so we check total - used (pending is already reserved)
@@ -615,20 +655,35 @@ class PTOService:
                 balance_service.remove_pending(
                     balance.id, request.total_days, pto_type='vacation', commit=False
                 )
-                # Then apply with carryover logic - use carryover from previous year first
-                hours_requested = Decimal(str(request.total_days)) * Decimal('8')
-                hours_from_carryover, hours_from_current = PTOService._apply_vacation_with_carryover(
-                    db, request.user_id, year, hours_requested, is_pending=False
-                )
-                # Apply remaining to current year balance (vacation_used stores HOURS)
-                if hours_from_current > 0:
+
+                # Check if this is a vacation rollover (carryover_from_year already set at creation)
+                if request.carryover_from_year:
+                    # VACATION ROLLOVER: Simply move to used in the FROM year's balance
+                    # carryover_from_year was set at creation, balance is already the FROM year
+                    hours_requested = Decimal(str(request.total_days)) * Decimal('8')
                     balance.vacation_used = (
                         (balance.vacation_used or Decimal('0')) +
-                        hours_from_current  # Already in hours, no conversion needed
+                        hours_requested
                     )
-                # Track carryover usage - if hours came from previous year, record it
-                if hours_from_carryover > 0:
-                    request.carryover_from_year = year - 1
+                    logger.info(
+                        f"Vacation rollover approved: {request.total_days} days deducted from "
+                        f"{request.carryover_from_year} balance for user {request.user_id}"
+                    )
+                else:
+                    # Regular vacation: apply with carryover logic from CarryoverRequest if exists
+                    hours_requested = Decimal(str(request.total_days)) * Decimal('8')
+                    hours_from_carryover, hours_from_current = PTOService._apply_vacation_with_carryover(
+                        db, request.user_id, year, hours_requested, is_pending=False
+                    )
+                    # Apply remaining to current year balance (vacation_used stores HOURS)
+                    if hours_from_current > 0:
+                        balance.vacation_used = (
+                            (balance.vacation_used or Decimal('0')) +
+                            hours_from_current
+                        )
+                    # Track carryover usage - if hours came from previous year via CarryoverRequest
+                    if hours_from_carryover > 0:
+                        request.carryover_from_year = year - 1
             elif request.pto_type in ('sick', 'personal', 'chicago_leave'):
                 # Move from pending to used
                 balance_service.move_pending_to_used(
@@ -682,13 +737,15 @@ class PTOService:
         PTOService._verify_approval_authorization(db, request, approved_by)
 
         try:
-            # Get year from start_date
+            # Get year from start_date, OR from carryover_from_year if this is a rollover
             year = request.start_date.year
+            balance_year = request.carryover_from_year if request.carryover_from_year else year
 
             # Remove pending days for tracked PTO types (don't commit - part of transaction)
+            # For vacation rollover, this uses the FROM year's balance
             if request.pto_type in ('vacation', 'sick', 'personal', 'chicago_leave'):
                 balance_service = BalanceService(db)
-                balance = balance_service.get_or_create_balance(request.user_id, year, commit=False)
+                balance = balance_service.get_or_create_balance(request.user_id, balance_year, commit=False)
                 balance_service.remove_pending(
                     balance.id, request.total_days, pto_type=request.pto_type, commit=False
                 )
@@ -737,12 +794,14 @@ class PTOService:
             raise ValueError("Only pending requests can be cancelled")
 
         try:
-            # Get year from start_date
+            # Get year from start_date, OR from carryover_from_year if this is a rollover
             year = request.start_date.year
+            balance_year = request.carryover_from_year if request.carryover_from_year else year
 
             # Remove pending days for tracked PTO types (don't commit - part of transaction)
+            # For vacation rollover, this uses the FROM year's balance
             if request.pto_type in ('vacation', 'sick', 'personal', 'chicago_leave'):
-                balance = self.balance_service.get_or_create_balance(request.user_id, year, commit=False)
+                balance = self.balance_service.get_or_create_balance(request.user_id, balance_year, commit=False)
                 self.balance_service.remove_pending(
                     balance.id, request.total_days, pto_type=request.pto_type, commit=False
                 )

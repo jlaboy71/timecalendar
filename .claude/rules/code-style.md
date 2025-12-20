@@ -136,6 +136,59 @@ with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1
         ui.button('OK', on_click=confirm).style('background-color: #C9A227 !important; color: white !important;')
 ```
 
+### PTO Overdraft Policy Enforcement
+**CRITICAL**: When modifying PTO balance validation in `request_form.py`, follow this policy:
+
+**Hard Cap Types (BLOCK submission when over balance):**
+```python
+hard_cap_types = ['chicago_leave', 'sick', 'personal']
+```
+- These have fixed annual allocations - NO manager override allowed
+- Submit button is DISABLED when request exceeds balance
+- User sees red blocking message
+
+**Soft Cap Types (WARNING only, allow submission):**
+- `vacation` - Manager can approve overdraft requests
+- Submit button remains ENABLED
+- User sees amber warning message
+
+**Code Location:** `nicegui_app/pages/request_form.py` lines 1012-1052
+
+**DO NOT:**
+- Allow overdraft for Sick, Personal, or Chicago Leave
+- Add new accruing types without deciding their cap policy
+- Change this logic without updating `business-rules.md`
+
+### Vacation Rollover Balance Handling
+**CRITICAL**: When vacation rollover is involved (`carryover_from_year` is set), ALWAYS use that year for balance operations, NOT `start_date.year`.
+
+**The Pattern:**
+```python
+# CORRECT - Check carryover_from_year first
+balance_year = request.carryover_from_year if request.carryover_from_year else request.start_date.year
+balance = balance_service.get_or_create_balance(request.user_id, balance_year)
+
+# WRONG - Using start_date.year directly
+balance = balance_service.get_or_create_balance(request.user_id, request.start_date.year)
+```
+
+**Files that handle vacation balance (ALL must use this pattern):**
+- `src/services/pto_service.py` - create_request, approve_request, deny_request, cancel_request
+- `nicegui_app/pages/dashboard.py` - cancel_request, cancel_pending_request, delete_request_direct, delete_approved_request_employee
+- `nicegui_app/pages/requests.py` - cancel_user_request, cancel_approved_request
+- `nicegui_app/pages/manager_request_detail.py` - approve_cancellation
+- `nicegui_app/pages/request_form.py` - get_leave_balance, update_warning
+
+**Why this matters:**
+- Vacation rollover requests are for January 2026 but use 2025 balance
+- If you use `start_date.year` (2026), pending/used goes to wrong year
+- This causes phantom pending days and corrupted balance data
+
+**When modifying ANY vacation balance code:**
+1. Search for `carryover_from_year` usage in that file
+2. Verify the pattern is applied consistently
+3. Test with a vacation rollover request
+
 ### Modifying Email Templates
 **CRITICAL**: When modifying email templates, you MUST update ALL THREE locations that contain email template code.
 
@@ -198,6 +251,29 @@ def open_edit_dialog(item):
         dialog.open()
 ```
 Without `context.client.content`, the new dialog is created inside the parent dialog's context and gets hidden when the parent closes!
+
+**Opening dialog from slide-out panel (CRITICAL timing):**
+When opening a dialog after closing a slide-out panel, you MUST:
+1. Capture `context.client` BEFORE closing the panel
+2. Create the timer BEFORE calling `panel.close()`
+3. Use the captured client in the timer callback
+
+```python
+def edit_handler():
+    item_copy = dict(item)  # Capture data
+    client = context.client  # Capture client BEFORE closing
+
+    def delayed_open():
+        with client.content:
+            with ui.dialog() as dialog, ui.card():
+                # dialog content using item_copy
+            dialog.open()
+
+    # Create timer FIRST, then close panel
+    ui.timer(0.15, delayed_open, once=True)
+    panel.close()  # Close AFTER timer is created
+```
+If you close the panel before creating the timer, the timer may not fire properly!
 
 ### Check Existing Patterns First
 **BEFORE proposing any new visual elements (icons, colors, styles, formats):**

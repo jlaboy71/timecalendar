@@ -230,7 +230,7 @@ def admin_system_page():
                             ('analytics', 'Analytics', 'Usage insights', '/analytics'),
                             ('assessment', 'Reports', 'Generate reports', '/reports'),
                             ('approval', 'Approvals', 'Pending requests', '/admin/approvals'),
-                            ('help_outline', 'Help Center', 'Documentation', '/help'),
+                            ('verified', 'Policy Reference', 'Formulas & business rules', '/admin/policy'),
                         ]
                         for icon, title, desc, url in nav_items:
                             with ui.card().classes('w-full p-3 cursor-pointer nav-hub-card').on('click', lambda u=url: ui.navigate.to(u)):
@@ -482,6 +482,122 @@ def admin_system_page():
                                         ui.button(icon='delete', on_click=create_delete_handler(bf)).props('flat dense color=red aria-label="Delete this backup"').tooltip('Delete this backup')
 
                     refresh_backups()
+
+                # Data Integrity Check Card
+                with ui.card().classes('w-full p-4 mb-4'):
+                    with ui.row().classes('items-center gap-2 mb-4'):
+                        ui.icon('verified', size='sm', color='teal')
+                        ui.label('Data Integrity Check').classes('text-lg font-semibold')
+                        create_help_button(
+                            'Data Integrity Check',
+                            'Verify the integrity of your PTO balance data.<br><br>'
+                            '<b>Checks performed:</b><br>'
+                            '• <b>Stale Pending</b> - Detects pending balances that don\'t match actual pending requests<br>'
+                            '• <b>Orphaned Requests</b> - Finds PTO requests without valid users<br>'
+                            '• <b>Negative Balances</b> - Identifies unexpected negative balances<br>'
+                            '• <b>Formula Integrity</b> - Verifies balance calculations are correct<br><br>'
+                            '<b>How to use:</b><br>'
+                            '• Click "Run Integrity Check" to scan for issues<br>'
+                            '• Review any issues found in the results panel<br>'
+                            '• Use "Fix Stale Pending" to automatically correct stale data<br><br>'
+                            '<i>Run this check periodically or after any unusual behavior.</i>'
+                        )
+
+                    # Results container
+                    integrity_results_container = ui.column().classes('w-full')
+
+                    def run_integrity_check():
+                        """Run integrity check and display results."""
+                        integrity_results_container.clear()
+                        with integrity_results_container:
+                            with ui.row().classes('items-center gap-2 mb-4'):
+                                ui.spinner(size='sm')
+                                ui.label('Running integrity checks...').classes('text-sm')
+
+                        try:
+                            check_db = next(get_db())
+                            from src.services.integrity_service import IntegrityService
+                            integrity_service = IntegrityService(check_db)
+                            results = integrity_service.run_full_check()
+                            check_db.close()
+
+                            integrity_results_container.clear()
+                            with integrity_results_container:
+                                # Summary header
+                                summary = results['summary']
+                                status_color = 'green' if summary['failed'] == 0 else 'red' if summary['failed'] > 0 else 'amber'
+                                status_icon = 'check_circle' if summary['failed'] == 0 else 'error' if summary['failed'] > 0 else 'warning'
+                                status_text = 'All Checks Passed' if summary['failed'] == 0 else f'{summary["failed"]} Issue(s) Found'
+
+                                with ui.row().classes(f'w-full items-center justify-between p-4 rounded-lg mb-4 bg-{status_color}-50 dark:bg-{status_color}-900/20'):
+                                    with ui.row().classes('items-center gap-3'):
+                                        ui.icon(status_icon, color=status_color, size='md')
+                                        ui.label(status_text).classes('text-lg font-semibold')
+                                    with ui.row().classes('gap-4 text-sm'):
+                                        ui.label(f'Passed: {summary["passed"]}').classes('text-green-600')
+                                        ui.label(f'Failed: {summary["failed"]}').classes('text-red-600' if summary['failed'] > 0 else 'opacity-50')
+                                        ui.label(f'Warnings: {summary["warnings"]}').classes('text-amber-600' if summary['warnings'] > 0 else 'opacity-50')
+                                    ui.label(f'Run: {results["timestamp"][:19]}').classes('text-xs opacity-50')
+
+                                # Individual check results
+                                with ui.expansion('Check Details', icon='checklist').classes('w-full mb-4'):
+                                    for check in results['checks']:
+                                        check_icon = 'check_circle' if check['status'] == 'PASS' else 'error' if check['status'] == 'FAIL' else 'warning'
+                                        check_color = 'green' if check['status'] == 'PASS' else 'red' if check['status'] == 'FAIL' else 'amber'
+                                        with ui.row().classes('w-full items-center gap-3 p-2 border-b'):
+                                            ui.icon(check_icon, color=check_color, size='xs')
+                                            ui.label(check['name']).classes('flex-1')
+                                            ui.badge(check['status'], color=check_color).props('dense')
+                                            ui.label(check.get('details', '')).classes('text-xs opacity-50')
+
+                                # Issues list (if any)
+                                if results['issues']:
+                                    with ui.expansion(f'Issues ({len(results["issues"])})', icon='report_problem').classes('w-full').props('default-opened'):
+                                        for issue in results['issues'][:20]:  # Limit display
+                                            with ui.row().classes('w-full items-start gap-2 p-2 bg-red-50 dark:bg-red-900/10 rounded mb-2'):
+                                                ui.icon('error_outline', color='red', size='xs')
+                                                ui.label(issue.get('message', str(issue))).classes('text-sm')
+
+                                        if len(results['issues']) > 20:
+                                            ui.label(f'... and {len(results["issues"]) - 20} more issues').classes('text-sm opacity-50 italic')
+
+                                        # Fix button if there are stale pending issues
+                                        stale_issues = [i for i in results['issues'] if 'pending' in i.get('message', '').lower()]
+                                        if stale_issues:
+                                            ui.separator().classes('my-4')
+                                            with ui.row().classes('items-center gap-4'):
+                                                ui.label(f'{len(stale_issues)} stale pending issue(s) can be auto-fixed').classes('text-sm')
+
+                                                def fix_stale():
+                                                    fix_db = next(get_db())
+                                                    fix_service = IntegrityService(fix_db)
+                                                    fix_results = fix_service.fix_stale_pending(dry_run=False)
+                                                    fix_db.close()
+                                                    show_success_dialog('Fixed', f'Fixed {fix_results["total_fixed"]} stale pending balance(s)')
+                                                    run_integrity_check()  # Re-run to show updated results
+
+                                                ui.button('Fix Stale Pending', icon='build', on_click=fix_stale).props('color=amber dense')
+
+                                # All good message
+                                if summary['failed'] == 0 and summary['warnings'] == 0:
+                                    with ui.row().classes('items-center gap-2 p-4 bg-green-50 dark:bg-green-900/10 rounded'):
+                                        ui.icon('celebration', color='green')
+                                        ui.label('All integrity checks passed! Your data is healthy.').classes('text-green-700 dark:text-green-300')
+
+                        except Exception as e:
+                            integrity_results_container.clear()
+                            with integrity_results_container:
+                                with ui.row().classes('items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 rounded'):
+                                    ui.icon('error', color='red')
+                                    ui.label(f'Error running checks: {str(e)}').classes('text-red-600')
+
+                    # Initial state - show run button
+                    with integrity_results_container:
+                        with ui.row().classes('w-full items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg'):
+                            with ui.column():
+                                ui.label('Click to run integrity checks on your PTO balance data').classes('text-sm')
+                                ui.label('Checks for stale pending, orphaned requests, and formula integrity').classes('text-xs opacity-50')
+                            ui.button('Run Integrity Check', icon='play_arrow', on_click=run_integrity_check).props('color=teal')
 
                 # Market Calendar Sync Card with Visual Feedback
                 with ui.card().classes('w-full p-4 mt-4'):

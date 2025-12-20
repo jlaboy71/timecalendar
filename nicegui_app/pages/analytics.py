@@ -102,7 +102,7 @@ def analytics_page():
 
     active_tab = {'value': 'overview'}
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Show department scope for managers
         if is_manager_only and manager_department_name:
             page_header(title=f'ANALYTICS - {manager_department_name.upper()}', show_back=False)
@@ -689,8 +689,14 @@ def analytics_page():
                                 for item in type_data:
                                     color = leave_colors.get(item['type'].lower(), '#6b7280')
                                     pct = (item['days'] / total_days * 100) if total_days > 0 else 0
-                                    # Short label for WFH
-                                    label = 'WFH' if item['type'].lower() in ('work_from_home', 'wfh') else item['type'].replace('_', ' ').title()
+                                    # Short label for WFH and Leave
+                                    type_lower = item['type'].lower()
+                                    if type_lower in ('work_from_home', 'wfh'):
+                                        label = 'WFH'
+                                    elif type_lower in ('chicago_leave', 'leave'):
+                                        label = 'Leave'
+                                    else:
+                                        label = item['type'].replace('_', ' ').title()
                                     with ui.row().classes('items-center gap-2'):
                                         ui.element('div').classes('w-3 h-3 rounded-full').style(f'background-color: {color}')
                                         ui.label(label).classes('text-sm w-20')
@@ -702,6 +708,8 @@ def analytics_page():
                         lower = leave_type.lower()
                         if lower in ('work_from_home', 'wfh'):
                             return 'WFH'
+                        if lower in ('chicago_leave', 'leave'):
+                            return 'Leave'
                         return leave_type.replace('_', ' ').title()
 
                     def render_leave_bars():
@@ -1089,8 +1097,13 @@ def analytics_page():
                                         # Type label with color indicator
                                         with ui.row().classes('w-24 items-center gap-2'):
                                             ui.element('div').classes('w-3 h-3 rounded-full').style(f'background-color: {color}')
-                                            # Use WFH for work_from_home
-                                            label = 'WFH' if leave_type in ('work_from_home', 'wfh') else item['type'].replace('_', ' ').title()
+                                            # Use WFH for work_from_home, Leave for chicago_leave
+                                            if leave_type in ('work_from_home', 'wfh'):
+                                                label = 'WFH'
+                                            elif leave_type in ('chicago_leave', 'leave'):
+                                                label = 'Leave'
+                                            else:
+                                                label = item['type'].replace('_', ' ').title()
                                             ui.label(label).classes('text-sm font-medium')
 
                                         # Progress bar
@@ -1694,10 +1707,9 @@ def analytics_page():
                             style = color_styles.get(rec['priority'], color_styles['INFO'])
 
                             with ui.card().classes('p-4 h-full').style(f"background-color: {style['bg']}; border-top: 4px solid {style['border']}"):
-                                with ui.row().classes('items-center justify-between mb-2'):
-                                    ui.label(rec['title']).classes('font-bold text-sm')
-                                    ui.badge(rec['priority'], color=style['badge'])
-                                ui.label(f"Category: {rec['category']}").classes('text-xs opacity-70')
+                                ui.label(rec['title']).classes('font-bold text-sm mb-1')
+                                ui.badge(rec['priority'], color=style['badge'])
+                                ui.label(f"Category: {rec['category']}").classes('text-xs opacity-70 mt-2')
                                 ui.label(rec['action']).classes('text-sm mt-2')
                                 if rec['affected']:
                                     ui.label(f"Affected: {', '.join(rec['affected'][:3])}{'...' if len(rec['affected']) > 3 else ''}").classes('text-xs opacity-60 mt-1')

@@ -50,7 +50,7 @@ def handbook_page():
     # Get current handbook content and version
     handbook_content, handbook_version = get_active_handbook_content()
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Header with greeting
         title = 'HANDBOOK AI ASSISTANT' if is_manager_or_admin else 'EMPLOYEE HANDBOOK'
         page_header(title=title, show_back=False)

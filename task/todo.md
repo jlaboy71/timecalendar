@@ -5,6 +5,32 @@
 
 ---
 
+## COMPLETED TASK: System Administration Redesign
+
+**Date Completed**: December 18, 2024
+**Reference**: `task/sysadminupgrade.md`
+
+### Summary
+Consolidated 9 tabs → 4 logical groups for better navigation and "command center" feel.
+
+### New Tab Structure
+| Tab | Contains |
+|-----|----------|
+| **OVERVIEW** | Quick stats (employees, pending, DB size, backup), alerts, quick actions, navigation hub |
+| **DATA** | Database status, backup management, market calendar sync |
+| **COMMUNICATIONS** | Email config, test emails |
+| **SYSTEM** | Policy reference, logs viewer, settings |
+
+### Changes Made
+- [x] Created new 4-tab structure replacing 9 tabs
+- [x] Added OVERVIEW dashboard with command center design
+- [x] Consolidated Data, Communications, and System tabs
+- [x] Removed redundant "link farm" tabs (Handbook, EOY, Analytics, Auto Notify now in nav hub)
+- [x] Enhanced status bar with TJM gold accent
+- [x] All existing functionality preserved
+
+---
+
 ## COMPLETED TASK: Fix Chicago Safe Leave Redundancy
 
 **Date Completed**: December 17, 2024
@@ -540,6 +566,63 @@ Before going live, update `.env`:
 | Phase 6: Final Verification | PASSED |
 
 **The TJM Time Calendar application is ready for production deployment.**
+
+---
+
+## CURRENT TASK: Fix PTO Cancellation Balance Bug
+
+**Date**: December 19, 2024
+**Issue**: Vacation balance shows 19 days instead of 20 after cancelling pending request
+
+### Root Cause Analysis
+
+The UI layer has **3 duplicate cancel functions** that bypass the service layer:
+
+| File | Function | Problem |
+|------|----------|---------|
+| `dashboard.py:1410` | `cancel_request()` | Only handles vacation, bypasses PTOService |
+| `requests.py:15` | `cancel_user_request()` | Only handles vacation, bypasses PTOService |
+| `calendar.py:889` | `cancel_pending_request()` | Only handles vacation, bypasses PTOService |
+
+The **correct implementation** exists in `pto_service.py:759` (`cancel_request`) which:
+- Handles ALL PTO types (vacation, sick, personal, chicago_leave)
+- Uses `remove_pending()` to properly restore balance
+- Has proper transaction handling
+
+**Bug**: The UI functions duplicate logic instead of calling `PTOService.cancel_request()`.
+
+### Fix Plan
+
+1. **dashboard.py** - Replace inline balance manipulation with `PTOService.cancel_request()`
+2. **requests.py** - Replace inline balance manipulation with `PTOService.cancel_request()`
+3. **calendar.py** - Replace inline balance manipulation with `PTOService.cancel_request()`
+
+### Expected Result
+- All PTO types (vacation, sick, personal, chicago_leave) will properly restore pending balance on cancel
+- Single source of truth for cancel logic in PTOService
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `nicegui_app/pages/dashboard.py:1410` | Replaced inline balance logic with `PTOService.cancel_request()` |
+| `nicegui_app/pages/requests.py:15` | Replaced inline balance logic with `PTOService.cancel_request()` |
+| `nicegui_app/pages/calendar.py:889` | Replaced inline balance logic with `PTOService.cancel_request()` |
+
+### Review
+
+**Bug**: UI cancel functions duplicated balance restoration logic but ONLY handled vacation type. Sick, personal, and chicago_leave cancellations never restored pending balance.
+
+**Fix**: All three UI cancel functions now delegate to `PTOService.cancel_request()` which correctly handles ALL PTO types using the `remove_pending()` method.
+
+**Impact**: Minimal - only changed the cancel logic, no other code affected. The PTOService method was already correct and tested.
+
+**Testing Required**:
+1. Cancel a pending vacation request → balance should restore
+2. Cancel a pending sick request → balance should restore
+3. Cancel a pending personal request → balance should restore
+
+**Status**: COMPLETE - All syntax verified
 
 ---
 

@@ -135,7 +135,10 @@ def manager_request_detail_page(request_id: int):
             # Request Details Card
             with ui.card().classes('w-full p-4 mb-4'):
                 ui.label('Request Details').classes('text-xl font-bold mb-2')
-                ui.label(f"Type: {request.pto_type.title()}")
+                # Show "Vacation Rollover" for rollover requests
+                is_rollover = hasattr(request, 'carryover_from_year') and request.carryover_from_year and request.pto_type.lower() == 'vacation'
+                type_display = f"Vacation Rollover (from {request.carryover_from_year})" if is_rollover else request.pto_type.title()
+                ui.label(f"Type: {type_display}")
                 ui.label(f"Start Date: {request.start_date.strftime('%A, %B %d, %Y')}")
                 ui.label(f"End Date: {request.end_date.strftime('%A, %B %d, %Y')}")
                 ui.label(f"Duration: {fmt_days(float(request.total_days))}")
@@ -230,11 +233,13 @@ def manager_request_detail_page(request_id: int):
                                 req.cancellation_requested = False
 
                                 # Restore balance
+                                # For vacation rollover, use carryover_from_year if set
                                 pto_type_lower = req.pto_type.lower()
                                 total_days = float(req.total_days)
+                                balance_year = req.carryover_from_year if req.carryover_from_year else req.start_date.year
                                 if pto_type_lower in ['vacation', 'sick', 'personal']:
                                     balance_service = BalanceService(db_cancel)
-                                    balance = balance_service.get_or_create_balance(req.user_id, req.start_date.year)
+                                    balance = balance_service.get_or_create_balance(req.user_id, balance_year)
                                     if pto_type_lower == 'vacation':
                                         balance.vacation_used = max(0, float(balance.vacation_used or 0) - (total_days * 8))
                                     elif pto_type_lower == 'sick':

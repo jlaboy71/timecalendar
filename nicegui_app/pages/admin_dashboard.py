@@ -17,7 +17,7 @@ def admin_dashboard_page():
         page_header(title='ADMIN PANEL', show_back=False)
 
         # Navigation cards (flex-wrap for mobile responsive)
-        with ui.row().classes('w-full gap-4 justify-center flex-wrap'):
+        with ui.row().classes('w-full gap-4 justify-center flex-wrap stagger-children'):
             # Manage Departments card
             with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
                 with ui.column().classes('items-center gap-4'):
@@ -44,7 +44,7 @@ def admin_dashboard_page():
 
         # Second row - Super Admin only (flex-wrap for mobile responsive)
         if user_role == 'superadmin':
-            with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap'):
+            with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap stagger-children'):
                 # System Administration card
                 with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-500'):
                     with ui.column().classes('items-center gap-4'):

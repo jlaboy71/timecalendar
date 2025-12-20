@@ -35,6 +35,7 @@ from nicegui_app.pages.help import help_page as help_page_content
 from nicegui_app.pages.admin_system import admin_system_page
 from nicegui_app.pages.admin_email_preview import email_preview_page
 from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
+from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.theme import apply_dark_mode
 from src.services.session_manager import require_auth
@@ -183,6 +184,10 @@ def dashboard():
 def submit_request():
     """PTO Request submission page."""
     if not require_auth():
+        # Debug: Show message instead of blank page
+        apply_dark_mode()
+        ui.label('Session expired or not authenticated. Redirecting to login...').classes('text-amber-500 p-4')
+        ui.timer(2.0, lambda: ui.navigate.to('/'), once=True)
         return
     request_form_page()
 
@@ -190,6 +195,10 @@ def submit_request():
 def submit_request_with_type(pto_type: str):
     """PTO Request submission page with pre-selected type."""
     if not require_auth():
+        # Debug: Show message instead of blank page
+        apply_dark_mode()
+        ui.label('Session expired or not authenticated. Redirecting to login...').classes('text-amber-500 p-4')
+        ui.timer(2.0, lambda: ui.navigate.to('/'), once=True)
         return
     request_form_page(preselect_type=pto_type)
 
@@ -356,6 +365,14 @@ def admin_auto_notify_reports():
     if not require_auth():
         return
     auto_notify_reports_page()
+
+
+@ui.page('/admin/policy')
+def admin_policy():
+    """Policy & Formula Reference page for superadmins."""
+    if not require_auth():
+        return
+    admin_policy_viewer_page()
 
 
 # ============================================================

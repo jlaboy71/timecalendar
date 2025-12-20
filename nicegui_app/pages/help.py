@@ -16,7 +16,7 @@ def help_page():
     current_view = {'chapter': None, 'article': None}
     search_results = {'items': []}
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Header using shared component (no help button on help page itself)
         page_header(title='HELP CENTER', show_back=False)
 

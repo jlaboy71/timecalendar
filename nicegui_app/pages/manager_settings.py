@@ -101,7 +101,7 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
 
         dialog.open()
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='MANAGER SETTINGS', show_back=True)
 
         # Team PTO Request Notifications Card

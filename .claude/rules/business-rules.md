@@ -33,10 +33,33 @@
 - Hours go directly to `used`
 
 ### Balance Validation
-- Warnings shown when request exceeds available balance
-- Submission NOT blocked - manager discretion on approval
-- Future year requests allowed (up to 5 years ahead)
-- Warning shown if future year balance not yet allocated
+
+#### Hard Cap Types (BLOCKED when over balance)
+These types have fixed annual allocations. **Overdraft is NOT allowed.**
+| Type | Reason |
+|------|--------|
+| **Sick** | 5 days/year - fixed allocation, no manager override |
+| **Personal** | 2 days/year - fixed allocation, no manager override |
+| **Chicago Leave** | Per Chicago ordinance, only accrued time can be used |
+
+#### Soft Cap Types (WARNING when over balance)
+| Type | Behavior |
+|------|----------|
+| **Vacation** | Warning shown, but submission allowed. Manager discretion on approval. |
+
+#### Future Year Requests
+- **Sick, Personal, Chicago Leave**: NOT allowed for future years
+- **Non-balance types (bereavement, fmla, jury_duty, etc.)**: Allowed for future years
+- **Vacation Rollover**: Special handling (see below)
+
+#### Vacation Rollover (December → January)
+Employees can request vacation for January of next year in December:
+1. **When**: Only in December, for January dates only
+2. **Balance Check**: Must have vacation balance in current year
+3. **No Auto-Approve**: Even managers go to pending (requires approval)
+4. **Deduction**: Hours deducted from current year (e.g., 2025), NOT next year
+5. **Cancel Restriction**: Approved rollover can only be cancelled by manager
+6. **Tagged**: Request has `carryover_from_year` set to identify it as rollover
 
 ## Carryover Rules
 

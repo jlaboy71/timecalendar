@@ -52,8 +52,11 @@ def carryover_page():
         current_user = user_service.get_user_by_id(user['id'])
         balance = balance_service.get_or_create_balance(user['id'], current_year)
 
-        # Check if user is a Chicago employee
-        is_chicago = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+        # Check if user is a Chicago employee AND Chicago leave is enabled
+        from src.models.system_setting import SystemSetting
+        user_is_in_chicago = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+        chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+        is_chicago = user_is_in_chicago and chicago_setting and chicago_setting.bool_value
 
         if is_chicago:
             # ============ CHICAGO EMPLOYEE VIEW ============
@@ -90,7 +93,7 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
     paid_leave_will_rollover = min(paid_leave_unused, paid_leave_max_carryover)
     paid_leave_will_expire = max(0, paid_leave_unused - paid_leave_will_rollover)
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='LEAVE ROLLOVER', show_back=False)
         ui.label(f'Your Chicago leave automatically rolls over to {next_year}').classes('opacity-70 mb-6')
 
@@ -209,7 +212,7 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
 
     remaining_cap = max(0, max_carryover - already_approved) if max_carryover > 0 else sick_unused
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='SICK TIME CARRYOVER', show_back=False)
         ui.label(f'Carry unused {current_year} sick time into {next_year}').classes('opacity-70 mb-6')
 

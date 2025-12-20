@@ -259,27 +259,31 @@ def admin_departments_page():
                             ui.label(dept['name']).classes('text-lg font-semibold')
                             ui.label(f"Code: {dept['code']}").classes('text-xs opacity-50 font-mono')
 
-                    # MIDDLE: Manager and Employees
-                    with ui.row().classes('flex-1 items-center gap-8 justify-center'):
-                        # Manager
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('person', size='sm').classes('opacity-50')
-                            if dept['manager_name']:
-                                ui.label(dept['manager_name']).classes('text-sm font-medium')
-                            else:
-                                ui.label('No Manager').classes('text-sm text-amber-600 italic')
+                    # MIDDLE: Spacer
+                    ui.element('div').classes('flex-1')
 
-                        # Employee count
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('groups', size='sm').classes('opacity-50')
-                            count = dept['employee_count']
-                            ui.label(f"{count} Employee{'s' if count != 1 else ''}").classes('text-sm')
+                    # RIGHT: Info (stacked) + Action buttons
+                    with ui.row().classes('items-center gap-4 flex-shrink-0'):
+                        # Stacked info: Employees on top, Manager below, icons aligned
+                        with ui.column().classes('gap-1 items-end').style('min-width: 140px;'):
+                            # Employee count
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('groups', size='xs').classes('opacity-50')
+                                count = dept['employee_count']
+                                ui.label(f"{count} Employee{'s' if count != 1 else ''}").classes('text-xs')
+                            # Manager
+                            with ui.row().classes('items-center gap-2'):
+                                ui.icon('person', size='xs').classes('opacity-50')
+                                if dept['manager_name']:
+                                    ui.label(dept['manager_name']).classes('text-xs font-medium')
+                                else:
+                                    ui.label('No Manager').classes('text-xs text-amber-600 italic')
 
-                    # RIGHT: Action buttons (view team, edit, delete)
-                    with ui.row().classes('gap-2 flex-shrink-0'):
-                        ui.button(icon='visibility', on_click=lambda e, d=dept_copy: show_team_panel(d)).props('flat dense').tooltip('View Team')
-                        ui.button(icon='edit', on_click=lambda e, d=dept_copy: open_edit_dialog(d)).props('flat dense').tooltip('Edit Department')
-                        ui.button(icon='delete', on_click=lambda e, d=dept_copy: open_delete_dialog(d)).props('flat color=red dense').tooltip('Delete Department')
+                        # Action buttons (view team, edit, delete)
+                        with ui.row().classes('gap-2'):
+                            ui.button(icon='visibility', on_click=lambda e, d=dept_copy: show_team_panel(d)).props('flat dense').tooltip('View Team')
+                            ui.button(icon='edit', on_click=lambda e, d=dept_copy: open_edit_dialog(d)).props('flat dense').tooltip('Edit Department')
+                            ui.button(icon='delete', on_click=lambda e, d=dept_copy: open_delete_dialog(d)).props('flat color=red dense').tooltip('Delete Department')
 
         # ============ STAT TILE DETAIL DIALOGS ============
 
@@ -696,7 +700,7 @@ def admin_departments_page():
                 db.close()
 
             with ui.dialog().props('position=right full-height') as panel:
-                with ui.card().classes('h-full p-0 animate-fade-in').style('width: 500px;'):
+                with ui.card().classes('h-full p-0 animate-fade-in').style('width: 700px;'):
                     # Panel header
                     with ui.element('div').classes('p-5 border-b').style(f'background: linear-gradient(135deg, {TJM_GOLD} 0%, #b8922a 100%)'):
                         with ui.row().classes('w-full justify-between items-center'):

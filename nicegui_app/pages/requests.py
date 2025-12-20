@@ -9,43 +9,32 @@ from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
+from src.services.user_service import UserService
+from src.models.user import User
+from src.models.system_setting import SystemSetting
 from nicegui_app.components.formatting import format_days_hours, fmt_days
 
 
 def cancel_user_request(request_id: int, pto_type: str, total_days: float, year: int):
-    """Cancel a user's pending PTO request (for employees)."""
+    """Cancel a user's pending PTO request (for employees).
+
+    Note: pto_type, total_days, year params kept for API compatibility but not used.
+    PTOService.cancel_request handles all balance restoration for ALL PTO types.
+    """
     db = None
     try:
         db = next(get_db())
-        from src.models.pto_request import PTORequest
+        current_user = app.storage.user.get('user', {})
+        user_id = current_user.get('id')
 
-        # Get the request
-        request = db.query(PTORequest).filter(PTORequest.id == request_id).first()
-
-        if not request:
-            show_error_dialog('Not Found', 'The request was not found.')
-            return
-
-        if request.status != 'pending':
-            show_warning_dialog('Cannot Cancel', 'Only pending requests can be cancelled.')
-            return
-
-        # Update the request status
-        request.status = 'cancelled'
-
-        # If it was vacation, return the pending hours
-        if pto_type.lower() == 'vacation':
-            balance_service = BalanceService(db)
-            balance = balance_service.get_or_create_balance(request.user_id, year)
-            balance_service.adjust_vacation_used(balance.id, -total_days, is_pending=True)
-
-        db.commit()
+        # Use PTOService.cancel_request which handles ALL PTO types correctly
+        pto_service = PTOService(db)
+        pto_service.cancel_request(request_id, user_id)
 
         # Audit log the cancellation
-        current_user = app.storage.user.get('user', {})
         AuditService.log_pto_cancel(
             db=db,
-            user_id=current_user.get('id'),
+            user_id=user_id,
             username=current_user.get('username'),
             request_id=request_id,
             employee_name=current_user.get('full_name', current_user.get('username')),
@@ -54,6 +43,9 @@ def cancel_user_request(request_id: int, pto_type: str, total_days: float, year:
 
         show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/requests'))
 
+    except ValueError as e:
+        # PTOService raises ValueError for validation errors (not found, not pending, not owner)
+        show_warning_dialog('Cannot Cancel', str(e))
     except Exception as e:
         show_error_dialog('Error', f'Error cancelling request: {str(e)}')
     finally:
@@ -85,10 +77,12 @@ def cancel_approved_request(request_id: int, pto_type: str, total_days: float, y
         request.status = 'cancelled'
 
         # Use centralized balance restoration
+        # For vacation rollover, use carryover_from_year for balance lookup
         pto_type_lower = pto_type.lower()
         if pto_type_lower in ['vacation', 'sick', 'personal']:
             balance_service = BalanceService(db)
-            balance = balance_service.get_or_create_balance(request.user_id, year)
+            balance_year = request.carryover_from_year if request.carryover_from_year else year
+            balance = balance_service.get_or_create_balance(request.user_id, balance_year)
             # Restore balance using centralized method (was_approved=True since we're cancelling approved request)
             balance_service.restore_balance(balance.id, pto_type_lower, total_days * 8, was_approved=True)
 
@@ -133,6 +127,13 @@ def request_cancellation(request_id: int, reason: str = None):
 
         if request.cancellation_requested:
             show_warning_dialog('Already Requested', 'A cancellation has already been requested for this time off.')
+            return
+
+        # VACATION ROLLOVER: Employees cannot cancel approved rollover - only manager can
+        if request.carryover_from_year and request.pto_type.lower() == 'vacation':
+            show_warning_dialog('Cannot Cancel Rollover',
+                'Approved vacation rollover cannot be cancelled by the employee. '
+                'Please contact your manager to cancel this time off.')
             return
 
         # Mark cancellation as requested
@@ -383,14 +384,51 @@ def requests_page():
     stored_year = app.storage.user.get('requests_year_filter', current_year)
     year_filter = {'value': stored_year if stored_year in [current_year, next_year] else current_year}
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
-        # Different title for managers vs employees
-        page_title = 'MY TIME OFF' if is_manager_or_admin else 'REQUESTS'
-        page_header(title=page_title, show_back=False)
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
+        # Page title is always TIME OFF
+        page_header(title='TIME OFF', show_back=False)
 
         db = next(get_db())
         try:
-            all_user_requests = PTOService.get_user_requests(db, user['id'])
+            # Get current user's department members (for team view) - need this BEFORE view_state
+            current_user_obj = db.query(User).filter(User.id == user['id']).first()
+            team_members = []
+            team_member_ids = set()
+            if is_manager_or_admin and current_user_obj and current_user_obj.department_id:
+                team_members_db = db.query(User).filter(
+                    User.department_id == current_user_obj.department_id,
+                    User.is_active == True
+                ).order_by(User.last_name, User.first_name).all()
+                # Convert to dict for dropdown
+                team_members = [{'id': u.id, 'name': f"{u.first_name} {u.last_name}"} for u in team_members_db]
+                team_member_ids = {u.id for u in team_members_db}
+
+            # View state: 'my' or 'team' - persist selection in storage
+            stored_view_user_id = app.storage.user.get('requests_view_user_id', None)
+            # Validate stored selection is still valid (user is in team)
+            if stored_view_user_id and stored_view_user_id != user['id'] and stored_view_user_id in team_member_ids:
+                view_state = {'mode': 'team', 'selected_user_id': stored_view_user_id}
+            else:
+                view_state = {'mode': 'my', 'selected_user_id': user['id']}
+
+            # Check if viewed user is Chicago employee (for LEAVE tile)
+            # When viewing team member, check THEIR location, not the logged-in manager's
+            viewed_user_obj = current_user_obj
+            if view_state['mode'] == 'team' and view_state['selected_user_id'] != user['id']:
+                viewed_user_obj = db.query(User).filter(User.id == view_state['selected_user_id']).first()
+            is_chicago_employee = viewed_user_obj and viewed_user_obj.location_city and viewed_user_obj.location_city.lower() == 'chicago'
+            chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+            show_chicago_leave = is_chicago_employee and chicago_setting and chicago_setting.bool_value
+
+            # Container refs for dynamic updates
+            content_container = None
+            team_selector_container = None
+
+            def get_requests_for_user(target_user_id):
+                """Get requests for a specific user."""
+                return PTOService.get_user_requests(db, target_user_id)
+
+            all_user_requests = get_requests_for_user(view_state['selected_user_id'])
 
             # Sort by submitted_at descending (newest first)
             all_user_requests_sorted = sorted(all_user_requests, key=lambda r: r.submitted_at, reverse=True)
@@ -506,6 +544,13 @@ def requests_page():
                     'color': '#f97316',
                     'border': 'border-orange-500',
                     'description': 'Leave for military service or training per USERRA requirements. Job protection guaranteed.'
+                },
+                'chicago_leave': {
+                    'name': 'Chicago Paid Leave',
+                    'icon': 'spa',
+                    'color': '#f59e0b',
+                    'border': 'border-amber-500',
+                    'description': 'Chicago Paid Leave per city ordinance. Accrues based on hours worked and can be used for any reason. Cannot exceed available accrued balance.'
                 }
             }
 
@@ -744,40 +789,87 @@ def requests_page():
                 app.storage.user['requests_year_filter'] = year
                 ui.navigate.to('/requests')
 
+            def on_view_change(selected_value):
+                """Handle view dropdown change."""
+                if selected_value == 'my':
+                    # Clear storage to show own data
+                    app.storage.user['requests_view_user_id'] = None
+                else:
+                    # Team member selected - save user ID to storage
+                    app.storage.user['requests_view_user_id'] = selected_value
+                ui.navigate.to('/requests')
+
             with ui.card().classes('w-full mb-4 p-3'):
                 with ui.row().classes('w-full justify-between items-center'):
-                    ui.label(f'Requests - {year_filter["value"]}').classes('text-lg font-semibold')
+                    # Show whose requests we're viewing
+                    if view_state['mode'] == 'team' and viewed_user_obj and viewed_user_obj.id != user['id']:
+                        header_name = f"{viewed_user_obj.first_name} {viewed_user_obj.last_name}"
+                        ui.label(f"{header_name}'s Requests - {year_filter['value']}").classes('text-lg font-semibold')
+                    else:
+                        ui.label(f'My Requests - {year_filter["value"]}').classes('text-lg font-semibold')
 
-                    # Year dropdown
-                    years = [current_year, next_year]
-                    ui.select(
-                        {y: str(y) for y in years},
-                        label='Year',
-                        value=year_filter['value'],
-                        on_change=lambda e: switch_year(e.value)
-                    ).props('dense outlined').classes('w-24')
+                    with ui.row().classes('items-center gap-3'):
+                        # View dropdown (for managers/admins only)
+                        if is_manager_or_admin and team_members:
+                            # Build options: My Time + team members
+                            view_options = {'my': 'My Time'}
+                            for m in team_members:
+                                if m['id'] != user['id']:  # Don't duplicate current user
+                                    view_options[m['id']] = m['name']
+
+                            current_view_value = 'my' if view_state['mode'] == 'my' else view_state['selected_user_id']
+                            ui.select(
+                                options=view_options,
+                                label='View',
+                                value=current_view_value,
+                                on_change=lambda e: on_view_change(e.value)
+                            ).props('dense outlined').classes('w-40')
+
+                        # Year dropdown
+                        years = [current_year, next_year]
+                        ui.select(
+                            {y: str(y) for y in years},
+                            label='Year',
+                            value=year_filter['value'],
+                            on_change=lambda e: switch_year(e.value)
+                        ).props('dense outlined').classes('w-24')
 
             # PTO type tiles - transparent cards with colored border accents (matching Dashboard/Reports)
             wfh_approved = [r for r in approved_requests if r.pto_type.lower() == 'work_from_home']
-            total_days = sum(float(r.total_days or 0) for r in approved_requests)
+            chicago_leave_approved = [r for r in approved_requests if r.pto_type.lower() == 'chicago_leave']
 
-            # Define tile data with Tailwind color classes
+            # Define tile data with CAPS labels and larger icons
             tile_data = [
-                {'type': 'vacation', 'label': 'Vacation', 'icon': 'beach_access', 'count': len(vacation_approved),
+                {'type': 'vacation', 'label': 'VACATION', 'icon': 'beach_access', 'count': len(vacation_approved),
                  'days': sum(float(r.total_days or 0) for r in vacation_approved),
                  'border': 'blue', 'text': '#3b82f6'},
-                {'type': 'sick', 'label': 'Sick', 'icon': 'medical_services', 'count': len(sick_approved),
+                {'type': 'sick', 'label': 'SICK', 'icon': 'medical_services', 'count': len(sick_approved),
                  'days': sum(float(r.total_days or 0) for r in sick_approved),
                  'border': 'green', 'text': '#22c55e'},
-                {'type': 'personal', 'label': 'Personal', 'icon': 'person', 'count': len(personal_approved),
+                {'type': 'personal', 'label': 'PERSONAL', 'icon': 'person', 'count': len(personal_approved),
                  'days': sum(float(r.total_days or 0) for r in personal_approved),
                  'border': 'purple', 'text': '#a855f7'},
-                {'type': 'work_from_home', 'label': 'WFH', 'icon': 'home_work', 'count': len(wfh_approved),
-                 'days': sum(float(r.total_days or 0) for r in wfh_approved),
-                 'border': 'red', 'text': '#ef4444'},
             ]
 
-            with ui.element('div').classes('w-full grid grid-cols-5 gap-3 mb-4'):
+            # Add LEAVE tile for Chicago employees (between Personal and WFH)
+            if show_chicago_leave:
+                tile_data.append({
+                    'type': 'chicago_leave', 'label': 'LEAVE', 'icon': 'spa', 'count': len(chicago_leave_approved),
+                    'days': sum(float(r.total_days or 0) for r in chicago_leave_approved),
+                    'border': 'amber', 'text': '#f59e0b'
+                })
+
+            # Add WFH tile last
+            tile_data.append({
+                'type': 'work_from_home', 'label': 'WFH', 'icon': 'home_work', 'count': len(wfh_approved),
+                'days': sum(float(r.total_days or 0) for r in wfh_approved),
+                'border': 'red', 'text': '#ef4444'
+            })
+
+            # Grid columns: 4 normally, 5 with Chicago leave
+            grid_cols = 'grid-cols-5' if show_chicago_leave else 'grid-cols-4'
+
+            with ui.element('div').classes(f'w-full grid {grid_cols} gap-3 mb-4'):
                 for tile in tile_data:
                     def make_click_handler(t=tile['type']):
                         return lambda: apply_type_filter(t)
@@ -791,24 +883,10 @@ def requests_page():
                     tile_cards[tile['type']] = card
                     with card:
                         with ui.column().classes('items-center w-full'):
-                            ui.icon(tile['icon']).style(f"color: {tile['text']}")
-                            ui.label(tile['label']).classes('font-semibold text-center').style(f"color: {tile['text']}")
+                            ui.icon(tile['icon'], size='lg').style(f"color: {tile['text']}")
+                            ui.label(tile['label']).classes('font-bold text-center text-sm').style(f"color: {tile['text']}")
                             ui.label(f'{tile["count"]} request{"s" if tile["count"] != 1 else ""}').classes('text-xs opacity-60 text-center')
                             ui.label(fmt_days(tile["days"])).classes('text-sm font-bold text-center')
-
-                # Total/All tile to reset filters
-                total_count = len(approved_requests)
-                tile_border_colors['total'] = '#6b7280'
-                total_card = ui.card().classes('p-3 border-t-4 border-gray-500 cursor-pointer hover:opacity-80 transition-all duration-200').style(
-                    'border-bottom: 4px solid transparent;'
-                ).on('click', lambda: clear_type_filters())
-                tile_cards['total'] = total_card
-                with total_card:
-                    with ui.column().classes('items-center w-full'):
-                        ui.icon('list_alt').style('color: #6b7280')
-                        ui.label('Total').classes('font-semibold text-center').style('color: #6b7280')
-                        ui.label(f'{total_count} request{"s" if total_count != 1 else ""}').classes('text-xs opacity-60 text-center')
-                        ui.label(fmt_days(total_days)).classes('text-sm font-bold text-center')
 
             # Other types dropdown (if any exist)
             if other_approved:

@@ -107,15 +107,8 @@ def request_form_page(preselect_type: str = None):
             PTORequest.status == 'pending'
         ).all()
 
-        # Query market holidays for date validation (current year and next)
-        current_year = date.today().year
-        holidays = db.query(MarketHoliday).filter(
-            MarketHoliday.holiday_date >= date(current_year, 1, 1),
-            MarketHoliday.holiday_date <= date(current_year + 1, 12, 31)
-        ).all()
-        # Get unique dates as ISO strings for JavaScript validation (YYYY-MM-DD format)
-        holiday_dates_set = set(h.holiday_date.isoformat() for h in holidays)
-        holiday_dates_js = str(list(holiday_dates_set)).replace("'", '"')
+        # NOTE: Holiday validation is now done server-side in count_business_days()
+        # Removed client-side JS validation that caused iOS Safari blank screen
 
         # Get manager info from department
         manager_name = None
@@ -160,7 +153,7 @@ def request_form_page(preselect_type: str = None):
     }
 
     # ============ MAIN PAGE LAYOUT ============
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
 
         # Header with greeting
         page_header(title='REQUEST FORM', show_back=False)
@@ -530,6 +523,20 @@ def request_form_page(preselect_type: str = None):
 
                 # Use the start date year if no year specified
                 target_year = for_year or state['start_date'].year
+                current_year = date.today().year
+                current_month = date.today().month
+
+                # VACATION ROLLOVER: If December and vacation for January next year,
+                # use current year balance (rollover scenario)
+                is_vacation_rollover = (
+                    leave_type_code.upper() == 'VACATION' and
+                    current_month == 12 and
+                    state['start_date'].year > current_year and
+                    state['start_date'].month == 1 and
+                    state['end_date'].month == 1
+                )
+                if is_vacation_rollover:
+                    target_year = current_year
 
                 # Get or create balance for the target year
                 db_session = next(get_db())
@@ -696,10 +703,20 @@ def request_form_page(preselect_type: str = None):
                     # Get PTO type info for overlay
                     current_type = selected_type['value']
                     type_icon, type_hex = type_icons.get(current_type, ('event', '#9ca3af'))
-                    type_label = leave_type_options.get(current_type, current_type.replace('_', ' ').title()) if current_type else 'Select Type'
-                    # Shorten "Work From Home" to "WFH" for calendar overlay
-                    if current_type == 'work_from_home':
-                        type_label = 'WFH'
+                    # Create uppercase labels for calendar overlay
+                    label_map = {
+                        'vacation': 'VACATION',
+                        'sick': 'SICK',
+                        'personal': 'PERSONAL',
+                        'work_from_home': 'WFH',
+                        'chicago_leave': 'LEAVE',
+                        'bereavement': 'BEREAVEMENT',
+                        'fmla': 'FMLA',
+                        'jury_duty': 'JURY DUTY',
+                        'voting': 'VOTING',
+                        'military': 'MILITARY',
+                    }
+                    type_label = label_map.get(current_type, current_type.replace('_', ' ').upper()) if current_type else 'SELECT'
 
                     # Single range calendar with click-click pattern
                     def on_date_change(e):
@@ -787,17 +804,19 @@ def request_form_page(preselect_type: str = None):
                         initial_value = {'from': state['start_date'].isoformat(), 'to': state['end_date'].isoformat()}
 
                     # Wrap calendar in relative container for icon overlay
+                    # NOTE: Removed complex inline :options JS that caused iOS Safari blank screen
+                    # Weekend/holiday exclusion is handled server-side in count_business_days()
                     with ui.element('div').classes('relative w-full'):
                         range_calendar = ui.date(
                             value=initial_value,
                             on_change=on_date_change
-                        ).props(f'range color={cal_color} :options="date => {{ const p = date.split(\'/\'); const d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); const day = d.getDay(); const iso = date.replace(/\\//g, \'-\'); const holidays = {holiday_dates_js}; return iso >= \'{date.today().isoformat()}\' && day !== 0 && day !== 6 && !holidays.includes(iso); }}"').classes('w-full')
+                        ).props(f'range color={cal_color}').classes('w-full')
                         calendar_widgets['range'] = range_calendar
 
                         # PTO type overlay on calendar header
                         with ui.element('div').classes('absolute top-2 right-2 flex flex-col items-center gap-0').style('z-index: 10;'):
-                            ui.icon(type_icon, size='1.25rem').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
-                            ui.label(type_label).classes('text-xs font-medium').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                            ui.icon(type_icon, size='xl').style(f'color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
+                            ui.label(type_label).classes('text-xs font-bold').style('color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);')
 
                     # Half-day option and Clear button row
                     with ui.row().classes('w-full mt-3 items-center justify-between'):
@@ -960,11 +979,23 @@ def request_form_page(preselect_type: str = None):
                 if state['is_half_day']:
                     total_days = 0.5
                 else:
-                    total_days = (state['end_date'] - state['start_date']).days + 1
+                    total_days = count_business_days(state['start_date'], state['end_date'])
                 hours_requested = total_days * 8
                 is_wfh = pto_type.value == 'work_from_home'
                 _, _, _, available, balance_allocated, _ = get_balance_for_type(pto_type.value)
-                target_year = state['start_date'].year
+
+                # Detect vacation rollover scenario
+                current_year = date.today().year
+                current_month = date.today().month
+                is_vacation_rollover = (
+                    pto_type.value == 'vacation' and
+                    current_month == 12 and
+                    state['start_date'].year > current_year and
+                    state['start_date'].month == 1 and
+                    state['end_date'].month == 1
+                )
+                # For rollover, use current year; otherwise use start_date year
+                target_year = current_year if is_vacation_rollover else state['start_date'].year
 
                 with warning_container:
                     # WFH date restriction: only within 1 week allowed
@@ -991,8 +1022,17 @@ def request_form_page(preselect_type: str = None):
 
                     # Skip balance-related warnings for WFH (no balance system)
                     if not is_wfh:
-                        # Warning for unallocated future year balance
-                        if not balance_allocated and target_year != date.today().year:
+                        # VACATION ROLLOVER info card
+                        if is_vacation_rollover:
+                            with ui.card().classes('w-full p-3 mb-2 border-l-4 border-green-500'):
+                                with ui.row().classes('items-start'):
+                                    ui.icon('sync', color='green').classes('mr-2 mt-1')
+                                    with ui.column().classes('gap-0'):
+                                        ui.label(f'Vacation Rollover from {current_year}').classes('text-green-500 font-medium')
+                                        ui.label(f'This vacation will be deducted from your {current_year} balance and requires manager approval.').classes('text-sm opacity-70')
+
+                        # Warning for unallocated future year balance (NOT for vacation rollover)
+                        elif not balance_allocated and target_year != date.today().year:
                             with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
                                 with ui.row().classes('items-start'):
                                     ui.icon('schedule', color='amber').classes('mr-2 mt-1')
@@ -1010,19 +1050,37 @@ def request_form_page(preselect_type: str = None):
                                         ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
 
                         # Warning for exceeding available balance
-                        is_chicago = pto_type.value == 'chicago_leave'
+                        # HARD CAP TYPES: These types have fixed annual allocations and CANNOT be overdrafted
+                        # - sick: 5 days/year (40 hours) - hard cap, no manager override
+                        # - personal: 2 days/year (16 hours) - hard cap, no manager override
+                        # - chicago_leave: Chicago Paid Leave ordinance requires accrual-based usage
+                        # SOFT CAP TYPES: These allow overdraft with manager approval
+                        # - vacation: Manager can approve requests exceeding balance
+                        hard_cap_types = ['chicago_leave', 'sick', 'personal']
+                        should_block = pto_type.value in hard_cap_types
+
                         if hours_requested > available:
-                            if is_chicago:
-                                # BLOCK Chicago Safe Leave requests when over balance (per ordinance requirement)
-                                state['chicago_blocked'] = True
+                            if should_block:
+                                # BLOCK - these types have hard annual caps, no overdraft allowed
+                                state['chicago_blocked'] = True  # Using existing state key for submit button logic
+
+                                # Type-specific messaging
+                                if pto_type.value == 'chicago_leave':
+                                    block_reason = 'Per Chicago ordinance, you can only use time that has been accrued.'
+                                elif pto_type.value == 'sick':
+                                    block_reason = 'Sick leave has a fixed annual allocation and cannot exceed your balance.'
+                                else:  # personal
+                                    block_reason = 'Personal days have a fixed annual allocation and cannot exceed your balance.'
+
                                 with ui.card().classes('w-full p-3 mb-2 border-l-4 border-red-500 bg-red-900/20'):
                                     with ui.row().classes('items-start'):
                                         ui.icon('block', color='red').classes('mr-2 mt-1')
                                         with ui.column().classes('gap-0'):
-                                            ui.label(f'Cannot request - insufficient accrued time').classes('text-red-500 font-bold')
+                                            ui.label(f'Cannot request - insufficient balance').classes('text-red-500 font-bold')
                                             ui.label(f'Request exceeds available balance by {fmt_days((hours_requested - available)/8)}').classes('text-red-400 text-sm')
-                                            ui.label('Per Chicago ordinance, you can only use time that has been accrued.').classes('text-sm opacity-70 mt-1')
+                                            ui.label(block_reason).classes('text-sm opacity-70 mt-1')
                             else:
+                                # WARNING only - vacation allows manager override
                                 state['chicago_blocked'] = False
                                 with ui.card().classes('w-full p-3 mb-2 border-l-4 border-amber-500'):
                                     with ui.row().classes('items-start'):
@@ -1034,12 +1092,14 @@ def request_form_page(preselect_type: str = None):
                             state['chicago_blocked'] = False
 
                     # Check for holidays in the selected date range
+                    # Only show full closure holidays (not early close - those are still work days)
                     try:
                         db_check = next(get_db())
                         holidays_in_range = db_check.query(MarketHoliday).filter(
                             MarketHoliday.holiday_date >= state['start_date'],
                             MarketHoliday.holiday_date <= state['end_date'],
-                            MarketHoliday.market == 'Federal'
+                            MarketHoliday.market == 'Federal',
+                            ~MarketHoliday.name.contains('Early Close')  # Same filter as count_business_days
                         ).all()
                         db_check.close()
 
@@ -1049,8 +1109,10 @@ def request_form_page(preselect_type: str = None):
                                     ui.icon('celebration', color='blue').classes('mr-2 mt-1')
                                     with ui.column().classes('gap-0'):
                                         holiday_names = ', '.join([h.name for h in holidays_in_range])
+                                        is_plural = len(holidays_in_range) > 1
                                         ui.label(f'Holiday overlap: {holiday_names}').classes('text-blue-600 font-medium')
-                                        ui.label('Your selected dates include a company holiday. You may not need to use PTO for this day.').classes('text-sm opacity-70')
+                                        msg = 'These are company holidays and have been excluded' if is_plural else 'This is a company holiday and has been excluded'
+                                        ui.label(f'{msg} from your PTO total.').classes('text-sm opacity-70')
                     except Exception:
                         pass  # Don't block form if holiday check fails
 
@@ -1140,6 +1202,93 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             submit_btn.props(remove='loading disabled')
         return
 
+    # Future year requests handling
+    current_year = date.today().year
+    current_month = date.today().month
+    is_future_year = start_date.year > current_year
+
+    # Track if this is a vacation rollover request
+    is_vacation_rollover = False
+
+    if is_future_year:
+        # Non-vacation balance types: NOT allowed for future years
+        non_vacation_balance_types = ['sick', 'personal', 'chicago_leave']
+        if pto_type.lower() in non_vacation_balance_types:
+            show_warning_dialog('Future Year Request Not Allowed',
+                f'{pto_type.replace("_", " ").title()} requests cannot be submitted for future years. '
+                'Please submit your request when the new year begins.')
+            if submit_btn:
+                submit_btn.props(remove='loading disabled')
+            return
+
+        # Vacation rollover: Only allowed in December for January of next year
+        if pto_type.lower() == 'vacation':
+            # Must be December to request rollover
+            if current_month != 12:
+                show_warning_dialog('Vacation Rollover Not Available',
+                    'Vacation rollover requests can only be submitted in December. '
+                    'Please wait until December to request vacation time for next year.')
+                if submit_btn:
+                    submit_btn.props(remove='loading disabled')
+                return
+
+            # Must be for January only
+            if start_date.month != 1 or end_date.month != 1:
+                show_warning_dialog('Vacation Rollover - January Only',
+                    'Vacation rollover can only be used in January of the new year. '
+                    'Please select dates in January only.')
+                if submit_btn:
+                    submit_btn.props(remove='loading disabled')
+                return
+
+            # Must have vacation balance in current year
+            db_rollover_check = next(get_db())
+            try:
+                from src.models import PTOBalance
+                balance = db_rollover_check.query(PTOBalance).filter(
+                    PTOBalance.user_id == user_id,
+                    PTOBalance.year == current_year
+                ).first()
+
+                if balance:
+                    vacation_available = (
+                        float(balance.vacation_total or 0) +
+                        float(balance.vacation_carryover or 0) -
+                        float(balance.vacation_used or 0) -
+                        float(balance.vacation_pending or 0)
+                    )
+                else:
+                    vacation_available = 0
+
+                if vacation_available <= 0:
+                    show_warning_dialog('No Vacation Balance',
+                        f'You have no available vacation time in {current_year} to roll over. '
+                        'Vacation rollover requires unused vacation days from the current year.')
+                    if submit_btn:
+                        submit_btn.props(remove='loading disabled')
+                    return
+
+                # Check if requesting more days than available
+                if half_day:
+                    days_requested = 0.5
+                else:
+                    days_requested = count_business_days(start_date, end_date)
+                hours_requested = days_requested * 8
+
+                if hours_requested > vacation_available:
+                    show_warning_dialog('Insufficient Vacation Balance',
+                        f'You are requesting {days_requested} days but only have '
+                        f'{vacation_available / 8:.1f} days available in {current_year} to roll over.')
+                    if submit_btn:
+                        submit_btn.props(remove='loading disabled')
+                    return
+
+                # All checks passed - this is a valid vacation rollover
+                is_vacation_rollover = True
+
+            finally:
+                db_rollover_check.close()
+
     # Maximum date range check (90 calendar days / ~3 months)
     days_diff = (end_date - start_date).days
     if days_diff > 90:
@@ -1174,9 +1323,10 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 chicago_available = float(balance.chicago_paid_leave_available)
                 leave_name = 'Chicago Leave'
 
-                total_days = (end_date - start_date).days + 1
                 if half_day:
                     total_days = 0.5
+                else:
+                    total_days = count_business_days(start_date, end_date)
                 hours_requested = total_days * 8
 
                 if hours_requested > chicago_available:
@@ -1224,44 +1374,10 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             submit_btn.props(remove='loading disabled')
         return
 
-    # Block PTO requests on federal holidays
-    db_holiday_check = None
-    try:
-        db_holiday_check = next(get_db())
-        holidays_in_range = db_holiday_check.query(MarketHoliday).filter(
-            MarketHoliday.holiday_date >= start_date,
-            MarketHoliday.holiday_date <= end_date
-        ).all()
-        if holidays_in_range:
-            # Get unique holiday names with their dates
-            holiday_info = []
-            seen = set()
-            for h in holidays_in_range:
-                key = (h.holiday_date, h.name)
-                if key not in seen:
-                    seen.add(key)
-                    holiday_info.append((h.holiday_date.strftime('%A, %b %d'), h.name))
-
-            with ui.dialog() as holiday_dialog, ui.card().classes('p-0 max-w-md'):
-                with ui.row().classes('w-full p-4 bg-orange-500 text-white items-center'):
-                    ui.icon('celebration', size='md').classes('mr-2')
-                    ui.label('Company Holiday').classes('text-lg font-bold')
-                with ui.column().classes('p-4 gap-3'):
-                    ui.label('PTO requests cannot include company holidays.').classes('text-base')
-                    ui.label('You already have these days off:').classes('text-sm opacity-70')
-                    with ui.column().classes('pl-4'):
-                        for hdate, hname in holiday_info:
-                            ui.label(f'• {hname} ({hdate})').classes('text-sm font-medium')
-                    ui.label('No need to use your PTO balance for holidays!').classes('text-sm opacity-70 mt-2')
-                    with ui.row().classes('w-full justify-end mt-2'):
-                        ui.button('OK', on_click=holiday_dialog.close).props('color=primary')
-            holiday_dialog.open()
-            if submit_btn:
-                submit_btn.props(remove='loading disabled')
-            return
-    finally:
-        if db_holiday_check:
-            db_holiday_check.close()
+    # NOTE: Holiday handling is done via count_business_days() which excludes
+    # holidays from the day count. The inline banner in update_warning() informs
+    # users which holidays are excluded. No blocking modal needed - Policy A.
+    # See: docs/bugs/BUG-HOLIDAY-MODAL-LOOP.md
 
     db = None
     try:
@@ -1327,17 +1443,20 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                     submit_btn.props(remove='loading disabled')
                 return
 
-        # Check for dates too far in the past (friendly message instead of harsh error)
-        days_until_start = (start_date - date.today()).days
-        if days_until_start < -7:
-            show_warning_dialog(
-                'Date Too Far Back',
-                'Requests for dates more than 7 days ago require manager assistance. '
-                'Please contact your manager to submit this request on your behalf.'
-            )
+        # Use PolicyEngine for date validation (centralized policy logic)
+        from src.services.policy_engine import PolicyEngine
+        policy_engine = PolicyEngine()
+        pto_type_str = pto_type.value if hasattr(pto_type, 'value') else str(pto_type)
+        date_result = policy_engine.validate_request_dates(start_date, end_date, pto_type_str)
+
+        if not date_result.is_valid:
+            show_warning_dialog('Invalid Date', date_result.rejection_reason)
             if submit_btn:
                 submit_btn.props(remove='loading disabled')
             return
+
+        # Calculate days for advance notice check
+        days_until_start = (start_date - date.today()).days
 
         # Advance notice reminder (only for future dates) - use non-blocking notification
         if policy and policy.advance_notice_days and policy.advance_notice_days > 0:
@@ -1416,18 +1535,21 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                     float(total_days)
                 )
 
-            show_success_dialog('Request Submitted', 'PTO request submitted for approval', on_close=lambda: ui.navigate.to('/dashboard'))
+            # Show appropriate success message for rollover vs regular request
+            if is_vacation_rollover:
+                show_success_dialog('Vacation Rollover Submitted',
+                    f'Your vacation rollover request for January {start_date.year} has been submitted. '
+                    f'This will be deducted from your {current_year} balance once approved.',
+                    on_close=lambda: ui.navigate.to('/dashboard'))
+            else:
+                show_success_dialog('Request Submitted', 'PTO request submitted for approval', on_close=lambda: ui.navigate.to('/dashboard'))
 
     except Exception as e:
         # Show a friendlier error message
         error_msg = str(e)
-        if 'more than 7 days in the past' in error_msg.lower():
+        if 'more than 7 days' in error_msg.lower() or 'days ago' in error_msg.lower():
             # This shouldn't happen with UI validation, but just in case
-            show_warning_dialog(
-                'Date Too Far Back',
-                'Requests for dates more than 7 days ago require manager assistance. '
-                'Please contact your manager to submit this request on your behalf.'
-            )
+            show_warning_dialog('Invalid Date', error_msg)
         else:
             show_warning_dialog(
                 'Unable to Submit',

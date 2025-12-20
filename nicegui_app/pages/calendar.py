@@ -37,11 +37,14 @@ def calendar_page():
     is_chicago_employee = False
     db = next(get_db())
     try:
+        from src.models.system_setting import SystemSetting
         current_user = db.query(User).filter(User.id == user_id).first()
         if current_user:
             user_department_id = current_user.department_id
-            # Check if user is in Chicago for Chicago leave filter visibility
-            is_chicago_employee = current_user.location_city and current_user.location_city.lower() == 'chicago'
+            # Check if user is in Chicago AND Chicago leave is enabled
+            user_is_in_chicago = current_user.location_city and current_user.location_city.lower() == 'chicago'
+            chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+            is_chicago_employee = user_is_in_chicago and chicago_setting and chicago_setting.bool_value
     finally:
         db.close()
 
@@ -194,7 +197,7 @@ def calendar_page():
         wfh_dialog.open()
 
     # Main container
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Print CSS styles - printer-friendly with white background
         ui.add_head_html('''
         <style>
@@ -890,27 +893,18 @@ def calendar_page():
                                 """Cancel pending request for employee."""
                                 cancel_db = next(get_db())
                                 try:
-                                    req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
-                                    if not req:
-                                        show_error_dialog('Not Found', 'The request was not found.')
-                                        return
+                                    current_user = app.storage.user.get('user', {})
+                                    user_id = current_user.get('id')
 
-                                    req.status = 'cancelled'
-
-                                    # Restore pending balance
-                                    if req_type.lower() == 'vacation':
-                                        balance_service = BalanceService(cancel_db)
-                                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
-                                        hours_to_restore = req_total_days * 8
-                                        balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
-
-                                    cancel_db.commit()
+                                    # Use PTOService.cancel_request which handles ALL PTO types correctly
+                                    from src.services.pto_service import PTOService
+                                    pto_service = PTOService(cancel_db)
+                                    pto_service.cancel_request(req_id, user_id)
 
                                     # Audit log the cancellation
-                                    current_user = app.storage.user.get('user', {})
                                     AuditService.log_pto_cancel(
                                         db=cancel_db,
-                                        user_id=current_user.get('id'),
+                                        user_id=user_id,
                                         username=current_user.get('username'),
                                         request_id=req_id,
                                         employee_name=req_employee_name,
@@ -920,6 +914,10 @@ def calendar_page():
                                     show_success_dialog('Success', 'Request cancelled successfully')
                                     dialog.close()
                                     render_current_view()
+                                except ValueError as e:
+                                    show_warning_dialog('Cannot Cancel', str(e))
+                                except Exception as e:
+                                    show_error_dialog('Error', f'Error cancelling request: {str(e)}')
                                 finally:
                                     cancel_db.close()
 
@@ -1038,16 +1036,29 @@ def calendar_page():
 
         def show_quick_request_popup(click_date: date):
             """Show popup for quick PTO request on empty day (employees only)."""
+            from src.services.policy_engine import PolicyEngine
+
             if user_role != 'employee':
                 return
 
-            if click_date < today:
-                show_warning_dialog('Past Date', 'Cannot request time off for past dates. Please select a future date.')
+            # Use PolicyEngine for date validation
+            policy = PolicyEngine()
+            result = policy.validate_request_dates(click_date, click_date, 'vacation')
+
+            if not result.is_valid:
+                show_warning_dialog('Invalid Date', result.rejection_reason)
                 return
 
             with ui.dialog() as dialog, ui.card().classes('min-w-80'):
                 ui.label('Request Time Off').classes('text-xl font-bold mb-2')
                 ui.label(f'{click_date.strftime("%A, %B %d, %Y")}').classes('opacity-70 mb-4')
+
+                # Show backdating notice if applicable
+                if result.is_backdated:
+                    with ui.element('div').classes('p-3 rounded-lg mb-4').style('background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b;'):
+                        with ui.row().classes('items-start gap-2'):
+                            ui.icon('info', size='xs', color='amber')
+                            ui.label('This date is in the past. Your request will require manager approval.').classes('text-sm')
 
                 ui.label('Would you like to submit a PTO request for this date?').classes('mb-4')
 

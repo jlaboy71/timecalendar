@@ -2,7 +2,7 @@
 import re
 import json
 from datetime import datetime
-from nicegui import ui, app
+from nicegui import ui, app, context
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog, show_success_dialog
@@ -11,6 +11,7 @@ from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
 from src.services.balance_service import BalanceService
 from src.schemas.user_schemas import UserCreate, UserUpdate
+from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color, TJM_GOLD, TJM_GRAY
 
 
 def admin_employees_list_page():
@@ -74,7 +75,7 @@ def admin_employees_list_page():
         'per_page': 25,
     }
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='EMPLOYEE MANAGEMENT', show_back=False)
 
         # Add New Employee button
@@ -261,12 +262,14 @@ def admin_employees_add_page():
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-4xl mx-auto p-4 animate-fade-in'):
         page_header(title='ADD NEW EMPLOYEE', show_back=False)
 
         # Basic Information Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Basic Information').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('person', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Basic Information').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 first_name_input = ui.input('First Name').props('outlined').classes('flex-1')
@@ -297,8 +300,10 @@ def admin_employees_add_page():
             ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-1')
 
         # Employment Details Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Employment Details').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('badge', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Employment Details').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4 items-end'):
                 with ui.column().classes('flex-1'):
@@ -312,7 +317,93 @@ def admin_employees_add_page():
                             ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
                 with ui.column().classes('flex-1'):
-                    department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('w-full')
+                    with ui.row().classes('w-full items-end gap-2'):
+                        department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('flex-grow')
+
+                        # Quick Create Department button
+                        def open_create_department_dialog():
+                            with context.client.content:
+                                with ui.dialog() as create_dialog, ui.card().classes('p-6').style(f'background-color: #1f2937; min-width: 450px;'):
+                                    with ui.row().classes('items-center gap-2 mb-4'):
+                                        ui.icon('add_business', size='sm').style(f'color: {TJM_GOLD};')
+                                        ui.label('Quick Create Department').classes('text-lg font-bold')
+
+                                    # Department name with live icon preview
+                                    with ui.row().classes('w-full items-center gap-3'):
+                                        dept_icon_preview = ui.icon('business', size='lg').style(f'color: {TJM_GOLD};')
+                                        new_dept_name = ui.input('Department Name').props('outlined').classes('flex-grow')
+
+                                    def update_icon_preview():
+                                        if new_dept_name.value:
+                                            icon = get_dept_icon(new_dept_name.value)
+                                            dept_icon_preview.props(f'name={icon}')
+                                        else:
+                                            dept_icon_preview.props('name=business')
+
+                                    new_dept_name.on('update:model-value', lambda e: update_icon_preview())
+
+                                    new_dept_code = ui.input('Department Code', placeholder='e.g., ACCT, HR, DEV').props('outlined').classes('w-full mt-2')
+                                    ui.label('The icon is auto-selected based on department name keywords').classes('text-xs opacity-60 mt-1')
+
+                                    with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                                        ui.button('Cancel', on_click=create_dialog.close).props('flat')
+
+                                        def create_quick_department():
+                                            if not new_dept_name.value or not new_dept_name.value.strip():
+                                                ui.notify('Department name is required', type='warning')
+                                                return
+                                            if not new_dept_code.value or not new_dept_code.value.strip():
+                                                ui.notify('Department code is required', type='warning')
+                                                return
+
+                                            db = next(get_db())
+                                            try:
+                                                new_dept = DepartmentService.create_department(
+                                                    db,
+                                                    name=new_dept_name.value.strip(),
+                                                    code=new_dept_code.value.strip().upper()
+                                                )
+                                                if new_dept:
+                                                    # Add to options and select it
+                                                    dept_options[new_dept.id] = new_dept.name
+                                                    department_select.options = dept_options
+                                                    department_select.value = new_dept.id
+                                                    department_select.update()
+                                                    update_dept_preview()
+                                                    create_dialog.close()
+                                                    ui.notify(f'Department "{new_dept.name}" created!', type='positive')
+                                                else:
+                                                    ui.notify('Failed to create department', type='negative')
+                                            except Exception as ex:
+                                                ui.notify(f'Error: {str(ex)}', type='negative')
+                                            finally:
+                                                db.close()
+
+                                        ui.button('Create', on_click=create_quick_department).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+
+                                create_dialog.open()
+
+                        ui.button(icon='add', on_click=open_create_department_dialog).props('flat dense').tooltip('Quick Create Department')
+
+            # Department icon preview (shows when department is selected)
+            dept_preview_container = ui.row().classes('w-full mt-2')
+
+            def update_dept_preview():
+                dept_preview_container.clear()
+                dept_id = department_select.value
+                if dept_id and dept_id in dept_options:
+                    dept_name = dept_options[dept_id]
+                    dept_icon = get_dept_icon(dept_name)
+                    dept_color = get_dept_color(dept_id)
+
+                    with dept_preview_container:
+                        with ui.card().classes('w-full p-3').style(f'border-left: 4px solid {dept_color["bg"]}; background-color: {dept_color["light"]}20;'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('rounded-lg p-2').style(f'background-color: {dept_color["bg"]};'):
+                                    ui.icon(dept_icon, size='sm', color='white')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(dept_name).classes('font-semibold')
+                                    ui.label('Selected Department').classes('text-xs opacity-60')
 
             # Manager display (auto-filled based on department selection)
             manager_display_container = ui.row().classes('w-full mt-2')
@@ -343,7 +434,11 @@ def admin_employees_add_page():
                     finally:
                         mgr_db.close()
 
-            department_select.on('update:model-value', lambda e: update_manager_display())
+            def on_department_change(e):
+                update_dept_preview()
+                update_manager_display()
+
+            department_select.on('update:model-value', on_department_change)
 
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
@@ -358,8 +453,10 @@ def admin_employees_add_page():
                     ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
 
         # Work Location Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Work Location').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('location_on', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Work Location').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
@@ -386,8 +483,10 @@ def admin_employees_add_page():
                 location_state_select.on('update:model-value', lambda e: update_city_options())
 
         # Remote Work Schedule Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Remote Work Schedule').classes('text-lg font-semibold mb-2').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-2'):
+                ui.icon('home_work', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Remote Work Schedule').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
             ui.label('Select the days this employee works remotely').classes('text-sm opacity-60 mb-4')
 
             with ui.row().classes('w-full gap-6 justify-center'):
@@ -622,7 +721,7 @@ def admin_employees_edit_page(user_id: int):
             except (json.JSONDecodeError, TypeError, ValueError):
                 remote_schedule = {}
 
-        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        with ui.column().classes('w-full max-w-4xl mx-auto p-4 animate-fade-in'):
             page_header(title='EDIT EMPLOYEE', show_back=False)
 
             with ui.row().classes('w-full gap-4 mb-4'):

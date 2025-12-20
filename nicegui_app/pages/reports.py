@@ -137,7 +137,7 @@ def reports_page():
     }
 
     # Main container
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Header with greeting (no back arrow - we'll add button at bottom)
         page_header(title='REPORTS', show_back=False)
 
@@ -732,6 +732,13 @@ def reports_page():
                     PTOBalance.year == filter_state['year']
                 ).first()
 
+                # Check if user is Chicago employee (for LEAVE tile visibility)
+                from src.models.system_setting import SystemSetting
+                user_obj = db.query(User).filter(User.id == user_id).first()
+                is_chicago_employee = user_obj and user_obj.location_city and user_obj.location_city.lower() == 'chicago'
+                chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+                show_chicago_leave = is_chicago_employee and chicago_setting and chicago_setting.bool_value
+
                 # Get all requests for the year
                 all_requests = db.query(PTORequest).filter(
                     PTORequest.user_id == user_id,
@@ -908,9 +915,11 @@ def reports_page():
                         ('vacation', 'Vacation', 'beach_access', vac_avail, '#3b82f6', '#1e3a5f', vac_pending, len(requests_by_type['vacation']), False),
                         ('sick', 'Sick', 'local_hospital', sick_avail, '#22c55e', '#14532d', 0, len(requests_by_type['sick']), False),
                         ('personal', 'Personal', 'person', personal_avail, '#a855f7', '#581c87', 0, len(requests_by_type['personal']), False),
-                        ('chicago_leave', 'Leave', 'spa', chicago_avail, '#f59e0b', '#78350f', 0, chicago_count, False),
-                        ('work_from_home', 'WFH', 'home_work', wfh_days * 8, '#ef4444', '#7f1d1d', 0, wfh_count, True),
                     ]
+                    # Only show Chicago Leave tile for Chicago employees with setting enabled
+                    if show_chicago_leave:
+                        tiles.append(('chicago_leave', 'Leave', 'spa', chicago_avail, '#f59e0b', '#78350f', 0, chicago_count, False))
+                    tiles.append(('work_from_home', 'WFH', 'home_work', wfh_days * 8, '#ef4444', '#7f1d1d', 0, wfh_count, True))
 
                     # Border class mapping for tailwind
                     border_classes = {
@@ -921,8 +930,9 @@ def reports_page():
                         '#ef4444': 'border-red-500',
                     }
 
-                    # Use CSS Grid for perfect 5-column alignment
-                    with ui.element('div').classes('w-full grid grid-cols-5 gap-3 mb-4'):
+                    # Use CSS Grid - 5 columns if Chicago leave shown, 4 otherwise
+                    grid_cols = 'grid-cols-5' if show_chicago_leave else 'grid-cols-4'
+                    with ui.element('div').classes(f'w-full grid {grid_cols} gap-3 mb-4'):
                         for type_code, label, icon, hours_avail, color, bg_active, pending_hours, req_count, is_count_only in tiles:
                             is_selected = type_code in filter_state['selected_pto_types']
                             border_class = border_classes.get(color, 'border-gray-500')

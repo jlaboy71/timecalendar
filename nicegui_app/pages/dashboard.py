@@ -46,6 +46,39 @@ def dashboard_page():
 
     apply_dark_mode()
 
+    # Add custom CSS for admin dashboard enhancements
+    ui.add_head_html('''
+    <style>
+        @keyframes pulse-pending {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+        }
+        .pulse-pending {
+            animation: pulse-pending 2s ease-in-out infinite;
+        }
+        .admin-stat-card {
+            transition: all 0.2s ease;
+        }
+        .admin-stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .admin-btn {
+            transition: all 0.2s ease;
+            border: 2px solid transparent !important;
+        }
+        .admin-btn:hover {
+            border-color: #C9A227 !important;
+            transform: scale(1.02);
+        }
+        .section-header {
+            border-left: 3px solid #C9A227;
+            padding-left: 12px;
+            margin-bottom: 12px;
+        }
+    </style>
+    ''')
+
     # Check if user is logged in
     if not app.storage.user.get('user'):
         ui.navigate.to('/')
@@ -103,7 +136,7 @@ def dashboard_page():
                 cancellation_requests = PTOService.get_cancellation_requests_with_employee_info(db)
 
         # ============ MAIN LAYOUT ============
-        with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+        with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
 
             # Header with logo, greeting and logout
             is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
@@ -804,7 +837,10 @@ def dashboard_page():
                                     ui.icon(type_icon).classes(f'text-{border_color}-500')
                                     with ui.column().classes('gap-0'):
                                         with ui.row().classes('gap-2 items-center'):
-                                            ui.label(get_pto_display_name(req.pto_type)).classes('font-medium')
+                                            # Show "Vacation Rollover" for rollover requests
+                                            is_rollover = hasattr(req, 'carryover_from_year') and req.carryover_from_year and pto_type_lower == 'vacation'
+                                            display_label = 'Vacation Rollover' if is_rollover else get_pto_display_name(req.pto_type)
+                                            ui.label(display_label).classes('font-medium')
                                             ui.badge('Pending', color='amber').props('outline')
                                         if req.start_date == req.end_date:
                                             ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-sm opacity-70')
@@ -865,25 +901,30 @@ def dashboard_page():
 
                     with ui.row().classes('w-full gap-4 justify-center'):
                         # Total Employees - with gradient icon
-                        with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500'):
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500 admin-stat-card'):
                             with ui.row().classes('items-center gap-3'):
                                 with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #3b82f6, #1d4ed8);'):
                                     ui.icon('people', color='white').classes('text-xl')
                                 with ui.column().classes('gap-0'):
                                     ui.label(str(len(active_users))).classes('text-3xl font-bold')
                                     ui.label('Active Employees').classes('text-xs opacity-60')
+                            ui.tooltip('Total active user accounts in the system')
 
                         # Total Departments - with gradient icon
-                        with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500'):
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-purple-500 admin-stat-card'):
                             with ui.row().classes('items-center gap-3'):
                                 with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #8b5cf6, #6d28d9);'):
                                     ui.icon('business', color='white').classes('text-xl')
                                 with ui.column().classes('gap-0'):
                                     ui.label(str(len(all_departments))).classes('text-3xl font-bold')
                                     ui.label('Departments').classes('text-xs opacity-60')
+                            ui.tooltip('Organizational departments')
 
-                        # Pending Requests - with gradient icon (clickable)
-                        with ui.card().classes('flex-1 p-4 border-l-4 border-amber-500 cursor-pointer hover:shadow-lg transition-shadow').on('click', lambda: ui.navigate.to('/admin/approvals') if pending_count > 0 else None):
+                        # Pending Requests - with gradient icon (clickable) + pulse when > 0
+                        pending_card_classes = 'flex-1 p-4 border-l-4 border-amber-500 cursor-pointer admin-stat-card'
+                        if pending_count > 0:
+                            pending_card_classes += ' pulse-pending'
+                        with ui.card().classes(pending_card_classes).on('click', lambda: ui.navigate.to('/admin/approvals') if pending_count > 0 else None):
                             with ui.row().classes('items-center gap-3'):
                                 with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #f59e0b, #d97706);'):
                                     ui.icon('pending_actions', color='white').classes('text-xl')
@@ -893,15 +934,17 @@ def dashboard_page():
                                         if pending_count > 0:
                                             ui.badge('Action', color='amber').props('dense')
                                     ui.label('Pending Requests').classes('text-xs opacity-60')
+                            ui.tooltip('Click to review pending PTO requests' if pending_count > 0 else 'No pending requests')
 
-                        # PTO This Week - NEW stat card with gradient icon
-                        with ui.card().classes('flex-1 p-4 border-l-4 border-green-500'):
+                        # PTO This Week - stat card with gradient icon
+                        with ui.card().classes('flex-1 p-4 border-l-4 border-green-500 admin-stat-card'):
                             with ui.row().classes('items-center gap-3'):
                                 with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #22c55e, #16a34a);'):
                                     ui.icon('event_busy', color='white').classes('text-xl')
                                 with ui.column().classes('gap-0'):
                                     ui.label(str(pto_this_week_count)).classes('text-3xl font-bold')
                                     ui.label('Out This Week').classes('text-xs opacity-60')
+                            ui.tooltip('Employees with approved PTO this week')
 
                 # ============ QUICK INSIGHTS PANEL ============
                 with ui.row().classes('w-full gap-4 mb-4'):
@@ -1071,11 +1114,11 @@ def dashboard_page():
                         ui.label('Management').classes('text-xs font-semibold uppercase opacity-60')
                     with ui.row().classes('w-full gap-3'):
                         ui.button('Add Employee', icon='person_add',
-                                  on_click=lambda: ui.navigate.to('/admin/employees/add')).props('outline color=indigo').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/admin/employees/add')).props('outline color=indigo').classes('flex-1 admin-btn')
                         ui.button('Manage Employees', icon='people',
-                                  on_click=lambda: ui.navigate.to('/admin/employees')).props('outline color=indigo').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/admin/employees')).props('outline color=indigo').classes('flex-1 admin-btn')
                         ui.button('Manage Departments', icon='business',
-                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('outline color=indigo').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/admin/departments')).props('outline color=indigo').classes('flex-1 admin-btn')
 
                     ui.separator().classes('my-3')
 
@@ -1085,9 +1128,9 @@ def dashboard_page():
                         ui.label('Approvals').classes('text-xs font-semibold uppercase opacity-60')
                     with ui.row().classes('w-full gap-3'):
                         ui.button('PTO Approvals', icon='pending_actions',
-                                  on_click=lambda: ui.navigate.to('/admin/approvals')).props('outline color=purple').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/admin/approvals')).props('outline color=purple').classes('flex-1 admin-btn')
                         ui.button('Carryover Approvals', icon='move_down',
-                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=purple').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=purple').classes('flex-1 admin-btn')
 
                     ui.separator().classes('my-3')
 
@@ -1097,9 +1140,9 @@ def dashboard_page():
                         ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
                     with ui.row().classes('w-full gap-3'):
                         ui.button('Calendar', icon='calendar_month',
-                                  on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 admin-btn')
                         ui.button('Reports', icon='assessment',
-                                  on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1')
+                                  on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 admin-btn')
 
                     # System section - superadmin only
                     if user_role == 'superadmin':
@@ -1110,7 +1153,7 @@ def dashboard_page():
                             ui.label('System').classes('text-xs font-semibold uppercase opacity-60')
                         with ui.row().classes('w-full gap-3'):
                             ui.button('System Admin', icon='settings_applications',
-                                      on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=amber').classes('flex-1')
+                                      on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=amber').classes('flex-1 admin-btn')
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
@@ -1371,39 +1414,26 @@ def cancel_request(request_id: int):
         db = next(get_db())
         from src.services.pto_service import PTOService
 
-        # Get the request
-        pto_service = PTOService(db)
-        request = pto_service.get_request_by_id(request_id)
+        current_user = app.storage.user.get('user', {})
+        user_id = current_user.get('id')
 
+        # Use PTOService.cancel_request which handles ALL PTO types correctly
+        pto_service = PTOService(db)
+
+        # Get employee name for audit log before cancelling
+        request = pto_service.get_request_by_id(request_id)
         if not request:
             show_error_dialog('Not Found', 'The request you are looking for was not found.')
             return
-
-        if request.status != 'pending':
-            show_warning_dialog('Cannot Cancel', 'Only pending requests can be cancelled.')
-            return
-
-        # Get employee name for audit log before modifying
         employee_name = request.user.full_name if request.user else 'Unknown'
 
-        # Update the request status
-        request.status = 'cancelled'
-
-        # If it was vacation, return the pending hours
-        if request.pto_type.lower() == 'vacation':
-            balance_service = BalanceService(db)
-            balance = balance_service.get_or_create_balance(request.user_id, request.start_date.year)
-            # Remove from pending (convert to Decimal for balance service)
-            from decimal import Decimal
-            balance_service.adjust_vacation_used(balance.id, -Decimal(str(request.total_days)), is_pending=True)
-
-        db.commit()
+        # Cancel via service (handles balance restoration for ALL PTO types)
+        pto_service.cancel_request(request_id, user_id)
 
         # Audit log the cancellation
-        current_user = app.storage.user.get('user', {})
         AuditService.log_pto_cancel(
             db=db,
-            user_id=current_user.get('id'),
+            user_id=user_id,
             username=current_user.get('username'),
             request_id=request_id,
             employee_name=employee_name,
@@ -1412,6 +1442,9 @@ def cancel_request(request_id: int):
 
         show_success_dialog('Success', 'Request cancelled successfully', on_close=lambda: ui.navigate.to('/dashboard'))
 
+    except ValueError as e:
+        # PTOService raises ValueError for validation errors
+        show_warning_dialog('Cannot Cancel', str(e))
     except Exception as e:
         show_error_dialog('Error', f'Error cancelling request: {str(e)}')
     finally:
@@ -1776,7 +1809,9 @@ def show_pto_detail_dialog(request_or_id):
                     hours_to_restore = req_total_days * 8
 
                     if req_status == 'pending':
-                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                        # CRITICAL: Use carryover_from_year for vacation rollover requests
+                        balance_year = req_carryover_from_year if (req_type_lower == 'vacation' and req_carryover_from_year) else req_year
+                        balance = balance_service.get_or_create_balance(req_user_id, balance_year)
                         if req_type_lower == 'vacation':
                             balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
                     else:
@@ -1826,7 +1861,9 @@ def show_pto_detail_dialog(request_or_id):
 
                 if req_type.lower() == 'vacation':
                     balance_service = BalanceService(cancel_db)
-                    balance = balance_service.get_or_create_balance(req_user_id, req_year)
+                    # CRITICAL: Use carryover_from_year for vacation rollover requests
+                    balance_year = req_carryover_from_year if req_carryover_from_year else req_year
+                    balance = balance_service.get_or_create_balance(req_user_id, balance_year)
                     hours_to_restore = req_total_days * 8
                     balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
 
@@ -1930,16 +1967,21 @@ def show_pto_detail_dialog(request_or_id):
                 del_db.close()
 
         # Show action buttons based on role and status
-        # Don't allow cancellation of PTO that has already occurred
+        # Past approved requests cannot be cancelled (time was already taken)
+        # Past pending requests CAN be cancelled (never approved, so no time used)
         is_past_request = req_end_date < date.today()
 
         with ui.row().classes('w-full justify-end gap-2 mt-2 p-4'):
-            if not is_past_request and can_direct_delete and req_status in ['pending', 'approved']:
-                ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
-            elif not is_past_request and is_own_request and req_status == 'pending':
+            if can_direct_delete and req_status in ['pending', 'approved']:
+                # Admin/manager can delete pending anytime, approved only if not past
+                if req_status == 'pending' or not is_past_request:
+                    ui.button('Delete', icon='delete', on_click=delete_request_direct).props('color=negative')
+            elif is_own_request and req_status == 'pending':
+                # Employee can cancel their own pending requests (even past dates - never approved)
                 ui.button('Cancel Request', icon='cancel', on_click=cancel_pending_request).props('color=negative')
             elif not is_past_request and is_own_request and req_status == 'approved':
                 # Employee can directly delete approved requests (manager will be notified)
+                # But NOT past approved requests (time was already taken)
                 ui.button('Delete Request', icon='delete', on_click=delete_approved_request_employee).props('color=negative')
 
     detail_dialog.open()
