@@ -1,4 +1,4 @@
-# TJM Time Calendar - Project Status & Remaining Tasks
+# PTO Central - Project Status & Remaining Tasks
 
 **Last Updated**: December 2024
 **Overall Status**: ~95% Complete
@@ -657,3 +657,22 @@ Automatic year-end processing runs on first login of new year:
 - Creates new year balances
 - Applies approved carryovers
 - Generates market holidays
+
+---
+
+## COMPLETED TASK: Hire Date Dropdown Replacement
+
+**Date Completed**: December 2024
+
+### Summary
+Replaced single hire date text input with three dropdown selects for better user experience.
+
+### Changes Made
+- [x] Added Month dropdown (January-December)
+- [x] Added Day dropdown (1-31)
+- [x] Added Year dropdown (2020-2030)
+- [x] Updated validation logic with proper date parsing
+- [x] Added error handling for invalid dates
+
+### Files Modified
+- `nicegui_app/main.py` (admin_employees_add function)
