@@ -1,9 +1,9 @@
 ---
 name: nicegui-ui
-description: Use when building or modifying NiceGUI pages, components, dialogs, charts, or any UI work. Provides TJM brand patterns, imports, page structure, validation, dialogs, charts, audit logging, and error handling.
+description: Use when building or modifying NiceGUI pages, components, dialogs, charts, or any UI work. Provides PTO Central brand patterns, imports, page structure, validation, dialogs, charts, audit logging, and error handling.
 ---
 
-# TJM NiceGUI UI Patterns - Complete Reference
+# PTO Central NiceGUI UI Patterns - Complete Reference
 
 ## 1. Required Imports
 
@@ -48,12 +48,12 @@ from nicegui_app.components.charts import (
 
 ---
 
-## 2. TJM Brand Colors
+## 2. Brand Colors
 
 ```python
 # Primary colors
-TJM_GOLD = '#C9A227'      # Primary accent, buttons, active states
-TJM_GRAY = '#5a6a72'      # Headers, navigation
+PTO_GOLD = '#C9A227'      # Primary accent, buttons, active states
+PTO_GRAY = '#5a6a72'      # Headers, navigation
 
 # Background colors
 DARK_BG = '#1f2937'       # Dialog backgrounds (dark mode)
@@ -186,12 +186,12 @@ with ui.card().classes('w-full'):
 
 ## 5. Buttons
 
-### TJM Gold Primary Button
+### Gold Primary Button
 ```python
 ui.button('Submit', on_click=handler).style('background-color: #C9A227 !important; color: white !important;')
 ```
 
-### TJM Gold Outline Button
+### Gold Outline Button
 ```python
 ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').style('border-color: #C9A227 !important; color: #C9A227 !important;')
 ```

@@ -1,5 +1,5 @@
 """
-Backup and restore service for TJM Time Calendar.
+Backup and restore service for PTO Central.
 
 Provides programmatic access to database backup and restore operations.
 Supports local backups and optional sync to off-site storage.

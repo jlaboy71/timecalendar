@@ -11,7 +11,7 @@ from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
 from src.services.balance_service import BalanceService
 from src.schemas.user_schemas import UserCreate, UserUpdate
-from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color, TJM_GOLD, TJM_GRAY
+from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color, PTO_GOLD, PTO_GRAY
 
 
 def admin_employees_list_page():
@@ -266,10 +266,10 @@ def admin_employees_add_page():
         page_header(title='ADD NEW EMPLOYEE', show_back=False)
 
         # Basic Information Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
-                ui.icon('person', size='sm').style(f'color: {TJM_GOLD};')
-                ui.label('Basic Information').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
+                ui.icon('person', size='sm').style(f'color: {PTO_GOLD};')
+                ui.label('Basic Information').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 first_name_input = ui.input('First Name').props('outlined').classes('flex-1')
@@ -300,10 +300,10 @@ def admin_employees_add_page():
             ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-1')
 
         # Employment Details Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
-                ui.icon('badge', size='sm').style(f'color: {TJM_GOLD};')
-                ui.label('Employment Details').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
+                ui.icon('badge', size='sm').style(f'color: {PTO_GOLD};')
+                ui.label('Employment Details').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
 
             with ui.row().classes('w-full gap-4 items-end'):
                 with ui.column().classes('flex-1'):
@@ -325,12 +325,12 @@ def admin_employees_add_page():
                             with context.client.content:
                                 with ui.dialog() as create_dialog, ui.card().classes('p-6').style(f'background-color: #1f2937; min-width: 450px;'):
                                     with ui.row().classes('items-center gap-2 mb-4'):
-                                        ui.icon('add_business', size='sm').style(f'color: {TJM_GOLD};')
+                                        ui.icon('add_business', size='sm').style(f'color: {PTO_GOLD};')
                                         ui.label('Quick Create Department').classes('text-lg font-bold')
 
                                     # Department name with live icon preview
                                     with ui.row().classes('w-full items-center gap-3'):
-                                        dept_icon_preview = ui.icon('business', size='lg').style(f'color: {TJM_GOLD};')
+                                        dept_icon_preview = ui.icon('business', size='lg').style(f'color: {PTO_GOLD};')
                                         new_dept_name = ui.input('Department Name').props('outlined').classes('flex-grow')
 
                                     def update_icon_preview():
@@ -379,7 +379,7 @@ def admin_employees_add_page():
                                             finally:
                                                 db.close()
 
-                                        ui.button('Create', on_click=create_quick_department).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                                        ui.button('Create', on_click=create_quick_department).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
                                 create_dialog.open()
 
@@ -453,10 +453,10 @@ def admin_employees_add_page():
                     ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
 
         # Work Location Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
-                ui.icon('location_on', size='sm').style(f'color: {TJM_GOLD};')
-                ui.label('Work Location').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
+                ui.icon('location_on', size='sm').style(f'color: {PTO_GOLD};')
+                ui.label('Work Location').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
@@ -483,10 +483,10 @@ def admin_employees_add_page():
                 location_state_select.on('update:model-value', lambda e: update_city_options())
 
         # Remote Work Schedule Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-2'):
-                ui.icon('home_work', size='sm').style(f'color: {TJM_GOLD};')
-                ui.label('Remote Work Schedule').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
+                ui.icon('home_work', size='sm').style(f'color: {PTO_GOLD};')
+                ui.label('Remote Work Schedule').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
             ui.label('Select the days this employee works remotely').classes('text-sm opacity-60 mb-4')
 
             with ui.row().classes('w-full gap-6 justify-center'):

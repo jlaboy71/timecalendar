@@ -11,8 +11,8 @@ from src.models.user import User
 from src.services.policy_change_service import PolicyChangeService
 
 
-# TJM Brand Colors
-TJM_GOLD = '#c9a227'
+# PTO Central Brand Colors
+PTO_GOLD = '#c9a227'
 
 
 def policy_change_badge(change: PolicyChangeLog) -> None:

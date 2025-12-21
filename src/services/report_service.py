@@ -1,5 +1,5 @@
 """
-Report generation service for TJM Time Calendar.
+Report generation service for PTO Central.
 
 Provides formatted reports with company branding for PDF, print, and email.
 """
@@ -23,7 +23,7 @@ def _fmt_days(value: float) -> str:
     return f"{value:.1f}"
 
 
-# Load TJM logo as base64 at module level
+# Load PTO Central logo as base64 at module level
 _LOGO_BASE64 = None
 _logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
 if _logo_path.exists():
@@ -31,16 +31,16 @@ if _logo_path.exists():
         with open(_logo_path, 'rb') as f:
             _LOGO_BASE64 = base64.b64encode(f.read()).decode('ascii')
     except Exception as e:
-        logger.warning(f"Could not load TJM logo: {e}")
+        logger.warning(f"Could not load PTO Central logo: {e}")
 
 
 class ReportService:
     """Service for generating formatted reports."""
 
-    # Company branding - TJM colors from logo
-    COMPANY_NAME = "TJM Holdings / Haventech Solutions"
-    TJM_GOLD = "#C5A951"  # Gold/olive color from logo
-    TJM_GRAY = "#5A6A72"  # Dark gray/slate from logo text
+    # Company branding - brand colors from logo
+    COMPANY_NAME = "Haventech Solutions"
+    PTO_GOLD = "#C5A951"  # Gold/olive color from logo
+    PTO_GRAY = "#5A6A72"  # Dark gray/slate from logo text
     LOGO_BASE64 = _LOGO_BASE64
 
     def __init__(self, db: Session):
@@ -77,10 +77,10 @@ class ReportService:
         if self.LOGO_BASE64:
             logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="PTO Central" style="height: 50px; width: auto;">'
         else:
-            logo_html = f'<div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">TJM</div>'
+            logo_html = f'<div style="font-size: 24px; font-weight: bold; color: {self.PTO_GRAY};">PTO Central</div>'
 
         header_html = f'''
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; border-bottom: 3px solid {self.TJM_GOLD};">
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; border-bottom: 3px solid {self.PTO_GOLD};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
                     {logo_html}
@@ -92,7 +92,7 @@ class ReportService:
                 </div>
             </div>
             <div style="margin-top: 10px;">
-                <h1 style="margin: 0; font-size: 20px; color: {self.TJM_GRAY};">{title}</h1>
+                <h1 style="margin: 0; font-size: 20px; color: {self.PTO_GRAY};">{title}</h1>
                 {f'<div style="font-size: 14px; color: #555; margin-top: 5px;">{subtitle}</div>' if subtitle else ''}
             </div>
         </div>
@@ -173,7 +173,7 @@ class ReportService:
         <div style="padding: 20px; font-family: 'Segoe UI', sans-serif;">
             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                 <thead>
-                    <tr style="background: {self.TJM_GRAY}; color: white;">
+                    <tr style="background: {self.PTO_GRAY}; color: white;">
                         <th style="padding: 12px; text-align: left;">Leave Type</th>
                         <th style="padding: 12px; text-align: center;">Total (Days)</th>
                         <th style="padding: 12px; text-align: center;">Used (Days)</th>
@@ -206,8 +206,8 @@ class ReportService:
                 </tbody>
             </table>
 
-            <div style="margin-top: 30px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
-                <h3 style="margin: 0 0 10px 0; color: {self.TJM_GRAY};">Summary</h3>
+            <div style="margin-top: 30px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.PTO_GOLD}; border-radius: 4px;">
+                <h3 style="margin: 0 0 10px 0; color: {self.PTO_GRAY};">Summary</h3>
                 <p style="margin: 5px 0;">Total PTO Available: <strong>{hours_to_days(vac_avail + sick_avail + personal_avail)} days</strong></p>
                 <p style="margin: 5px 0;">Total PTO Used YTD: <strong>{hours_to_days(vac_used + sick_used + personal_used)} days</strong></p>
             </div>
@@ -371,15 +371,15 @@ class ReportService:
                     <div style="font-size: 11px; color: #666;">Denied Days</div>
                     <div style="font-size: 24px; font-weight: bold; color: #c62828;">{_fmt_days(total_denied)}</div>
                 </div>
-                <div style="flex: 1; min-width: 140px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
+                <div style="flex: 1; min-width: 140px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.PTO_GOLD}; border-radius: 4px;">
                     <div style="font-size: 11px; color: #666;">Total Requests</div>
-                    <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{len(requests)}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: {self.PTO_GRAY};">{len(requests)}</div>
                 </div>
             </div>
 
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr style="background: {self.TJM_GRAY}; color: white;">
+                    <tr style="background: {self.PTO_GRAY}; color: white;">
                         <th style="padding: 12px; text-align: left;">Type</th>
                         <th style="padding: 12px; text-align: left;">Dates</th>
                         <th style="padding: 12px; text-align: center;">Days</th>
@@ -504,7 +504,7 @@ class ReportService:
 
             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                 <thead>
-                    <tr style="background: {self.TJM_GRAY}; color: white;">
+                    <tr style="background: {self.PTO_GRAY}; color: white;">
                         <th style="padding: 10px; text-align: left;">Employee</th>
                         <th style="padding: 10px; text-align: left;">Department</th>
                         <th style="padding: 10px; text-align: center;">Vac Total</th>
@@ -626,9 +626,9 @@ class ReportService:
             </div>
             '''
         summary_html += f'''
-        <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.TJM_GOLD}; border-radius: 4px;">
+        <div style="flex: 1; min-width: 120px; padding: 15px; background: #f5f0e1; border-left: 4px solid {self.PTO_GOLD}; border-radius: 4px;">
             <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total</div>
-            <div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">{_fmt_days(total_days)}</div>
+            <div style="font-size: 24px; font-weight: bold; color: {self.PTO_GRAY};">{_fmt_days(total_days)}</div>
             <div style="font-size: 11px; color: #999;">days</div>
         </div>
         '''
@@ -667,7 +667,7 @@ class ReportService:
 
                 months_html += f'''
                 <div style="margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
-                    <div style="background: {self.TJM_GRAY}; color: white; padding: 10px 15px; display: flex; justify-content: space-between;">
+                    <div style="background: {self.PTO_GRAY}; color: white; padding: 10px 15px; display: flex; justify-content: space-between;">
                         <strong>{month_name}</strong>
                         <span>{len(month_requests)} request(s) • {_fmt_days(month_total)} days</span>
                     </div>

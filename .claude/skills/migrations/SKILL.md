@@ -1,6 +1,6 @@
 # Database Migrations Skill
 
-This skill provides patterns for safe Alembic migrations in TJM Time Calendar.
+This skill provides patterns for safe Alembic migrations in PTO Central.
 
 ---
 

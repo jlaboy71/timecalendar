@@ -88,9 +88,9 @@ def inject_global_styles():
             --radius-lg: 12px;
             --radius-xl: 16px;
 
-            /* TJM Brand */
-            --tjm-gold: #c9a227;
-            --tjm-gray: #5a6a72;
+            /* PTO Central Brand */
+            --pto-gold: #c9a227;
+            --pto-gray: #5a6a72;
         }
 
         /* ========== CARD ENHANCEMENTS ========== */
@@ -122,7 +122,7 @@ def inject_global_styles():
         }
 
         .q-field--outlined.q-field--focused .q-field__control:after {
-            border-color: var(--tjm-gold) !important;
+            border-color: var(--pto-gold) !important;
             border-width: 2px !important;
         }
 
@@ -296,12 +296,12 @@ def apply_dark_mode():
     inject_professional_fonts()
     inject_global_styles()
 
-    # TJM Brand Colors
-    TJM_GOLD = '#c9a227'
-    TJM_GRAY = '#5a6a72'
+    # PTO Central Brand Colors
+    PTO_GOLD = '#c9a227'
+    PTO_GRAY = '#5a6a72'
 
-    # Set Quasar primary color to TJM Gold
-    ui.colors(primary=TJM_GOLD)
+    # Set Quasar primary color to PTO Gold
+    ui.colors(primary=PTO_GOLD)
 
     # Add custom background colors for light and dark modes
     # NiceGUI/Quasar uses body--light and body--dark classes
@@ -322,22 +322,22 @@ def apply_dark_mode():
             background-color: #1E2328 !important;
         }}
 
-        /* TJM Brand Color Accents */
+        /* PTO Central Brand Color Accents */
         /* Header/Navigation bar */
         .q-header, .q-toolbar {{
-            background-color: {TJM_GRAY} !important;
+            background-color: {PTO_GRAY} !important;
         }}
 
         /* Card headers and titles - gold accent */
         .text-xl.font-bold, .text-2xl.font-bold {{
-            color: {TJM_GOLD} !important;
+            color: {PTO_GOLD} !important;
         }}
 
-        /* Primary buttons use TJM Gold (handled by ui.colors) */
+        /* Primary buttons use PTO Gold (handled by ui.colors) */
 
         /* Links and interactive elements */
         a:not(.q-btn) {{
-            color: {TJM_GOLD};
+            color: {PTO_GOLD};
         }}
         a:not(.q-btn):hover {{
             color: #b8922a;
@@ -566,7 +566,7 @@ def show_info_dialog(title: str, message: str, on_close=None):
 
 
 def show_success_dialog(title: str, message: str, on_close=None):
-    """Show a success dialog with TJM gold/amber styling.
+    """Show a success dialog with PTO Central gold/amber styling.
 
     Args:
         title: Dialog title

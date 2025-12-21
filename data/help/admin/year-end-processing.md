@@ -1,6 +1,6 @@
 # Year-End Processing
 
-Year-end processing is an **automatic system** that prepares the TJM Time Calendar for each new calendar year. It runs once per year, triggered by the first user login after January 1st.
+Year-end processing is an **automatic system** that prepares PTO Central for each new calendar year. It runs once per year, triggered by the first user login after January 1st.
 
 ## What Year-End Processing Does
 

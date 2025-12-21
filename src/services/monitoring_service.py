@@ -1,5 +1,5 @@
 """
-Monitoring and alerting service for TJM Time Calendar.
+Monitoring and alerting service for PTO Central.
 
 Provides error notification, performance logging, and health monitoring.
 """

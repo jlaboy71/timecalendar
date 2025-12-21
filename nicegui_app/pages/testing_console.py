@@ -1,5 +1,5 @@
 """
-TJM Time Calendar - Media Studio
+PTO Central - Media Studio
 Admin interface for training video production, documentation generation, and scenario execution.
 
 Route: /admin/testing-console
@@ -36,12 +36,12 @@ from services.audio_narration import AudioNarrationService
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TJM BRAND COLORS
+# PTO CENTRAL BRAND COLORS
 # ═══════════════════════════════════════════════════════════════════════════
 
-TJM_GOLD = '#c9a227'
-TJM_GRAY = '#5a6a72'
-TJM_DARK = '#1a1a2e'
+PTO_GOLD = '#c9a227'
+PTO_GRAY = '#5a6a72'
+PTO_DARK = '#1a1a2e'
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -244,7 +244,7 @@ def create_testing_console_page():
     # ═══════════════════════════════════════════════════════════════════════
 
     with ui.tabs().classes('w-full').style(f'background-color: #1f2937;') as main_tabs:
-        run_tab = ui.tab('Run Scenarios', icon='play_circle').style(f'color: {TJM_GOLD};')
+        run_tab = ui.tab('Run Scenarios', icon='play_circle').style(f'color: {PTO_GOLD};')
         outputs_tab = ui.tab('Generated Outputs', icon='folder_special')
         custom_tab = ui.tab('Custom Scenarios', icon='extension')
         history_tab = ui.tab('Run History', icon='history')
@@ -264,7 +264,7 @@ def create_testing_console_page():
 
             with ui.card().classes('w-full p-4 mb-4').style('background-color: #111827; border: 1px solid #374151;'):
                 with ui.row().classes('items-center gap-1 mb-3'):
-                    ui.icon('auto_awesome', size='xs').style(f'color: {TJM_GOLD};')
+                    ui.icon('auto_awesome', size='xs').style(f'color: {PTO_GOLD};')
                     ui.label('PIPELINE').classes('text-xs font-bold tracking-wider opacity-60')
 
                 with ui.row().classes('w-full items-center justify-between'):
@@ -415,7 +415,7 @@ def create_testing_console_page():
             with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937;'):
                 with ui.row().classes('w-full items-center justify-between mb-2'):
                     with ui.row().classes('items-center gap-2'):
-                        ui.icon('terminal', size='sm').style(f'color: {TJM_GOLD};')
+                        ui.icon('terminal', size='sm').style(f'color: {PTO_GOLD};')
                         ui.label('CONSOLE').classes('text-sm font-bold tracking-wide opacity-80')
                     with ui.row().classes('gap-1'):
                         def clear_logs():
@@ -448,7 +448,7 @@ def create_testing_console_page():
                 # SCENARIO PANEL
                 with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
                     with ui.row().classes('items-center gap-2 mb-3'):
-                        ui.icon('movie', size='sm').style(f'color: {TJM_GOLD};')
+                        ui.icon('movie', size='sm').style(f'color: {PTO_GOLD};')
                         ui.label('SCENARIO').classes('text-sm font-bold tracking-wide opacity-80')
 
                     # Build dropdown options grouped by role
@@ -496,7 +496,7 @@ def create_testing_console_page():
                 # ACCOUNT PANEL
                 with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
                     with ui.row().classes('items-center gap-2 mb-3'):
-                        ui.icon('person', size='sm').style(f'color: {TJM_GOLD};')
+                        ui.icon('person', size='sm').style(f'color: {PTO_GOLD};')
                         ui.label('ACCOUNT').classes('text-sm font-bold tracking-wide opacity-80')
 
                     account_select = ui.select(
@@ -539,7 +539,7 @@ def create_testing_console_page():
                 # GENERATE PANEL
                 with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
                     with ui.row().classes('items-center gap-2 mb-3'):
-                        ui.icon('auto_awesome', size='sm').style(f'color: {TJM_GOLD};')
+                        ui.icon('auto_awesome', size='sm').style(f'color: {PTO_GOLD};')
                         ui.label('GENERATE').classes('text-sm font-bold tracking-wide opacity-80')
 
                     # Voice selection
@@ -996,7 +996,7 @@ def create_testing_console_page():
                                 run_btn.props(remove='loading')
                                 console_state.log('═' * 50, 'info')
 
-                        run_btn = ui.button('PRODUCE', icon='movie', on_click=run_scenario).classes('flex-grow').style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                        run_btn = ui.button('PRODUCE', icon='movie', on_click=run_scenario).classes('flex-grow').style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                         console_state.run_button = run_btn
 
                         def stop_execution():
@@ -1174,7 +1174,7 @@ def create_testing_console_page():
                                     current['index'] -= 1
                                     update_lightbox_image()
 
-                            prev_btn = ui.button(icon='chevron_left', on_click=go_prev).props('flat round size=xl').classes('absolute left-4').style(f'color: {TJM_GOLD}; background-color: rgba(0,0,0,0.5);')
+                            prev_btn = ui.button(icon='chevron_left', on_click=go_prev).props('flat round size=xl').classes('absolute left-4').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
 
                             # Main image
                             lightbox_img = ui.image(f'/static/help/screenshots/{scenario_name}/{images[start_index].name}').classes('max-h-[75vh] max-w-[90vw] rounded-lg shadow-2xl')
@@ -1185,7 +1185,7 @@ def create_testing_console_page():
                                     current['index'] += 1
                                     update_lightbox_image()
 
-                            next_btn = ui.button(icon='chevron_right', on_click=go_next).props('flat round size=xl').classes('absolute right-4').style(f'color: {TJM_GOLD}; background-color: rgba(0,0,0,0.5);')
+                            next_btn = ui.button(icon='chevron_right', on_click=go_next).props('flat round size=xl').classes('absolute right-4').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
 
                         def update_lightbox_image():
                             img = images[current['index']]
@@ -1205,7 +1205,7 @@ def create_testing_console_page():
                                             current['index'] = idx
                                             update_lightbox_image()
                                         return handler
-                                    thumb = ui.image(f'/static/help/screenshots/{scenario_name}/{img.name}').classes('w-24 h-16 object-cover rounded cursor-pointer hover:ring-2 transition-all').style(f'ring-color: {TJM_GOLD};')
+                                    thumb = ui.image(f'/static/help/screenshots/{scenario_name}/{img.name}').classes('w-24 h-16 object-cover rounded cursor-pointer hover:ring-2 transition-all').style(f'ring-color: {PTO_GOLD};')
                                     thumb.on('click', make_thumb_click(i))
 
                         # Initial button visibility
@@ -1251,7 +1251,7 @@ def create_testing_console_page():
 
                         # Close button
                         with ui.row().classes('w-full justify-end mt-4'):
-                            ui.button('Close', on_click=audio_dlg.close).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                            ui.button('Close', on_click=audio_dlg.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
                 audio_dlg.open()
 
@@ -1295,9 +1295,9 @@ def create_testing_console_page():
                 with ui.dialog() as folder_dlg:
                     with ui.card().classes('p-0').style('background-color: #1f2937; width: 900px; max-height: 90vh;'):
                         # Header - ALL CAPS title
-                        with ui.row().classes('w-full items-center justify-between p-4').style(f'background-color: {TJM_GRAY};'):
+                        with ui.row().classes('w-full items-center justify-between p-4').style(f'background-color: {PTO_GRAY};'):
                             with ui.row().classes('items-center gap-3'):
-                                ui.icon('folder_open', size='lg').style(f'color: {TJM_GOLD};')
+                                ui.icon('folder_open', size='lg').style(f'color: {PTO_GOLD};')
                                 ui.label(scenario_name.replace('-', ' ').upper()).classes('text-xl font-bold')
                             with ui.row().classes('items-center gap-2'):
                                 # Content counts
@@ -1312,7 +1312,7 @@ def create_testing_console_page():
 
                                 # 0. FINAL TRAINING VIDEO - Prominent at top
                                 if has_final_video:
-                                    ui.label('FINAL TRAINING VIDEO').classes('text-sm font-bold mb-2').style(f'color: {TJM_GOLD};')
+                                    ui.label('FINAL TRAINING VIDEO').classes('text-sm font-bold mb-2').style(f'color: {PTO_GOLD};')
                                     final_size = final_video_path.stat().st_size / (1024 * 1024)
                                     final_mtime = datetime.fromtimestamp(final_video_path.stat().st_mtime)
 
@@ -1321,10 +1321,10 @@ def create_testing_console_page():
                                             show_video_player_dialog(scenario_name, vp)
                                         return handler
 
-                                    with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {TJM_GOLD}; ring-color: {TJM_GOLD};'):
+                                    with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {PTO_GOLD}; ring-color: {PTO_GOLD};'):
                                         with ui.row().classes('w-full items-center gap-4'):
                                             # Star icon
-                                            ui.icon('star', size='xl').style(f'color: {TJM_GOLD};')
+                                            ui.icon('star', size='xl').style(f'color: {PTO_GOLD};')
                                             # Info (flex-grow)
                                             with ui.column().classes('flex-grow gap-1'):
                                                 ui.label(f'{scenario_name.replace("-", " ").upper()} - READY TO DISTRIBUTE').classes('font-bold text-lg')
@@ -1332,7 +1332,7 @@ def create_testing_console_page():
                                                     ui.label(f'{final_size:.1f} MB')
                                                     ui.label(final_mtime.strftime('%b %d, %Y at %I:%M %p'))
                                             # Play button - prominent
-                                            ui.button('PLAY VIDEO', icon='play_circle', on_click=make_final_click(final_video_path)).props('unelevated').style(f'background-color: {TJM_GOLD} !important; color: white !important; font-weight: bold;')
+                                            ui.button('PLAY VIDEO', icon='play_circle', on_click=make_final_click(final_video_path)).props('unelevated').style(f'background-color: {PTO_GOLD} !important; color: white !important; font-weight: bold;')
 
                                     ui.separator().classes('my-4')
 
@@ -1437,10 +1437,10 @@ def create_testing_console_page():
                             if data['screenshots'] and data['audio']:
                                 def generate_training_video(sname=scenario_name, sdata=data):
                                     generate_video_from_outputs(sname, sdata, folder_dlg)
-                                ui.button('Generate Training Video', icon='movie', on_click=generate_training_video).props('outline').style(f'border-color: {TJM_GOLD}; color: {TJM_GOLD};')
+                                ui.button('Generate Training Video', icon='movie', on_click=generate_training_video).props('outline').style(f'border-color: {PTO_GOLD}; color: {PTO_GOLD};')
                             else:
                                 ui.label('Need screenshots + audio to generate video').classes('text-xs opacity-50')
-                            ui.button('Close', on_click=folder_dlg.close).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                            ui.button('Close', on_click=folder_dlg.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
                 folder_dlg.open()
 
@@ -1666,10 +1666,10 @@ def create_testing_console_page():
                 with ui.row().classes('items-center gap-2 mb-4'):
                     # Home/Root
                     if nav_state['level'] == 'root':
-                        ui.icon('folder', size='sm').style(f'color: {TJM_GOLD};')
+                        ui.icon('folder', size='sm').style(f'color: {PTO_GOLD};')
                         ui.label('MEDIA LIBRARY').classes('font-bold')
                     else:
-                        ui.button('MEDIA LIBRARY', icon='folder', on_click=lambda e: navigate_to('root')).props('flat dense no-caps').style(f'color: {TJM_GOLD};')
+                        ui.button('MEDIA LIBRARY', icon='folder', on_click=lambda e: navigate_to('root')).props('flat dense no-caps').style(f'color: {PTO_GOLD};')
 
                     # Scenario level
                     if nav_state['level'] in ['scenario', 'media_type'] and current_scenario:
@@ -1687,7 +1687,7 @@ def create_testing_console_page():
                     if nav_state['level'] == 'media_type' and current_media_type:
                         ui.icon('chevron_right', size='xs').classes('opacity-50')
                         type_icons = {'videos': 'videocam', 'screenshots': 'photo_library', 'audio': 'audiotrack', 'docs': 'description', 'training': 'star'}
-                        type_colors = {'videos': '#f59e0b', 'screenshots': '#3b82f6', 'audio': '#a855f7', 'docs': '#22c55e', 'training': TJM_GOLD}
+                        type_colors = {'videos': '#f59e0b', 'screenshots': '#3b82f6', 'audio': '#a855f7', 'docs': '#22c55e', 'training': PTO_GOLD}
                         ui.icon(type_icons.get(current_media_type, 'folder'), size='sm').style(f"color: {type_colors.get(current_media_type, '#888')};")
                         ui.label(current_media_type.upper()).classes('font-bold')
 
@@ -1825,12 +1825,12 @@ def create_testing_console_page():
                                 def make_delete(sn):
                                     return lambda e: (e.stop_propagation(), delete_scenario(sn))
 
-                                with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background-color: #1f2937; ring-color: {TJM_GOLD};').on('click', make_click(scenario_name)):
+                                with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background-color: #1f2937; ring-color: {PTO_GOLD};').on('click', make_click(scenario_name)):
                                     with ui.row().classes('w-full items-center gap-4'):
                                         # Folder icon with training star
                                         with ui.column().classes('items-center'):
                                             if has_training:
-                                                ui.icon('star_rate', size='lg').style(f'color: {TJM_GOLD};')
+                                                ui.icon('star_rate', size='lg').style(f'color: {PTO_GOLD};')
                                             else:
                                                 ui.icon('folder', size='lg').style('color: #3b82f6;')
 
@@ -1878,15 +1878,15 @@ def create_testing_console_page():
                                 def open_training():
                                     navigate_to('media_type', scenario_name, 'training')
 
-                                with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {TJM_GOLD}; ring-color: {TJM_GOLD};').on('click', open_training):
+                                with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {PTO_GOLD}; ring-color: {PTO_GOLD};').on('click', open_training):
                                     with ui.row().classes('w-full items-center gap-4'):
-                                        ui.icon('star', size='lg').style(f'color: {TJM_GOLD};')
+                                        ui.icon('star', size='lg').style(f'color: {PTO_GOLD};')
                                         with ui.column().classes('flex-grow gap-0'):
                                             ui.label('TRAINING VIDEO').classes('font-bold text-lg')
                                             file_size = training_path.stat().st_size / (1024 * 1024)
                                             ui.label(f'Ready to distribute • {file_size:.1f} MB').classes('text-xs opacity-60')
                                         ui.badge('FINAL', color='amber').props('dense')
-                                        ui.icon('chevron_right').style(f'color: {TJM_GOLD};')
+                                        ui.icon('chevron_right').style(f'color: {PTO_GOLD};')
 
                             # Videos folder
                             if data['videos']:
@@ -1969,10 +1969,10 @@ def create_testing_console_page():
                                 def delete_training(tp, sn):
                                     return lambda e: delete_file(tp, 'training', sn)
 
-                                with ui.card().classes('w-full p-4').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {TJM_GOLD};'):
+                                with ui.card().classes('w-full p-4').style(f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.05)); border: 2px solid {PTO_GOLD};'):
                                     with ui.row().classes('w-full items-center justify-between mb-4'):
                                         with ui.row().classes('items-center gap-3'):
-                                            ui.icon('star', size='lg').style(f'color: {TJM_GOLD};')
+                                            ui.icon('star', size='lg').style(f'color: {PTO_GOLD};')
                                             with ui.column().classes('gap-0'):
                                                 ui.label('TRAINING VIDEO').classes('font-bold text-lg')
                                                 ui.label(f'{file_size:.1f} MB • {mtime.strftime("%b %d, %Y %I:%M %p")}').classes('text-xs opacity-60')
@@ -2054,8 +2054,8 @@ def create_testing_console_page():
                                     if timeline_data:
                                         ui.separator().classes('my-4')
                                         with ui.row().classes('items-center gap-2 mb-2'):
-                                            ui.icon('subtitles', size='sm').style(f'color: {TJM_GOLD};')
-                                            ui.label('TRANSCRIPT TIMING').classes('text-sm font-bold').style(f'color: {TJM_GOLD};')
+                                            ui.icon('subtitles', size='sm').style(f'color: {PTO_GOLD};')
+                                            ui.label('TRANSCRIPT TIMING').classes('text-sm font-bold').style(f'color: {PTO_GOLD};')
                                         ui.label('Compare these timestamps to the video playback').classes('text-xs opacity-50 mb-3')
 
                                         with ui.scroll_area().classes('w-full').style('max-height: 180px; background: #374151; border-radius: 8px; padding: 12px;'):
@@ -2084,7 +2084,7 @@ def create_testing_console_page():
                                     def make_img_delete(ip, sn):
                                         return lambda e: (e.stop_propagation(), delete_file(ip, 'screenshot', sn))
 
-                                    with ui.card().classes('p-2 cursor-pointer hover:ring-2 transition-all relative').style(f'background-color: #1f2937; ring-color: {TJM_GOLD};').on('click', make_lightbox(i)):
+                                    with ui.card().classes('p-2 cursor-pointer hover:ring-2 transition-all relative').style(f'background-color: #1f2937; ring-color: {PTO_GOLD};').on('click', make_lightbox(i)):
                                         ui.image(f'/static/help/screenshots/{scenario_name}/{img_name}').classes('rounded').style('width: 200px; height: 113px; object-fit: cover;')
                                         with ui.row().classes('w-full items-center justify-between mt-1'):
                                             ui.label(img_path.stem.replace('-', ' ').title()).classes('text-xs opacity-70 flex-grow')
@@ -2133,12 +2133,12 @@ def create_testing_console_page():
             # ═══════════════════════════════════════════════════════════════════
             with ui.row().classes('w-full items-center justify-between mb-4'):
                 with ui.row().classes('items-center gap-3'):
-                    ui.icon('folder_special', size='lg').style(f'color: {TJM_GOLD};')
+                    ui.icon('folder_special', size='lg').style(f'color: {PTO_GOLD};')
                     ui.label('MEDIA BROWSER').classes('text-xl font-bold')
 
                 with ui.row().classes('items-center gap-2'):
-                    ui.button('Open Folder', icon='folder_open', on_click=open_output_folder).props('outline dense').style(f'border-color: {TJM_GOLD}; color: {TJM_GOLD};')
-                    ui.button('Refresh', icon='refresh', on_click=refresh_outputs).props('flat dense').style(f'color: {TJM_GOLD};')
+                    ui.button('Open Folder', icon='folder_open', on_click=open_output_folder).props('outline dense').style(f'border-color: {PTO_GOLD}; color: {PTO_GOLD};')
+                    ui.button('Refresh', icon='refresh', on_click=refresh_outputs).props('flat dense').style(f'color: {PTO_GOLD};')
 
             # ═══════════════════════════════════════════════════════════════════
             # BROWSER CONTENT (Scrollable)
@@ -2164,7 +2164,7 @@ def create_testing_console_page():
                     with ui.card().classes('p-6').style('background-color: #1f2937; min-width: 900px; max-width: 1100px; max-height: 85vh;'):
                         with ui.row().classes('w-full items-center justify-between mb-4'):
                             with ui.row().classes('items-center gap-3'):
-                                ui.icon('description', size='lg').style(f'color: {TJM_GOLD};')
+                                ui.icon('description', size='lg').style(f'color: {PTO_GOLD};')
                                 ui.label('Scenario Template').classes('text-xl font-bold')
                             ui.button(icon='close', on_click=dlg.close).props('flat round')
                         ui.label('Use this template with Claude Desktop to generate test scenarios').classes('text-sm opacity-60 mb-4')
@@ -2177,8 +2177,8 @@ def create_testing_console_page():
                             def copy_template():
                                 ui.run_javascript(f'navigator.clipboard.writeText({repr(content)})')
                                 ui.notify('Template copied to clipboard!', type='positive')
-                            ui.button('Copy to Clipboard', icon='content_copy', on_click=copy_template).props('outline').style(f'border-color: {TJM_GOLD}; color: {TJM_GOLD};')
-                            ui.button('Close', on_click=dlg.close).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                            ui.button('Copy to Clipboard', icon='content_copy', on_click=copy_template).props('outline').style(f'border-color: {PTO_GOLD}; color: {PTO_GOLD};')
+                            ui.button('Close', on_click=dlg.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                 dlg.open()
 
             def show_scenario_details(scenario: CustomScenario):
@@ -2187,7 +2187,7 @@ def create_testing_console_page():
                     with ui.card().classes('p-6').style('background-color: #1f2937; min-width: 600px; max-width: 800px; max-height: 85vh;'):
                         with ui.row().classes('w-full items-center justify-between mb-4'):
                             with ui.row().classes('items-center gap-3'):
-                                ui.icon('science', size='lg').style(f'color: {TJM_GOLD};')
+                                ui.icon('science', size='lg').style(f'color: {PTO_GOLD};')
                                 ui.label(scenario.name).classes('text-xl font-bold')
                             ui.button(icon='close', on_click=dlg.close).props('flat round')
                         with ui.row().classes('gap-2 mb-4'):
@@ -2212,7 +2212,7 @@ def create_testing_console_page():
                                                     ui.label(selector_text).classes('text-xs opacity-50')
                         ui.separator().classes('my-4')
                         with ui.row().classes('w-full justify-end'):
-                            ui.button('Close', on_click=dlg.close).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                            ui.button('Close', on_click=dlg.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                 dlg.open()
 
             # Custom scenarios container
@@ -2224,9 +2224,9 @@ def create_testing_console_page():
                 with custom_container:
                     with ui.row().classes('w-full items-center justify-between mb-4'):
                         with ui.row().classes('items-center gap-3'):
-                            ui.icon('extension', size='lg').style(f'color: {TJM_GOLD};')
+                            ui.icon('extension', size='lg').style(f'color: {PTO_GOLD};')
                             ui.label('CUSTOM SCENARIOS').classes('text-xl font-bold')
-                        ui.button('View Template', icon='description', on_click=show_template_dialog).props('flat').style(f'color: {TJM_GOLD};')
+                        ui.button('View Template', icon='description', on_click=show_template_dialog).props('flat').style(f'color: {PTO_GOLD};')
 
                     with ui.row().classes('w-full gap-4'):
 
@@ -2273,7 +2273,7 @@ def create_testing_console_page():
                                             else:
                                                 ui.notify('Failed to parse steps. Check format.', type='negative')
 
-                                        ui.button('Create Scenario', icon='add', on_click=create_quick_scenario_handler).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                                        ui.button('Create Scenario', icon='add', on_click=create_quick_scenario_handler).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
                                 with ui.tab_panel(import_tab):
                                     ui.label('Import from Markdown').classes('font-semibold mb-2')
@@ -2298,7 +2298,7 @@ def create_testing_console_page():
                                             else:
                                                 ui.notify('Failed to parse markdown. Check format.', type='negative')
 
-                                        ui.button('Import', icon='download', on_click=import_markdown_handler).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                                        ui.button('Import', icon='download', on_click=import_markdown_handler).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                                         ui.label('or').classes('opacity-50')
 
                                         async def handle_upload(e):
@@ -2324,7 +2324,7 @@ def create_testing_console_page():
                                         with ui.card().classes('w-full mb-2 p-3').style('background-color: #374151;'):
                                             with ui.row().classes('w-full items-center gap-3'):
                                                 icon_name = 'upload_file' if scenario.source == 'markdown_import' else 'bolt'
-                                                ui.icon(icon_name, size='sm').style(f'color: {TJM_GOLD};')
+                                                ui.icon(icon_name, size='sm').style(f'color: {PTO_GOLD};')
                                                 with ui.column().classes('flex-grow gap-0'):
                                                     ui.label(scenario.name).classes('font-medium')
                                                     with ui.row().classes('gap-2 items-center'):
@@ -2356,7 +2356,7 @@ def create_testing_console_page():
         with ui.tab_panel(history_tab):
             with ui.row().classes('w-full items-center justify-between mb-4'):
                 with ui.row().classes('items-center gap-3'):
-                    ui.icon('history', size='lg').style(f'color: {TJM_GOLD};')
+                    ui.icon('history', size='lg').style(f'color: {PTO_GOLD};')
                     ui.label('RUN HISTORY').classes('text-xl font-bold')
 
             history_container = ui.column().classes('w-full')

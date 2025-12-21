@@ -45,7 +45,7 @@ def _format_date_range_with_days(start_date: date, end_date: date) -> str:
 
 
 def _get_logo_base64() -> str:
-    """Get the TJM logo as base64 string for email embedding."""
+    """Get the PTO Central logo as base64 string for email embedding."""
     try:
         logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
         with open(logo_path, 'rb') as f:

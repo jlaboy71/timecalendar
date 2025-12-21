@@ -20,7 +20,7 @@ class ExportService:
 
     @staticmethod
     def _get_logo_path() -> Path:
-        """Get the path to the TJM logo."""
+        """Get the path to the PTO Central logo."""
         return Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
 
     @staticmethod
@@ -58,7 +58,7 @@ class ExportService:
         )
 
         # Title
-        elements.append(Paragraph("TJM Holdings - Workforce Analytics Report", title_style))
+        elements.append(Paragraph("PTO Central - Workforce Analytics Report", title_style))
         elements.append(Paragraph(f"Generated: {date.today().strftime('%B %d, %Y')}", styles['Normal']))
         elements.append(Spacer(1, 20))
 
@@ -186,7 +186,7 @@ class ExportService:
         # Parse HTML to extract content
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        # Add TJM logo at the top (preserving aspect ratio 2.28:1)
+        # Add PTO Central logo at the top (preserving aspect ratio 2.28:1)
         logo_path = ExportService._get_logo_path()
         if logo_path.exists():
             logo_width = 2 * inch

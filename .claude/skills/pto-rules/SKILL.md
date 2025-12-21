@@ -1,6 +1,6 @@
 # PTO Business Rules Skill
 
-This skill provides comprehensive knowledge of TJM Time Calendar PTO business rules, calculations, and validation patterns.
+This skill provides comprehensive knowledge of PTO Central business rules, calculations, and validation patterns.
 
 ---
 

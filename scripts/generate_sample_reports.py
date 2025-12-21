@@ -137,7 +137,7 @@ def generate_report_html(frequency: str, report_date: date, department: str) -> 
             <!-- Footer -->
             <div style="background-color: #374151; padding: 15px 20px; border-radius: 0 0 8px 8px; text-align: center;">
                 <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                    TJM Time Calendar - Auto-Notify System
+                    PTO Central - Auto-Notify System
                 </p>
             </div>
         </div>

@@ -1,6 +1,6 @@
 # Email Templates Skill
 
-This skill provides patterns for email template consistency in TJM Time Calendar notifications.
+This skill provides patterns for email template consistency in PTO Central notifications.
 
 ---
 
@@ -78,9 +78,9 @@ TYPE_COLORS = {
     'chicago_leave': '#f59e0b', # Amber
 }
 
-# TJM Brand
-TJM_GOLD = '#c9a227'
-TJM_GRAY = '#5a6a72'
+# PTO Central Brand
+PTO_GOLD = '#c9a227'
+PTO_GRAY = '#5a6a72'
 ```
 
 ---

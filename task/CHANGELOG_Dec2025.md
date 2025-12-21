@@ -1,4 +1,4 @@
-# TJM Time Calendar - Changelog (December 10-11, 2025)
+# PTO Central - Changelog (December 10-11, 2025)
 
 ## Summary
 Major UI/UX improvements, TJM branding, reports enhancements, and bug fixes over the last two days.
@@ -101,8 +101,8 @@ Major UI/UX improvements, TJM branding, reports enhancements, and bug fixes over
 
 ### TJM Brand Colors
 ```css
-TJM_GOLD = '#c9a227'  /* Primary accent, buttons, highlights */
-TJM_GRAY = '#5a6a72'  /* Headers, navigation, secondary elements */
+PTO_GOLD = '#c9a227'  /* Primary accent, buttons, highlights */
+PTO_GRAY = '#5a6a72'  /* Headers, navigation, secondary elements */
 ```
 
 ### PTO Type Color Scheme

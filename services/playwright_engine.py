@@ -1,5 +1,5 @@
 """
-TJM Time Calendar - Playwright Automation Engine
+PTO Central - Playwright Automation Engine
 Handles browser automation for testing and documentation generation.
 
 This service:
@@ -642,8 +642,8 @@ def get_pto_request_scenario() -> Scenario:
             ScenarioStep(
                 step_id="login",
                 title="Login to Application",
-                description="Access the TJM Time Calendar and log in",
-                script="Welcome to TJM Time Calendar. First, log in with your employee credentials.",
+                description="Access PTO Central and log in",
+                script="Welcome to PTO Central. First, log in with your employee credentials.",
                 action="screenshot",  # Login handled separately
                 wait_time=2.0
             ),

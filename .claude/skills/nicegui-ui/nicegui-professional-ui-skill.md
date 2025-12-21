@@ -1,18 +1,18 @@
 # NiceGUI Professional UI Enhancement Skill
 
 ## Purpose
-Transform NiceGUI applications from functional to **enterprise-grade professional** with sophisticated styling, animations, typography, and modern UI/UX patterns. This skill is designed for the **TJM Time Calendar** PTO management system.
+Transform NiceGUI applications from functional to **enterprise-grade professional** with sophisticated styling, animations, typography, and modern UI/UX patterns. This skill is designed for the **PTO Central** PTO management system.
 
 ---
 
 ## Brand Foundation
 
-### TJM Brand Identity
+### Brand Identity
 ```python
 # Core Brand Colors (DO NOT CHANGE)
-TJM_GOLD = "#c9a227"      # Primary accent - highlights, CTAs, active states
-TJM_GRAY = "#5a6a72"      # Navigation, headers, professional elements
-TJM_BLUE = "#2196F3"      # Interactive elements, links
+PTO_GOLD = "#c9a227"      # Primary accent - highlights, CTAs, active states
+PTO_GRAY = "#5a6a72"      # Navigation, headers, professional elements
+PTO_BLUE = "#2196F3"      # Interactive elements, links
 
 # Extended Professional Palette
 COLORS = {

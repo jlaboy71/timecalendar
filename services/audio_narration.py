@@ -1,5 +1,5 @@
 """
-TJM Time Calendar - Audio Narration Service
+PTO Central - Audio Narration Service
 Generates voice narration using OpenAI Text-to-Speech API.
 
 Features:

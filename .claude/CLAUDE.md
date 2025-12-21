@@ -1,7 +1,7 @@
-# TJM Time Calendar - Project Overview
+# PTO Central - Project Overview
 
 ## Application Purpose
-Employee PTO (Paid Time Off) and Market Calendar management system for TJM/Haventech. Built with NiceGUI (Python web framework) and SQLite database.
+Employee PTO (Paid Time Off) and Market Calendar management system for Haventech Solutions. Built with NiceGUI (Python web framework) and SQLite database.
 
 ## Architecture
 - **Frontend**: NiceGUI (Python-based reactive web UI)

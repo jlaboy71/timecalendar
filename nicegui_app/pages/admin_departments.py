@@ -22,9 +22,9 @@ from src.services.audit_service import AuditService
 from src.models.user import User
 from src.schemas.user_schemas import UserCreate, UserUpdate
 
-# TJM Brand Colors
-TJM_GOLD = "#c9a227"
-TJM_GRAY = "#5a6a72"
+# PTO Central Brand Colors
+PTO_GOLD = "#c9a227"
+PTO_GRAY = "#5a6a72"
 
 # Department icon mapping - keywords to Material Icons
 DEPT_ICON_KEYWORDS = {
@@ -194,9 +194,9 @@ def admin_departments_page():
                 ui.tooltip('Click to view employee distribution')
 
             # Add Department - action card
-            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {TJM_GOLD};').on('click', lambda: open_create_dialog()):
+            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: open_create_dialog()):
                 with ui.row().classes('items-center gap-3'):
-                    with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {TJM_GOLD}, #b8922a);'):
+                    with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {PTO_GOLD}, #b8922a);'):
                         ui.icon('add_business', color='white').classes('text-xl')
                     with ui.column().classes('gap-0'):
                         ui.label('+').classes('text-3xl font-bold')
@@ -204,9 +204,9 @@ def admin_departments_page():
                 ui.tooltip('Create a new department')
 
             # Add Employee - action card (opens slide-out panel)
-            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {TJM_GOLD};').on('click', lambda: show_add_employee_panel()):
+            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: show_add_employee_panel()):
                 with ui.row().classes('items-center gap-3'):
-                    with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {TJM_GOLD}, #b8922a);'):
+                    with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {PTO_GOLD}, #b8922a);'):
                         ui.icon('person_add', color='white').classes('text-xl')
                     with ui.column().classes('gap-0'):
                         ui.label('+').classes('text-3xl font-bold')
@@ -648,7 +648,7 @@ def admin_departments_page():
                         ui.label('MANAGER').classes('text-xs font-medium uppercase tracking-wide opacity-50 mb-3')
                         if dept['manager_name']:
                             with ui.row().classes('items-center gap-3'):
-                                with ui.element('div').classes('w-10 h-10 rounded-full flex items-center justify-center').style(f'background: {TJM_GOLD}'):
+                                with ui.element('div').classes('w-10 h-10 rounded-full flex items-center justify-center').style(f'background: {PTO_GOLD}'):
                                     ui.label(dept['manager_name'][0]).classes('text-white font-semibold')
                                 ui.label(dept['manager_name']).classes('font-medium')
                         else:
@@ -702,7 +702,7 @@ def admin_departments_page():
             with ui.dialog().props('position=right full-height') as panel:
                 with ui.card().classes('h-full p-0 animate-fade-in').style('width: 700px;'):
                     # Panel header
-                    with ui.element('div').classes('p-5 border-b').style(f'background: linear-gradient(135deg, {TJM_GOLD} 0%, #b8922a 100%)'):
+                    with ui.element('div').classes('p-5 border-b').style(f'background: linear-gradient(135deg, {PTO_GOLD} 0%, #b8922a 100%)'):
                         with ui.row().classes('w-full justify-between items-center'):
                             with ui.row().classes('items-center gap-3'):
                                 with ui.element('div').classes('w-10 h-10 rounded-lg flex items-center justify-center').style('background: rgba(255,255,255,0.2);'):
@@ -764,11 +764,11 @@ def admin_departments_page():
                                         with context.client.content:
                                             with ui.dialog() as dept_dialog, ui.card().classes('p-5').style('background-color: #1f2937; min-width: 400px;'):
                                                 with ui.row().classes('items-center gap-2 mb-4'):
-                                                    ui.icon('add_business', size='sm').style(f'color: {TJM_GOLD};')
+                                                    ui.icon('add_business', size='sm').style(f'color: {PTO_GOLD};')
                                                     ui.label('Quick Create Department').classes('text-lg font-bold')
 
                                                 with ui.row().classes('w-full items-center gap-3'):
-                                                    quick_dept_icon = ui.icon('business', size='lg').style(f'color: {TJM_GOLD};')
+                                                    quick_dept_icon = ui.icon('business', size='lg').style(f'color: {PTO_GOLD};')
                                                     quick_dept_name = ui.input('Department Name').props('outlined dense').classes('flex-grow')
 
                                                 def update_quick_icon():
@@ -806,7 +806,7 @@ def admin_departments_page():
                                                         finally:
                                                             qdb.close()
 
-                                                    ui.button('Create', on_click=create_quick_dept).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                                                    ui.button('Create', on_click=create_quick_dept).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
                                             dept_dialog.open()
 
@@ -959,7 +959,7 @@ def admin_departments_page():
 
                         with ui.row().classes('w-full gap-3'):
                             ui.button('Cancel', on_click=panel.close).props('flat').classes('flex-1')
-                            ui.button('Create', icon='person_add', on_click=create_employee).classes('flex-1').style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+                            ui.button('Create', icon='person_add', on_click=create_employee).classes('flex-1').style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
             panel.open()
 
@@ -967,4 +967,4 @@ def admin_departments_page():
         render_department_rows()
 
         # Back button
-        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style(f'border-color: {TJM_GOLD} !important; color: {TJM_GOLD} !important;')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;')

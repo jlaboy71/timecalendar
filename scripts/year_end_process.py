@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Year-end processing script for TJM Time Calendar.
+Year-end processing script for PTO Central.
 
 Run this script at the start of each new year to:
 1. Create PTO balances for all active employees
@@ -34,7 +34,7 @@ setup_logging()
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Year-end processing for TJM Time Calendar"
+        description="Year-end processing for PTO Central"
     )
     parser.add_argument(
         '--year', '-y',
@@ -64,7 +64,7 @@ def main():
     service = YearEndService(db)
 
     print("=" * 60)
-    print(f"TJM Time Calendar - Year-End Processing")
+    print(f"PTO Central - Year-End Processing")
     print(f"Target Year: {args.year}")
     print("=" * 60)
 

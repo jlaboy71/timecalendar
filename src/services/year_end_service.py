@@ -1,5 +1,5 @@
 """
-Year-end processing service for TJM Time Calendar.
+Year-end processing service for PTO Central.
 
 Handles:
 - Creating new year balances for all active employees

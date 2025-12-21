@@ -1,6 +1,6 @@
-# TJM Time Calendar - System Overview
+# PTO Central - System Overview
 
-Welcome to the TJM Time Calendar! This is your complete system for managing paid time off (PTO), tracking leave balances, and coordinating team schedules.
+Welcome to PTO Central! This is your complete system for managing paid time off (PTO), tracking leave balances, and coordinating team schedules.
 
 ## What Can You Do?
 

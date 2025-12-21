@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Generate a self-signed SSL certificate for TJM Time Calendar.
+Generate a self-signed SSL certificate for PTO Central.
 
 This creates a certificate suitable for internal/development use.
 For production with external access, use a proper CA-signed certificate.
@@ -45,7 +45,7 @@ def generate_self_signed_cert(
         "-out", str(cert_file),
         "-days", str(days_valid),
         "-nodes",  # No password on private key
-        "-subj", f"/C=US/ST=Illinois/L=Chicago/O=TJM Holdings/OU=Haventech/CN={common_name}"
+        "-subj", f"/C=US/ST=Illinois/L=Chicago/O=Haventech Solutions/OU=PTO Central/CN={common_name}"
     ]
 
     print(f"Generating self-signed certificate...")
@@ -65,8 +65,8 @@ def generate_self_signed_cert(
         print(f"  Private Key: {key_file}")
         print()
         print("To enable HTTPS, add these to your .env file:")
-        print(f"  TJM_SSL_CERT={cert_file}")
-        print(f"  TJM_SSL_KEY={key_file}")
+        print(f"  PTO_SSL_CERT={cert_file}")
+        print(f"  PTO_SSL_KEY={key_file}")
         print()
         print("NOTE: Browsers will show a security warning for self-signed certificates.")
         print("      This is expected for internal use. Click 'Advanced' > 'Proceed' to continue.")
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     success = generate_self_signed_cert(
         cert_dir=str(project_root / "certs"),
         days_valid=365,
-        common_name="tjm-calendar.local"
+        common_name="pto-central.local"
     )
 
     sys.exit(0 if success else 1)

@@ -170,7 +170,7 @@ class ICalExportService:
         lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//TJM Holdings//PTO Central//EN',
+            'PRODID:-//Haventech Solutions//PTO Central//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             f'X-WR-CALNAME:{calendar_name}',

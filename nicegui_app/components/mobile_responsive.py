@@ -1,5 +1,5 @@
 """
-Mobile responsive CSS utilities for TJM Time Calendar.
+Mobile responsive CSS utilities for PTO Central.
 Provides comprehensive mobile-first responsive styling for NiceGUI/Quasar applications.
 
 BACKUP/REVERT INSTRUCTIONS:
@@ -26,7 +26,7 @@ def inject_mobile_css():
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <style>
         /* ============================================
-           TJM TIME CALENDAR - MOBILE RESPONSIVE CSS
+           PTO CENTRAL - MOBILE RESPONSIVE CSS
            ============================================ */
 
         /* ===== VIEWPORT FIX ===== */

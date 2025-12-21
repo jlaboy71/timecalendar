@@ -189,7 +189,7 @@ Click **"Export PDF"** to generate a professional report including:
 - Recommendations
 - Carryover risk employees
 - Optimal meeting dates
-- TJM Holdings branded footer
+- Company branded footer
 
 ### Export CSV
 Click **"Export CSV"** to download:

@@ -122,7 +122,7 @@ class AlertService:
                     <p><strong>Error Type:</strong> {error_type}</p>
                     <p><strong>Message:</strong> {message}</p>
                     <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                    <p><strong>Server:</strong> {os.getenv('TJM_HOST', 'localhost')}:{os.getenv('TJM_PORT', '8080')}</p>
+                    <p><strong>Server:</strong> {os.getenv('PTO_HOST', 'localhost')}:{os.getenv('PTO_PORT', '8080')}</p>
                     {details_html}
                 </div>
                 <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px;">

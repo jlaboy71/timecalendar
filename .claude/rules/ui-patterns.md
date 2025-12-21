@@ -7,9 +7,9 @@
 
 ## Theme & Branding
 
-### TJM Brand Colors
-- **Primary Accent**: TJM Gold (#c9a227) - highlights, active states, important actions
-- **Navigation/Headers**: TJM Gray (#5a6a72)
+### Brand Colors
+- **Primary Accent**: Gold (#c9a227) - highlights, active states, important actions
+- **Navigation/Headers**: Gray (#5a6a72)
 - **General UI**: Blue (#2196F3) - buttons, links, interactive elements
 - Logo: Stored as base64 data URL in `nicegui_app/logo.py`
 

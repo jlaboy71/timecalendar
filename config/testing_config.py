@@ -64,12 +64,12 @@ class TestingConfig:
     # ═══════════════════════════════════════════════════════════════════════
 
     base_url: str = field(default_factory=lambda: os.getenv(
-        'TJM_BASE_URL',
+        'PTO_BASE_URL',
         'http://localhost:8080'  # No HTTPS - matches default app config
     ))
 
     environment: Environment = field(default_factory=lambda: Environment(
-        os.getenv('TJM_ENVIRONMENT', 'development')
+        os.getenv('PTO_ENVIRONMENT', 'development')
     ))
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -196,7 +196,7 @@ class TestingConfig:
             issues.append("TTS enabled but OPENAI_API_KEY not set in .env.testing")
 
         if not self.base_url:
-            issues.append("TJM_BASE_URL not configured")
+            issues.append("PTO_BASE_URL not configured")
 
         return issues
 

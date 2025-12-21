@@ -1,5 +1,5 @@
 """
-TJM Time Calendar - Documentation Generator Service
+PTO Central - Documentation Generator Service
 Generates help documentation from scenario results.
 
 Outputs:
@@ -100,7 +100,7 @@ class DocumentationGenerator:
         md_lines.append("")
         md_lines.append("If you encounter any issues, please contact your system administrator.")
         md_lines.append("")
-        md_lines.append(f"*Document generated automatically by TJM Time Calendar Testing Console*")
+        md_lines.append(f"*Document generated automatically by PTO Central Testing Console*")
 
         # Write file
         output_path = self.config.docs_dir / f"{result.scenario_id}.md"

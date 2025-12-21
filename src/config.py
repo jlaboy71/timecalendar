@@ -25,12 +25,12 @@ class Config:
         self.DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
         # SSL/HTTPS settings (optional)
-        self.SSL_CERTFILE = os.getenv('TJM_SSL_CERT')
-        self.SSL_KEYFILE = os.getenv('TJM_SSL_KEY')
+        self.SSL_CERTFILE = os.getenv('PTO_SSL_CERT')
+        self.SSL_KEYFILE = os.getenv('PTO_SSL_KEY')
 
         # Server settings
-        self.HOST = os.getenv('TJM_HOST', '0.0.0.0')
-        self.PORT = int(os.getenv('TJM_PORT', '8080'))
+        self.HOST = os.getenv('PTO_HOST', '0.0.0.0')
+        self.PORT = int(os.getenv('PTO_PORT', '8080'))
 
         # Validate required variables are set
         self._validate_config()

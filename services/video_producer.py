@@ -1,5 +1,5 @@
 """
-TJM Time Calendar - Professional Video Producer Service
+PTO Central - Professional Video Producer Service
 Creates high-quality training videos from screenshots with audio narration.
 
 Features:
@@ -36,13 +36,13 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TJM BRAND COLORS
+# PTO CENTRAL BRAND COLORS
 # ═══════════════════════════════════════════════════════════════════════════
 
-TJM_GOLD = '#C9A227'
-TJM_GOLD_RGB = (201, 162, 39)
-TJM_GRAY = '#5A6A72'
-TJM_GRAY_RGB = (90, 106, 114)
+PTO_GOLD = '#C9A227'
+PTO_GOLD_RGB = (201, 162, 39)
+PTO_GRAY = '#5A6A72'
+PTO_GRAY_RGB = (90, 106, 114)
 HIGHLIGHT_RED = '#EF4444'
 HIGHLIGHT_RED_RGB = (239, 68, 68)
 HIGHLIGHT_BLUE = '#3B82F6'
@@ -60,7 +60,7 @@ class AnnotationConfig:
     """Configuration for screenshot annotations"""
     # Highlight box
     highlight_box: Optional[Tuple[int, int, int, int]] = None  # (x1, y1, x2, y2)
-    highlight_color: Tuple[int, int, int] = TJM_GOLD_RGB
+    highlight_color: Tuple[int, int, int] = PTO_GOLD_RGB
     highlight_opacity: int = 50  # 0-255
     highlight_border_width: int = 4
 
@@ -294,7 +294,7 @@ class ScreenshotAnnotator:
         badge_size = 50
         draw.ellipse(
             [x, y, x + badge_size, y + badge_size],
-            fill=TJM_GOLD_RGB,
+            fill=PTO_GOLD_RGB,
             outline=(255, 255, 255),
             width=2
         )
@@ -343,7 +343,7 @@ class ScreenshotAnnotator:
 
         # Draw background with TJM gold border
         draw.rounded_rectangle(bg_rect, radius=8, fill=config.callout_bg_color)
-        draw.rounded_rectangle(bg_rect, radius=8, outline=TJM_GOLD_RGB, width=2)
+        draw.rounded_rectangle(bg_rect, radius=8, outline=PTO_GOLD_RGB, width=2)
 
         # Draw text
         draw.text((x, y), text, fill=config.callout_text_color, font=font)
@@ -373,14 +373,14 @@ class ElementHighlighter:
         """
         styles = {
             "default": f"""
-                element.style.outline = '4px solid {TJM_GOLD}';
+                element.style.outline = '4px solid {PTO_GOLD}';
                 element.style.outlineOffset = '4px';
                 element.style.boxShadow = '0 0 20px rgba(201, 162, 39, 0.5)';
                 element.style.transition = 'all 0.3s ease';
             """,
             "pulse": f"""
                 element.style.animation = 'tjm-pulse 1.5s infinite';
-                element.style.outline = '3px solid {TJM_GOLD}';
+                element.style.outline = '3px solid {PTO_GOLD}';
                 element.style.outlineOffset = '2px';
 
                 // Add keyframes
@@ -668,7 +668,7 @@ class VideoProducer:
         draw = ImageDraw.Draw(img)
 
         # TJM gold accent line
-        draw.rectangle([0, height//2 - 100, width, height//2 - 96], fill=TJM_GOLD_RGB)
+        draw.rectangle([0, height//2 - 100, width, height//2 - 96], fill=PTO_GOLD_RGB)
 
         # Title
         try:
@@ -685,11 +685,11 @@ class VideoProducer:
         draw.text((title_x, height//2 - 60), project.title, fill=(255, 255, 255), font=title_font)
 
         # Draw subtitle
-        subtitle = "TJM Time Calendar Training"
+        subtitle = "PTO Central Training"
         sub_bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
         sub_width = sub_bbox[2] - sub_bbox[0]
         sub_x = (width - sub_width) // 2
-        draw.text((sub_x, height//2 + 40), subtitle, fill=TJM_GOLD_RGB, font=subtitle_font)
+        draw.text((sub_x, height//2 + 40), subtitle, fill=PTO_GOLD_RGB, font=subtitle_font)
 
         # Save temp file
         temp_path = self.output_dir / "_title_card.png"
@@ -716,10 +716,10 @@ class VideoProducer:
         text = "Training Complete"
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
-        draw.text(((width - text_width)//2, height//2 - 40), text, fill=TJM_GOLD_RGB, font=font)
+        draw.text(((width - text_width)//2, height//2 - 40), text, fill=PTO_GOLD_RGB, font=font)
 
         # Subtitle
-        subtitle = "TJM Time Calendar"
+        subtitle = "PTO Central"
         sub_bbox = draw.textbbox((0, 0), subtitle, font=small_font)
         sub_width = sub_bbox[2] - sub_bbox[0]
         draw.text(((width - sub_width)//2, height//2 + 30), subtitle, fill=(150, 150, 150), font=small_font)
@@ -935,7 +935,7 @@ class VideoProducer:
         draw = ImageDraw.Draw(img)
 
         # TJM gold accent line
-        draw.rectangle([0, height//2 - 60, width, height//2 - 56], fill=TJM_GOLD_RGB)
+        draw.rectangle([0, height//2 - 60, width, height//2 - 56], fill=PTO_GOLD_RGB)
 
         try:
             title_font = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 48)
@@ -955,7 +955,7 @@ class VideoProducer:
         sub_bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
         sub_width = sub_bbox[2] - sub_bbox[0]
         sub_x = (width - sub_width) // 2
-        draw.text((sub_x, height//2 + 30), subtitle, fill=TJM_GOLD_RGB, font=subtitle_font)
+        draw.text((sub_x, height//2 + 30), subtitle, fill=PTO_GOLD_RGB, font=subtitle_font)
 
         temp_path = self.output_dir / "_intro_card.png"
         img.save(temp_path)
@@ -979,7 +979,7 @@ class VideoProducer:
         text = "Training Complete"
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
-        draw.text(((width - text_width)//2, height//2 - 20), text, fill=TJM_GOLD_RGB, font=font)
+        draw.text(((width - text_width)//2, height//2 - 20), text, fill=PTO_GOLD_RGB, font=font)
 
         subtitle = "PTO Central"
         sub_bbox = draw.textbbox((0, 0), subtitle, font=small_font)

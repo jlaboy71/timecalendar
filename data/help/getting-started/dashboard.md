@@ -1,6 +1,6 @@
 # Understanding Your Dashboard
 
-The Dashboard is your home base in TJM Time Calendar. Here's everything you'll see:
+The Dashboard is your home base in PTO Central. Here's everything you'll see:
 
 ## PTO Balance Cards
 

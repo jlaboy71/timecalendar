@@ -1,6 +1,6 @@
 """
 Help documentation service for providing searchable instructional content.
-Comprehensive documentation for the TJM Time Calendar system.
+Comprehensive documentation for the PTO Central system.
 
 Content is loaded from data/help/ directory with fallback to inline content.
 """
