@@ -64,6 +64,14 @@ class PTORequest(Base):
     cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     cancellation_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Carryover tracking - when vacation uses previous year's balance
+    # e.g., if a 2026 request uses 2025 vacation balance, this would be 2025
+    carryover_from_year: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Year from which vacation balance was deducted (if different from request year)"
+    )
+
     # Timestamps
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime, 

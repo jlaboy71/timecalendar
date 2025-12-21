@@ -1,236 +1,220 @@
 # TJM Time Calendar
 
+Employee PTO (Paid Time Off) and Market Calendar management system for TJM Holdings / Haventech Solutions.
+
 ## Overview
-TJM Time Calendar is a comprehensive PTO (Paid Time Off) and Market Calendar System designed for Haventech Solutions/TJM Holdings. This application integrates NYSE/CME/CBOE market holidays with employee time-off management, providing a centralized system for tracking availability and scheduling across the organization with role-based access control and approval workflows.
 
-## Purpose
-This system addresses the critical need for coordinating employee schedules with financial market operating hours, ensuring proper coverage during trading days while managing employee time-off requests efficiently through a modern, responsive web-based interface.
+TJM Time Calendar is a comprehensive employee scheduling system that integrates NYSE/CME/CBOE market holidays with PTO management. The system provides role-based access control, approval workflows, and complete audit trails for regulatory compliance.
 
-## Key Features
-- **Modern NiceGUI Web Interface**: Responsive, component-based UI with native Python implementation
-- **Authentication & Authorization**: Secure login system with role-based access control (Admin, Manager, Employee)
-- **Market Calendar Integration**: Automatic tracking of NYSE, CME, and CBOE market holidays
-- **PTO Request Management**: 
-  - Multiple request types (Vacation, Sick Leave, Personal Day, Unpaid Leave)
-  - Employee submission and tracking interface
-  - Manager approval workflows
-  - Request status tracking (Pending, Approved, Denied, Cancelled)
-- **Vacation Policy Engine**: Automatic accrual calculation based on years of service
-- **Employee Management**: Comprehensive CRUD operations for HR administration
-- **Calendar Visualization**: Integrated view of employee availability and market closures
-- **Conflict Detection**: Automatic identification of scheduling conflicts and coverage gaps
+## Features
+
+- **PTO Request Management**: Submit, approve, deny, and cancel time-off requests
+- **Balance Tracking**: Vacation, sick, personal days with carryover support
+- **Team Calendar**: Visual calendar with market holidays and team PTO visibility
+- **Manager Dashboard**: Approve/deny team requests, view team availability
+- **Admin Controls**: Manage employees, departments, system settings
+- **Trusted Employee System**: Auto-approve PTO for designated trusted employees
+- **Multi-State Policy Support**: Chicago Safe Leave and location-specific policies
+- **Audit Trail**: Complete logging of all PTO-related actions
+- **Email Notifications**: Automated notifications for request status changes
+- **Report Generation**: Export PTO reports in PDF, CSV, and HTML formats
+- **iCal Export**: Download calendar events for Outlook/Google Calendar integration
+- **Year-End Processing**: Automatic balance rollover and carryover handling
 
 ## Technology Stack
-- **Backend**: Python 3.x with SQLAlchemy ORM
-- **Database**: PostgreSQL (production-ready relational database)
-- **Frontend**: NiceGUI (Python-based reactive UI framework)
-- **Authentication**: Custom session-based authentication with bcrypt password hashing
-- **Deployment**: Windows 11 native environment, intranet-accessible
-- **Architecture**: Component-based design with reusable UI elements
 
-## Project Timeline & History
+| Component | Technology |
+|-----------|------------|
+| Frontend | NiceGUI 2.x (Python-based reactive web UI) |
+| Backend | Python 3.11+, FastAPI |
+| Database | SQLite |
+| ORM | SQLAlchemy 2.0 |
+| Migrations | Alembic |
+| Styling | Tailwind CSS, Quasar Components |
+| SSL | HTTPS with custom certificates |
 
-### Early Development (Initial Attempt)
-- **Challenge Encountered**: SQLAlchemy circular dependency issues in initial architecture
-- **Decision**: Complete project restart with structured phased approach
+## Prerequisites
 
-### Phase 1: Database Foundation (Completed)
-**Duration**: ~2 weeks
-- Designed comprehensive PostgreSQL database schema
-- Implemented core models:
-  - `employees`: User accounts with role-based access
-  - `pto_requests`: Time-off request tracking with approval workflows
-  - `market_holidays`: Financial market closure calendar
-  - `vacation_policies`: Years-of-service based accrual rules
-- Established referential integrity and cascading relationships
-- Created database initialization and migration scripts
+- Python 3.11 or higher
+- Windows 11 (primary supported platform)
+- Git (for version control)
 
-### Phase 2: Service Layer (Completed)
-**Duration**: ~1.5 weeks
-- Built authentication service with bcrypt password hashing
-- Implemented PTO service layer with business logic:
-  - Request submission validation
-  - Approval workflow management
-  - Conflict detection algorithms
-  - Balance calculation engine
-- Developed vacation policy service for automatic accrual calculations
-- Created employee management service (CRUD operations)
-- Established market holiday integration service
+## Installation
 
-### Phase 3: UI Development - Major Pivot (In Progress)
-**Duration**: ~3 weeks (ongoing)
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd TimeCalendar
+   ```
 
-#### Initial Streamlit Implementation (Completed, Then Deprecated)
-- Built multi-page Streamlit application
-- Implemented all core features and workflows
-- **Decision Point**: Streamlit's page reload behavior and limited interactivity led to architectural reassessment
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   ```
 
-#### Switch to NiceGUI (Current Focus)
-**Rationale for Change**:
-- **Superior Reactivity**: Real-time UI updates without page reloads
-- **Component-Based Architecture**: Reusable UI components for maintainable code
-- **Native Python**: Better integration with existing service layer
-- **Modern UX**: Single-page application feel with smooth transitions
-- **Flexibility**: More control over UI behavior and state management
+3. **Activate virtual environment**
+   ```bash
+   # Windows
+   venv\Scripts\activate
+   ```
 
-**NiceGUI Implementation Progress**:
-- ✅ Authentication system with login page
-- ✅ Session management and security
-- ✅ Role-based navigation and access control
-- ✅ Dashboard/Home page with role-specific views
-- ✅ Component library for consistent UI elements
-- 🔄 PTO request forms and workflows (in progress)
-- 🔄 Manager approval interface (in progress)
-- 🔄 Employee management CRUD (in progress)
-- 🔄 Calendar visualization (in progress)
+4. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Current Status (December 2024)
-**Total Development Time**: ~7-8 weeks (including pivot)
-- ✅ Phase 1: Database Foundation - Complete
-- ✅ Phase 2: Service Layer - Complete
-- 🔄 Phase 3: NiceGUI UI - In Active Development (60% complete)
-- ⏳ Phase 4: Testing & Deployment - Planned
+5. **Initialize the database**
+   ```bash
+   # Database tables are created automatically on first run
+   # Or run migrations explicitly:
+   venv\Scripts\python.exe -m alembic upgrade head
+   ```
 
-## Architecture
+## Configuration
 
-### Technology Decision: Why NiceGUI?
-After completing a full Streamlit implementation, the project pivoted to NiceGUI for the following reasons:
-1. **Interactivity**: NiceGUI provides true reactive components without page reloads
-2. **State Management**: Better control over application state and user sessions
-3. **User Experience**: Single-page application architecture with smoother workflows
-4. **Maintainability**: Component-based design reduces code duplication
-5. **Performance**: More efficient rendering for complex forms and tables
+Create a `.env` file in the project root (or set environment variables):
 
-### Three-Tier Modular Architecture
+```env
+# Application Settings
+SECRET_KEY=your-secret-key-here
+HOST=0.0.0.0
+PORT=8080
 
-#### Data Layer
-- **PostgreSQL Database**: Production-grade relational database
-- **SQLAlchemy Models**: Type-safe ORM with relationship management
-- **Schema**: Normalized design with referential integrity
+# SSL Configuration (optional)
+SSL_ENABLED=false
+SSL_CERTFILE=certs/server.crt
+SSL_KEYFILE=certs/server.key
 
-#### Business Logic Layer
-- **Authentication Service**: User login, session management, password security
-- **PTO Service**: Request lifecycle management, approval workflows, conflict detection
-- **Employee Service**: User management, role assignment, profile updates
-- **Vacation Policy Service**: Accrual calculations, balance tracking
-- **Market Holiday Service**: Calendar integration, trading day validation
+# Email Configuration (optional)
+EMAIL_ENABLED=false
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-email@example.com
+SMTP_PASSWORD=your-password
+EMAIL_FROM=noreply@tjm.com
+EMAIL_FROM_NAME=TJM Calendar
 
-#### Presentation Layer (NiceGUI)
-- **Single-Page Application**: Reactive UI with dynamic content updates
-- **Component Library**: Reusable UI elements (cards, forms, tables, modals)
-- **Role-Based Navigation**: Dynamic menu based on user permissions
-- **Session State Management**: Persistent authentication with secure sessions
-- **Responsive Design**: Optimized for desktop, tablet, and mobile
-
-## Development Approach
-This project exemplifies the "Code-Enabled Executive" development model:
-- **Business Logic First**: Clear requirements and architecture defined by leadership
-- **AI-Assisted Implementation**: Leveraging Aider + Claude for rapid development
-- **Iterative Refinement**: Willingness to pivot when better solutions emerge
-- **Structured Phases**: Managing complexity through disciplined development cycles
-- **Production Standards**: Emphasis on maintainable, scalable code
-- **Version Control**: GitHub-based workflow for tracking progress
-
-## Installation & Setup
-
-### Prerequisites
-- Python 3.9+
-- PostgreSQL 12+
-- Windows 11 (primary deployment target)
-
-### Quick Start
-```bash
-# Clone repository
-git clone [repository-url]
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure database connection
-# (Update connection string in configuration)
-
-# Initialize database
-python init_db.py
-
-# Run application
-python app.py
+# Digest Scheduler
+ENABLE_DIGEST_SCHEDULER=true
 ```
 
-### NiceGUI Deployment Notes
-- NiceGUI runs on FastAPI backend
-- Default port: 8080 (configurable)
-- Supports both development and production modes
-- Can be deployed as Windows service for intranet access
+## Running the Application
 
-## Usage
-1. **Login**: Access the application at `http://localhost:8080`
-2. **Role-Based Features**:
-   - **Employees**: Submit PTO requests, view request history, check balances
-   - **Managers**: Approve/deny requests, view team calendars, manage direct reports
-   - **Admins**: Manage all employees, configure vacation policies, maintain system
+```bash
+# Development mode
+venv\Scripts\python.exe nicegui_app/main.py
+```
 
-## Lessons Learned
+Access the application at: `https://localhost:8080` (or `http://` if SSL disabled)
 
-### Streamlit Experience
-- **Pros**: Rapid prototyping, built-in authentication options, simple deployment
-- **Cons**: Page reload behavior, limited interactivity, state management challenges
-- **Outcome**: Excellent for proof-of-concept; limitations apparent in production use
+## User Roles
 
-### NiceGUI Advantages
-- **Real-time updates**: Forms and tables update without page reloads
-- **Component reusability**: Reduced code duplication across pages
-- **Better UX**: Single-page application feel improves user experience
-- **Flexibility**: More control over UI behavior and styling
-
-## Future Enhancements (Phase 4+)
-- Advanced reporting and analytics dashboard
-- Email notifications for request approvals
-- Calendar export (iCal/Outlook integration)
-- Mobile application (NiceGUI supports mobile views)
-- Department-based reporting and analytics
-- Historical data analysis and trending
-- Integration with payroll systems
-- Automated backup and disaster recovery
-
-## Contributing
-This is an internal Haventech Solutions project. For questions or contributions, contact the CTO.
+| Role | Permissions |
+|------|-------------|
+| **Employee** | Submit PTO requests, view own balances, request cancellations |
+| **Manager** | Employee permissions + approve/deny team requests, auto-approve own PTO |
+| **Admin** | Manager permissions + manage employees, departments, view all data |
+| **Superadmin** | Full system access including year-end processing, system settings |
 
 ## Project Structure
+
 ```
-timecalendar/
-├── models/          # SQLAlchemy database models
-├── services/        # Business logic layer
-├── components/      # NiceGUI reusable UI components
-├── pages/           # Application pages/views
-├── utils/           # Helper functions and utilities
-├── config/          # Configuration files
-├── app.py           # Main application entry point
-└── requirements.txt # Python dependencies
+TimeCalendar/
+├── nicegui_app/           # UI layer
+│   ├── main.py            # Application entry point
+│   ├── pages/             # Page components
+│   │   ├── dashboard.py   # Main dashboard
+│   │   ├── calendar.py    # Team calendar
+│   │   ├── reports.py     # Report generation
+│   │   ├── admin_*.py     # Admin pages
+│   │   └── manager_*.py   # Manager pages
+│   └── components/        # Reusable UI components
+│       ├── header.py      # Page headers
+│       ├── theme.py       # Dark mode, dialogs
+│       └── formatting.py  # Display helpers
+├── src/
+│   ├── models/            # SQLAlchemy models
+│   ├── services/          # Business logic services
+│   ├── schemas/           # Pydantic validation schemas
+│   ├── config.py          # Application configuration
+│   └── database.py        # Database connection
+├── alembic/               # Database migrations
+├── tests/                 # Test files
+├── certs/                 # SSL certificates
+├── .claude/               # Development documentation
+│   └── rules/             # Code style and business rules
+└── requirements.txt       # Python dependencies
 ```
+
+## Development Guidelines
+
+For detailed development rules, see `.claude/rules/`:
+
+- **code-style.md**: Python conventions, NiceGUI patterns, service layer patterns
+- **business-rules.md**: PTO balance system, request workflow, leave types
+- **database.md**: Schema documentation, model relationships
+- **ui-patterns.md**: Theme colors, component patterns, status badges
+- **testing.md**: Test framework, verification steps
+
+### Key Principles
+
+1. **Keep changes simple** - Impact as little code as possible
+2. **Find root causes** - No temporary fixes for bugs
+3. **Test all roles** - Verify features work for all user types
+4. **Audit trail** - Log all PTO-affecting actions via `AuditService`
+5. **Follow existing patterns** - Check codebase before proposing new elements
+
+### Testing
+
+```bash
+# Run all tests
+venv\Scripts\python.exe -m pytest tests/ -v
+
+# Syntax check
+venv\Scripts\python.exe -m py_compile path/to/file.py
+
+# Import test
+venv\Scripts\python.exe -c "from nicegui_app.main import *; print('OK')"
+```
+
+## Health Check
+
+Access `/health` endpoint to verify system status:
+```
+https://localhost:8080/health
+```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `/health` | System health check |
+| `/api/calendar/export` | Export calendar to iCal format |
+| `/api/reports/team-pto` | Export team PTO reports |
+
+## Current Status
+
+**Version**: 1.0.0
+**Status**: Production Ready
+**Last Updated**: December 2025
+
+### Completed Features
+- Full PTO request lifecycle
+- Manager approval workflows
+- Admin employee management
+- Team calendar with filtering
+- Report generation (PDF/CSV/HTML)
+- Email notifications
+- Audit logging
+- Year-end processing
+- Trusted employee auto-approve
+- Multi-state policy support
 
 ## License
-Proprietary - Haventech Solutions/TJM Holdings
+
+**Internal Use Only** - TJM Holdings / Haventech Solutions
 
 ---
 
-**Project Lead**: Jose (CTO, TJM Holdings/Haventech Solutions)  
-**Development Model**: Code-Enabled Executive with AI-Assisted Implementation  
-**Current Phase**: Phase 3 - NiceGUI UI Development (60% complete)  
-**Status**: Active Development - Target Completion Q1 2025  
-
-*This system is part of Haventech Solutions' internal automation initiative, demonstrating the power of iterative development and technology selection based on real-world requirements.*
-
----
-
-## Technical Notes
-
-### Why We Switched from Streamlit to NiceGUI
-This decision was made after completing a functional Streamlit implementation. Key factors:
-- Streamlit's architecture requires page reloads for most interactions
-- Form submissions and approvals felt clunky with full page refreshes
-- NiceGUI's reactive components provide a more modern, responsive experience
-- The switch demonstrates prioritizing user experience over sunk development costs
-- Service layer remained unchanged, validating the three-tier architecture design
-
-### Development Timeline Insight
-The willingness to restart Phase 3 with a different framework added ~2 weeks to the timeline but will result in a significantly better end-user experience. This decision reflects the "Code-Enabled Executive" approach: understanding when technical limitations impact business value and making data-driven pivots.
+**Project Lead**: Jose LaBoy, CTO
+**Organization**: TJM Holdings / Haventech Solutions

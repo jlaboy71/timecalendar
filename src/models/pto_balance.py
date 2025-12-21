@@ -53,16 +53,22 @@ class PTOBalance(Base):
     
     # Sick leave balances
     sick_total: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), 
-        default=Decimal('0.00'), 
+        Numeric(5, 2),
+        default=Decimal('0.00'),
         nullable=False
     )
     sick_used: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), 
-        default=Decimal('0.00'), 
+        Numeric(5, 2),
+        default=Decimal('0.00'),
         nullable=False
     )
-    
+    sick_pending: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Sick hours in pending requests'
+    )
+
     # Personal day balances
     personal_total: Mapped[Decimal] = mapped_column(
         Numeric(5, 2),
@@ -73,6 +79,12 @@ class PTOBalance(Base):
         Numeric(5, 2),
         default=Decimal('0.00'),
         nullable=False
+    )
+    personal_pending: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Personal hours in pending requests'
     )
 
     # Carryover balances (hours carried from previous year)
@@ -93,6 +105,33 @@ class PTOBalance(Base):
         default=Decimal('0.00'),
         nullable=False,
         comment='Personal hours carried over from previous year'
+    )
+
+    # Chicago Paid Leave for Any Reason (separate bank per Chicago ordinance)
+    # Any reason use allowed, 16hr max carryover
+    chicago_paid_leave_total: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Chicago Paid Leave hours allocated for the year (40hr max)'
+    )
+    chicago_paid_leave_used: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Chicago Paid Leave hours used'
+    )
+    chicago_paid_leave_pending: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Chicago Paid Leave hours in pending requests'
+    )
+    chicago_paid_leave_carryover: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment='Chicago Paid Leave hours carried over (max 16 hrs per ordinance)'
     )
 
     # Remote work tracking
@@ -130,10 +169,15 @@ class PTOBalance(Base):
 
     @property
     def sick_available(self) -> Decimal:
-        """Calculate available sick days (including carryover)."""
-        return self.sick_total + self.sick_carryover - self.sick_used
+        """Calculate available sick days (including carryover, minus pending)."""
+        return self.sick_total + self.sick_carryover - self.sick_used - self.sick_pending
 
     @property
     def personal_available(self) -> Decimal:
-        """Calculate available personal days (including carryover)."""
-        return self.personal_total + self.personal_carryover - self.personal_used
+        """Calculate available personal days (including carryover, minus pending)."""
+        return self.personal_total + self.personal_carryover - self.personal_used - self.personal_pending
+
+    @property
+    def chicago_paid_leave_available(self) -> Decimal:
+        """Calculate available Chicago Paid Leave hours (including carryover, minus pending)."""
+        return self.chicago_paid_leave_total + self.chicago_paid_leave_carryover - self.chicago_paid_leave_used - self.chicago_paid_leave_pending

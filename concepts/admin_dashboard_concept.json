@@ -1,0 +1,283 @@
+{
+  "concept": "Enhanced Administration Dashboard",
+  "style": {
+    "theme": "dark",
+    "background": "#111827",
+    "card_background": "#1f2937",
+    "accent_primary": "#C9A227",
+    "accent_secondary": "#3b82f6",
+    "accent_success": "#22c55e",
+    "accent_warning": "#f59e0b",
+    "accent_danger": "#ef4444",
+    "border_color": "#374151",
+    "text_primary": "#e5e7eb",
+    "text_secondary": "#9ca3af"
+  },
+  "layout": {
+    "type": "single_column",
+    "max_width": "1400px",
+    "padding": "24px",
+    "gap": "24px"
+  },
+  "sections": [
+    {
+      "id": "header",
+      "type": "header_bar",
+      "elements": [
+        {
+          "type": "title",
+          "text": "Administration Dashboard",
+          "icon": "admin_panel_settings",
+          "style": {
+            "font_size": "28px",
+            "font_weight": "bold",
+            "color": "#e5e7eb",
+            "icon_color": "#ef4444"
+          }
+        },
+        {
+          "type": "badge",
+          "text": "Admin",
+          "style": {
+            "background": "linear-gradient(135deg, #22c55e, #16a34a)",
+            "padding": "6px 16px",
+            "border_radius": "20px"
+          }
+        }
+      ]
+    },
+    {
+      "id": "stats_row",
+      "type": "grid",
+      "columns": 4,
+      "gap": "20px",
+      "cards": [
+        {
+          "type": "stat_card",
+          "title": "Active Employees",
+          "value": "10",
+          "icon": "people",
+          "icon_background": "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+          "trend": {
+            "direction": "up",
+            "value": "+2",
+            "period": "this month"
+          },
+          "accent_border": "#3b82f6"
+        },
+        {
+          "type": "stat_card",
+          "title": "Departments",
+          "value": "2",
+          "icon": "business",
+          "icon_background": "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+          "accent_border": "#8b5cf6"
+        },
+        {
+          "type": "stat_card",
+          "title": "Pending Requests",
+          "value": "3",
+          "icon": "pending_actions",
+          "icon_background": "linear-gradient(135deg, #f59e0b, #d97706)",
+          "badge": {
+            "text": "Action Required",
+            "color": "#f59e0b"
+          },
+          "accent_border": "#f59e0b"
+        },
+        {
+          "type": "stat_card",
+          "title": "PTO This Week",
+          "value": "4",
+          "subtitle": "employees out",
+          "icon": "event_busy",
+          "icon_background": "linear-gradient(135deg, #22c55e, #16a34a)",
+          "accent_border": "#22c55e"
+        }
+      ]
+    },
+    {
+      "id": "quick_insights",
+      "type": "grid",
+      "columns": 2,
+      "gap": "20px",
+      "cards": [
+        {
+          "type": "insight_card",
+          "title": "Upcoming Time Off",
+          "icon": "calendar_today",
+          "items": [
+            {
+              "employee": "John Smith",
+              "type": "Vacation",
+              "dates": "Dec 16-20",
+              "avatar_color": "#3b82f6"
+            },
+            {
+              "employee": "Jane Doe",
+              "type": "Personal",
+              "dates": "Dec 18",
+              "avatar_color": "#a855f7"
+            },
+            {
+              "employee": "Mike Johnson",
+              "type": "WFH",
+              "dates": "Dec 19-20",
+              "avatar_color": "#ef4444"
+            }
+          ],
+          "footer_link": "View Full Calendar"
+        },
+        {
+          "type": "chart_card",
+          "title": "Department PTO Usage",
+          "chart_type": "horizontal_bar",
+          "data": [
+            {"label": "Technology", "value": 75, "color": "#3b82f6"},
+            {"label": "Operations", "value": 45, "color": "#22c55e"}
+          ],
+          "subtitle": "% of allocated PTO used this year"
+        }
+      ]
+    },
+    {
+      "id": "management",
+      "type": "action_section",
+      "title": "Management",
+      "title_icon": "settings",
+      "buttons": [
+        {
+          "text": "Manage Departments",
+          "icon": "domain",
+          "style": "outline",
+          "color": "#3b82f6"
+        },
+        {
+          "text": "Manage Employees",
+          "icon": "group",
+          "style": "outline",
+          "color": "#3b82f6"
+        },
+        {
+          "text": "Add Employee",
+          "icon": "person_add",
+          "style": "filled",
+          "color": "#22c55e"
+        }
+      ]
+    },
+    {
+      "id": "approvals",
+      "type": "action_section",
+      "title": "Approvals",
+      "title_icon": "task_alt",
+      "buttons": [
+        {
+          "text": "PTO Approvals",
+          "icon": "approval",
+          "style": "outline",
+          "color": "#f59e0b",
+          "badge": {
+            "count": 3,
+            "color": "#ef4444"
+          }
+        },
+        {
+          "text": "Carryover Approvals",
+          "icon": "published_with_changes",
+          "style": "outline",
+          "color": "#f59e0b",
+          "badge": {
+            "count": 1,
+            "color": "#f59e0b"
+          }
+        }
+      ]
+    },
+    {
+      "id": "resources",
+      "type": "action_section",
+      "title": "Resources",
+      "title_icon": "folder_open",
+      "buttons": [
+        {
+          "text": "Calendar",
+          "icon": "calendar_month",
+          "style": "outline",
+          "color": "#8b5cf6"
+        },
+        {
+          "text": "Manage Handbook",
+          "icon": "menu_book",
+          "style": "outline",
+          "color": "#8b5cf6"
+        },
+        {
+          "text": "Reports",
+          "icon": "assessment",
+          "style": "outline",
+          "color": "#8b5cf6"
+        },
+        {
+          "text": "Auto Notify",
+          "icon": "notifications_active",
+          "style": "outline",
+          "color": "#C9A227",
+          "glow": true
+        },
+        {
+          "text": "Analytics",
+          "icon": "insights",
+          "style": "outline",
+          "color": "#8b5cf6"
+        }
+      ]
+    },
+    {
+      "id": "system",
+      "type": "action_section",
+      "title": "System",
+      "title_icon": "settings_applications",
+      "buttons": [
+        {
+          "text": "Year-End Processing",
+          "icon": "event_repeat",
+          "style": "outline",
+          "color": "#f59e0b",
+          "full_width": true
+        },
+        {
+          "text": "System Settings",
+          "icon": "tune",
+          "style": "outline",
+          "color": "#6b7280"
+        },
+        {
+          "text": "Email Templates",
+          "icon": "email",
+          "style": "outline",
+          "color": "#6b7280"
+        }
+      ]
+    }
+  ],
+  "enhancements": {
+    "stat_cards": {
+      "description": "Each stat card has a gradient icon circle, large bold number, and optional trend indicator",
+      "border": "left-4px accent color border",
+      "hover": "subtle lift shadow effect"
+    },
+    "insight_cards": {
+      "description": "New cards showing upcoming time off and department usage charts",
+      "style": "rounded corners, subtle inner shadow"
+    },
+    "action_buttons": {
+      "description": "Buttons with notification badges showing pending counts",
+      "hover": "glow effect matching button color"
+    },
+    "section_headers": {
+      "description": "Section titles with icons for visual hierarchy",
+      "style": "uppercase, letter-spacing, muted color"
+    }
+  }
+}

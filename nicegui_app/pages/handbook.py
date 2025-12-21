@@ -4,7 +4,7 @@ Uses database content (if available) for both display and AI search.
 """
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 from src.database import get_db
 
@@ -39,18 +39,18 @@ def handbook_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    if not app.storage.general.get('user'):
+    if not app.storage.user.get('user'):
         ui.navigate.to('/')
         return
 
-    user_data = app.storage.general.get('user')
+    user_data = app.storage.user.get('user')
     user_role = user_data.get('role', 'employee')
     is_manager_or_admin = user_role in ['manager', 'admin', 'superadmin']
 
     # Get current handbook content and version
     handbook_content, handbook_version = get_active_handbook_content()
 
-    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Header with greeting
         title = 'HANDBOOK AI ASSISTANT' if is_manager_or_admin else 'EMPLOYEE HANDBOOK'
         page_header(title=title, show_back=False)
@@ -73,7 +73,7 @@ def handbook_page():
             render_handbook_content(handbook_content)
 
         # Back to Dashboard button
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
 
 def render_ai_chat():

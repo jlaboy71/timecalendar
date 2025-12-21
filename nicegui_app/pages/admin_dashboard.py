@@ -1,6 +1,6 @@
 """Admin panel landing page with navigation to admin functions."""
 from nicegui import ui, app
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 
 
@@ -8,16 +8,16 @@ def admin_dashboard_page():
     """Admin panel landing page content."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
 
-    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title='ADMIN PANEL', show_back=False)
 
-        # Navigation cards
-        with ui.row().classes('w-full gap-6 justify-center'):
+        # Navigation cards (flex-wrap for mobile responsive)
+        with ui.row().classes('w-full gap-4 justify-center flex-wrap stagger-children'):
             # Manage Departments card
             with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
                 with ui.column().classes('items-center gap-4'):
@@ -42,27 +42,9 @@ def admin_dashboard_page():
                     ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
                     ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
 
-            # Year-End Processing card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
-                with ui.column().classes('items-center gap-4'):
-                    ui.icon('event_repeat', size='3rem').classes('text-primary')
-                    ui.label('Year-End Processing').classes('text-xl font-semibold')
-                    ui.label('Process year transitions and holidays').classes('text-gray-600 text-center')
-                    ui.button('Go to Year-End', on_click=lambda: ui.navigate.to('/admin/year-end'), color='primary')
-
-        # Second row of cards
-        with ui.row().classes('w-full gap-6 justify-center mt-6'):
-            # Handbook Management card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
-                with ui.column().classes('items-center gap-4'):
-                    ui.icon('menu_book', size='3rem').classes('text-primary')
-                    ui.label('Handbook Management').classes('text-xl font-semibold')
-                    ui.label('Update and manage employee handbook').classes('text-gray-600 text-center')
-                    ui.button('Manage Handbook', on_click=lambda: ui.navigate.to('/admin/handbook'), color='primary')
-
-        # Third row - Super Admin only
+        # Second row - Super Admin only (flex-wrap for mobile responsive)
         if user_role == 'superadmin':
-            with ui.row().classes('w-full gap-6 justify-center mt-6'):
+            with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap stagger-children'):
                 # System Administration card
                 with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-500'):
                     with ui.column().classes('items-center gap-4'):
@@ -71,4 +53,4 @@ def admin_dashboard_page():
                         ui.label('Database, email config, logs, and system settings').classes('text-gray-600 text-center')
                         ui.button('System Settings', on_click=lambda: ui.navigate.to('/admin/system'), color='warning')
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-8')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-8')

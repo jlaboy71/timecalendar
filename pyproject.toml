@@ -1,0 +1,79 @@
+[project]
+name = "tjm-time-calendar"
+version = "1.0.0"
+description = "Employee PTO and Market Calendar Management System"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.ruff]
+# Target Python 3.11
+target-version = "py311"
+
+# Line length to match common standards
+line-length = 100
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "alembic/versions",
+    ".nicegui",
+    "*.pyc",
+]
+
+[tool.ruff.lint]
+# Enable rules
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort (import sorting)
+    "UP",     # pyupgrade (Python version upgrades)
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Do not perform function calls in argument defaults (needed for FastAPI/NiceGUI)
+    "SIM108", # Use ternary operator (sometimes less readable)
+]
+
+# Per-file ignores
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert in tests
+"alembic/*" = ["E402", "F401"]  # Allow late imports in migrations
+
+[tool.ruff.lint.isort]
+# Force single-line imports for cleaner diffs
+force-single-line = false
+# Group imports by type
+known-first-party = ["src", "nicegui_app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src", "nicegui_app"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

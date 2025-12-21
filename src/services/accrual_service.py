@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from src.models.user import User
 from src.models.leave_type import LeaveType
@@ -33,7 +34,8 @@ class AccrualService:
         2. State-specific (e.g., IL)
         3. Default (NULL location)
         """
-        leave_type = self.db.query(LeaveType).filter_by(code=leave_type_code).first()
+        stmt = select(LeaveType).where(LeaveType.code == leave_type_code)
+        leave_type = self.db.execute(stmt).scalar_one_or_none()
         if not leave_type:
             return None
 
@@ -41,36 +43,39 @@ class AccrualService:
 
         # Try city-specific first
         if employee.location_city and employee.location_state:
-            policy = self.db.query(LeavePolicy).filter(
+            stmt = select(LeavePolicy).where(
                 LeavePolicy.leave_type_id == leave_type.id,
                 LeavePolicy.location_state == employee.location_state,
                 LeavePolicy.location_city == employee.location_city,
                 LeavePolicy.effective_date <= today,
                 (LeavePolicy.end_date.is_(None) | (LeavePolicy.end_date >= today))
-            ).first()
+            )
+            policy = self.db.execute(stmt).scalar_one_or_none()
             if policy:
                 return policy
 
         # Try state-specific
         if employee.location_state:
-            policy = self.db.query(LeavePolicy).filter(
+            stmt = select(LeavePolicy).where(
                 LeavePolicy.leave_type_id == leave_type.id,
                 LeavePolicy.location_state == employee.location_state,
                 LeavePolicy.location_city.is_(None),
                 LeavePolicy.effective_date <= today,
                 (LeavePolicy.end_date.is_(None) | (LeavePolicy.end_date >= today))
-            ).first()
+            )
+            policy = self.db.execute(stmt).scalar_one_or_none()
             if policy:
                 return policy
 
         # Fall back to default
-        return self.db.query(LeavePolicy).filter(
+        stmt = select(LeavePolicy).where(
             LeavePolicy.leave_type_id == leave_type.id,
             LeavePolicy.location_state.is_(None),
             LeavePolicy.location_city.is_(None),
             LeavePolicy.effective_date <= today,
             (LeavePolicy.end_date.is_(None) | (LeavePolicy.end_date >= today))
-        ).first()
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def get_vacation_tier(self, employee: User) -> Optional[VacationAccrualTier]:
         """
@@ -81,11 +86,12 @@ class AccrualService:
 
         years_of_service = (date.today() - employee.hire_date).days // 365
 
-        return self.db.query(VacationAccrualTier).filter(
+        stmt = select(VacationAccrualTier).where(
             VacationAccrualTier.min_years_service <= years_of_service,
             (VacationAccrualTier.max_years_service.is_(None) |
              (VacationAccrualTier.max_years_service >= years_of_service))
-        ).first()
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def calculate_annual_vacation_hours(self, employee: User) -> Decimal:
         """

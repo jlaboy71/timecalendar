@@ -20,7 +20,7 @@ class CarryoverRequest(Base):
     From Haventech Handbook:
     - Vacation carryover requires prior written approval from management
     - Default: No carryover allowed
-    - Chicago employees: Up to 16 hours automatic carryover
+    - Chicago employees: Up to 80 hours (10 days) automatic carryover for Sick and Safe Leave
     """
     __tablename__ = "carryover_requests"
 
@@ -60,6 +60,12 @@ class CarryoverRequest(Base):
         Numeric(5, 2),
         nullable=True,
         comment="May differ from requested"
+    )
+    hours_used: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal('0.00'),
+        nullable=False,
+        comment="Hours consumed from the carryover (deducted from FROM year balance)"
     )
 
     # Approval workflow
@@ -116,6 +122,13 @@ class CarryoverRequest(Base):
         foreign_keys=[approved_by]
     )
     leave_type: Mapped["LeaveType"] = relationship("LeaveType")
+
+    @property
+    def hours_remaining(self) -> Decimal:
+        """Calculate remaining carryover hours available to use."""
+        approved = self.hours_approved or Decimal('0')
+        used = self.hours_used or Decimal('0')
+        return max(Decimal('0'), approved - used)
 
     def __repr__(self) -> str:
         return f"<CarryoverRequest(employee_id={self.employee_id}, {self.from_year}->{self.to_year}, {self.hours_requested}hrs)>"

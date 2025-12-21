@@ -13,9 +13,42 @@ from src.services.export_service import ExportService
 from datetime import date, datetime, timedelta
 from io import StringIO
 import csv
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, skeleton_table, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, skeleton_table, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog
 from nicegui_app.components.formatting import fmt_days
+from nicegui_app.pages.dashboard import show_pto_detail_dialog
+
+
+# PTO type icons and colors - consistent with request_form.py and dashboard.py
+PTO_TYPE_STYLES = {
+    'vacation': {'icon': 'beach_access', 'hex': '#3b82f6', 'border': 'border-blue-500'},
+    'sick': {'icon': 'local_hospital', 'hex': '#22c55e', 'border': 'border-green-500'},
+    'personal': {'icon': 'person', 'hex': '#a855f7', 'border': 'border-purple-500'},
+    'work_from_home': {'icon': 'home_work', 'hex': '#ef4444', 'border': 'border-red-500'},
+    'chicago_leave': {'icon': 'spa', 'hex': '#f59e0b', 'border': 'border-amber-500'},
+    'bereavement': {'icon': 'sentiment_very_dissatisfied', 'hex': '#6366f1', 'border': 'border-indigo-500'},
+    'fmla': {'icon': 'family_restroom', 'hex': '#0891b2', 'border': 'border-cyan-500'},
+    'jury_duty': {'icon': 'gavel', 'hex': '#ec4899', 'border': 'border-pink-500'},
+    'voting': {'icon': 'how_to_vote', 'hex': '#0d9488', 'border': 'border-teal-500'},
+    'military': {'icon': 'military_tech', 'hex': '#64748b', 'border': 'border-slate-500'},
+}
+
+
+def get_pto_style(pto_type: str) -> dict:
+    """Get icon, color, and border for a PTO type."""
+    return PTO_TYPE_STYLES.get(pto_type.lower(), {'icon': 'event', 'hex': '#6b7280', 'border': 'border-gray-500'})
+
+
+def show_help_tip(title: str, message: str):
+    """Show a help tip dialog with OK button."""
+    with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+        with ui.row().classes('items-center gap-2 mb-4'):
+            ui.icon('help', color='amber', size='md')
+            ui.label(title).classes('text-lg font-bold')
+        ui.label(message).classes('text-sm opacity-80')
+        with ui.row().classes('w-full justify-end mt-4'):
+            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+    dialog.open()
 
 
 def reports_page():
@@ -24,7 +57,7 @@ def reports_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -76,8 +109,8 @@ def reports_page():
         'report_type': 'team_balance' if is_admin_only else 'my_pto',
         'status_filter': 'all',  # 'all', 'approved', 'pending', 'cancelled'
         'pto_type_filter': 'all',  # 'all', 'vacation', 'sick', 'personal', etc.
-        # My PTO dashboard filters (single-select)
-        'selected_pto_type': None,  # None = all types, or one type selected
+        # My PTO dashboard filters (multi-select)
+        'selected_pto_types': set(),  # Empty set = all types, set of type codes for multi-select
         # Calendar view type filters (checkboxes for main types)
         'calendar_types': ['vacation', 'sick', 'personal', 'work_from_home'],  # Default: all main types selected
         'calendar_other_type': None,  # Selected "other" type for calendar
@@ -104,7 +137,7 @@ def reports_page():
     }
 
     # Main container
-    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Header with greeting (no back arrow - we'll add button at bottom)
         page_header(title='REPORTS', show_back=False)
 
@@ -122,13 +155,25 @@ def reports_page():
                     # My PTO section (managers only - admins don't have PTO)
                     if not is_admin_only:
                         with ui.column().classes('gap-2'):
-                            ui.label('My Reports').classes('text-sm font-semibold uppercase opacity-60')
+                            with ui.row().classes('items-center gap-1'):
+                                ui.label('My Reports').classes('text-sm font-semibold uppercase opacity-60')
+                                ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                                    'My Reports',
+                                    'View your personal PTO information including requests, balances, and a calendar view of your time off throughout the year.'
+                                )).props('flat dense round size=xs').style('color: #f59e0b')
                             with ui.row().classes('gap-2'):
                                 my_pto_btn = ui.button('My PTO', icon='person', on_click=lambda: switch_report('my_pto')).props('color=primary')
 
                     # Team Reports section
                     with ui.column().classes('gap-2'):
-                        ui.label('Team Reports').classes('text-sm font-semibold uppercase opacity-60')
+                        with ui.row().classes('items-center gap-1'):
+                            ui.label('Team Reports').classes('text-sm font-semibold uppercase opacity-60')
+                            ui.button(icon='help_outline', on_click=lambda: show_help_tip(
+                                'Team Reports',
+                                'Team Balance: View all team members\' PTO balances (available, used, pending).\n\n'
+                                'Team Usage: See approved time off requests by employee.\n\n'
+                                'Audit Log: Track all system activity including logins, PTO requests, and approvals.'
+                            )).props('flat dense round size=xs').style('color: #f59e0b')
                         with ui.row().classes('gap-2 flex-wrap'):
                             # For admins, default team_balance is selected
                             team_balance_btn = ui.button('Team Balance', on_click=lambda: switch_report('team_balance')).props('color=primary' if is_admin_only else 'outline')
@@ -183,20 +228,15 @@ def reports_page():
 
                     # Right side: Action buttons
                     with ui.row().classes('gap-2 flex-wrap'):
-                        # Refresh button
-                        ui.button('Refresh', icon='refresh', on_click=lambda: render_report()).props('flat dense')
-
                         # Download dropdown
                         with ui.dropdown_button('Download', icon='download', auto_close=True).props('flat dense') as download_dropdown:
                             async def handle_download_csv():
                                 download_dropdown.close()
-                                ui.notify('Generating CSV...', type='info')
                                 await asyncio.sleep(0.1)
                                 export_csv()
 
                             async def handle_download_pdf():
                                 download_dropdown.close()
-                                ui.notify('Generating PDF...', type='info')
                                 await asyncio.sleep(0.1)
                                 download_pdf()
 
@@ -211,11 +251,16 @@ def reports_page():
 
         def render_filters():
             filters_card.clear()
+            # Hide filters card for my_pto (all filters are inline with title)
+            if filter_state['report_type'] == 'my_pto':
+                filters_card.set_visibility(False)
+                return
+            filters_card.set_visibility(True)
+
             with filters_card:
                 # Row 1: Filters
                 with ui.row().classes('w-full gap-4 items-end flex-wrap'):
-                    # Year filter (common to all reports)
-                    # Only show current year and next year (no historical years without data)
+                    # Year filter
                     years = [current_year, current_year + 1]
                     ui.select(
                         {y: str(y) for y in years},
@@ -283,46 +328,34 @@ def reports_page():
                                     ui.element('div').classes('w-3 h-3 rounded-full').style(f'background-color: {color}')
                                     ui.label(label).classes('text-sm')
 
-                            # Other types dropdown
-                            other_options = {
-                                None: 'Other Types',
-                                'bereavement': 'Bereavement',
-                                'fmla': 'FMLA',
-                                'jury_duty': 'Jury Duty',
-                                'voting': 'Voting',
-                                'military': 'Military'
-                            }
+                            # Other types as clickable icons
+                            other_types = [
+                                ('bereavement', 'Bereave.'),
+                                ('fmla', 'FMLA'),
+                                ('jury_duty', 'Jury'),
+                                ('voting', 'Voting'),
+                                ('military', 'Military'),
+                            ]
 
-                            def on_other_change(e):
-                                filter_state['calendar_other_type'] = e.value
+                            def toggle_other_type(type_code):
+                                if filter_state['calendar_other_type'] == type_code:
+                                    filter_state['calendar_other_type'] = None
+                                else:
+                                    filter_state['calendar_other_type'] = type_code
                                 render_report()
 
-                            ui.select(
-                                other_options,
-                                value=filter_state['calendar_other_type'],
-                                on_change=on_other_change
-                            ).props('dense outlined').classes('w-36')
+                            for type_code, label in other_types:
+                                style = PTO_TYPE_STYLES.get(type_code, {})
+                                is_selected = filter_state['calendar_other_type'] == type_code
+                                border = '2px solid ' + style.get('hex', '#6b7280') if is_selected else '1px solid transparent'
+                                bg = f"rgba({int(style.get('hex', '#6b7280')[1:3], 16)}, {int(style.get('hex', '#6b7280')[3:5], 16)}, {int(style.get('hex', '#6b7280')[5:7], 16)}, 0.15)" if is_selected else 'transparent'
+                                with ui.element('div').classes('flex items-center gap-1 cursor-pointer px-2 py-1 rounded').style(
+                                    f'border: {border}; background: {bg};'
+                                ).on('click', lambda tc=type_code: toggle_other_type(tc)):
+                                    ui.icon(style.get('icon', 'event'), size='xs').style(f'color: {style.get("hex", "#6b7280")};')
+                                    ui.label(label).classes('text-xs').style(f'color: {style.get("hex", "#6b7280")};')
 
-                    # Other types dropdown for my_pto view (balance tiles handle main types)
-                    if filter_state['report_type'] == 'my_pto':
-                        other_options = {
-                            None: 'Other Types',
-                            'bereavement': 'Bereavement',
-                            'fmla': 'FMLA',
-                            'jury_duty': 'Jury Duty',
-                            'voting': 'Voting',
-                            'military': 'Military'
-                        }
-
-                        def on_other_change(e):
-                            filter_state['calendar_other_type'] = e.value
-                            render_report()
-
-                        ui.select(
-                            other_options,
-                            value=filter_state['calendar_other_type'],
-                            on_change=on_other_change
-                        ).props('dense outlined').classes('w-36')
+                    # Other types for my_pto view are now rendered inline with the title in render_my_pto()
 
                     # Department filter (team reports only)
                     if filter_state['report_type'] in ['team_balance', 'team_usage', 'audit']:
@@ -475,7 +508,7 @@ def reports_page():
                             f"background-color: {'#14532d' if is_active else '#374151'}; border-top: 4px solid #22c55e;"
                         ).on('click', lambda s='approved', c=approved_count: filter_by_status(s, c)):
                             ui.label('Approved').classes('text-xs opacity-60 uppercase mb-1')
-                            ui.label(f'{fmt_days(approved_days)} days').classes('text-xl font-bold').style('color: #22c55e')
+                            ui.label(fmt_days(approved_days)).classes('text-xl font-bold').style('color: #22c55e')
                             ui.label(f'{approved_count} request{"s" if approved_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Pending tile
@@ -485,7 +518,7 @@ def reports_page():
                             f"background-color: {'#78350f' if is_active else '#374151'}; border-top: 4px solid #f59e0b;"
                         ).on('click', lambda s='pending', c=pending_count: filter_by_status(s, c)):
                             ui.label('Pending').classes('text-xs opacity-60 uppercase mb-1')
-                            ui.label(f'{fmt_days(pending_days)} days').classes('text-xl font-bold').style('color: #f59e0b')
+                            ui.label(fmt_days(pending_days)).classes('text-xl font-bold').style('color: #f59e0b')
                             ui.label(f'{pending_count} request{"s" if pending_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Cancelled tile
@@ -495,7 +528,7 @@ def reports_page():
                             f"background-color: {'#7f1d1d' if is_active else '#374151'}; border-top: 4px solid #ef4444;"
                         ).on('click', lambda s='cancelled', c=cancelled_count: filter_by_status(s, c)):
                             ui.label('Cancelled').classes('text-xs opacity-60 uppercase mb-1')
-                            ui.label(f'{fmt_days(cancelled_days)} days').classes('text-xl font-bold').style('color: #ef4444')
+                            ui.label(fmt_days(cancelled_days)).classes('text-xl font-bold').style('color: #ef4444')
                             ui.label(f'{cancelled_count} request{"s" if cancelled_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Total tile (always clickable)
@@ -509,27 +542,15 @@ def reports_page():
 
                     # Detailed list with descriptions
                     for req in requests:
-                        # Use PTO type colors for the left border
-                        type_colors = {
-                            'vacation': 'border-blue-500',
-                            'sick': 'border-green-500',
-                            'personal': 'border-purple-500',
-                            'work_from_home': 'border-red-500'
-                        }
-                        status_icons = {
-                            'approved': 'check_circle',
-                            'pending': 'schedule',
-                            'denied': 'cancel',
-                            'cancelled': 'block'
-                        }
-                        border_color = type_colors.get(req.pto_type.lower(), 'border-gray-300')
+                        # Get PTO type styling (icon, color, border)
+                        pto_style = get_pto_style(req.pto_type)
 
-                        with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {border_color}'):
+                        with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {pto_style["border"]} cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
                             with ui.row().classes('w-full justify-between items-start'):
                                 with ui.column().classes('gap-1'):
                                     with ui.row().classes('items-center gap-2'):
-                                        ui.icon(status_icons.get(req.status, 'event')).classes('text-lg')
-                                        ui.label(req.pto_type.title()).classes('font-semibold')
+                                        ui.icon(pto_style['icon'], size='sm').style(f'color: {pto_style["hex"]};')
+                                        ui.label(req.pto_type.replace('_', ' ').title()).classes('font-semibold').style(f'color: {pto_style["hex"]};')
                                         ui.badge(req.status.upper()).props(
                                             f'color={"green" if req.status == "approved" else "amber" if req.status == "pending" else "red"}'
                                         )
@@ -548,7 +569,7 @@ def reports_page():
                                             ui.label(req.notes).classes('text-sm italic')
 
                                 with ui.column().classes('items-end'):
-                                    ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('font-bold')
+                                    ui.label(fmt_days(float(req.total_days or 0))).classes('font-bold')
 
             finally:
                 db.close()
@@ -578,7 +599,7 @@ def reports_page():
                     # Helper to create a balance stat column
                     def balance_stat(value_days, value_hrs, label, color_class=''):
                         with ui.column().classes('items-center flex-1'):
-                            ui.label(f'{value_days} days').classes(f'text-xl font-bold {color_class}')
+                            ui.label(value_days).classes(f'text-xl font-bold {color_class}')
                             ui.label(f'({value_hrs:.0f} hrs)').classes('text-xs opacity-50')
                             ui.label(label).classes('text-xs opacity-60 mt-1')
 
@@ -688,13 +709,13 @@ def reports_page():
                                 color = type_colors.get(pto_lower, 'grey')
                                 display_name = type_display.get(pto_lower, req.pto_type.replace('_', ' ').title())
 
-                                with ui.row().classes('w-full p-2 items-center gap-3 border-b'):
+                                with ui.row().classes('w-full p-2 items-center gap-3 border-b cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
                                     ui.badge(display_name, color=color)
                                     if req.start_date == req.end_date:
                                         ui.label(req.start_date.strftime('%d')).classes('font-medium')
                                     else:
                                         ui.label(f'{req.start_date.strftime("%d")} - {req.end_date.strftime("%d")}').classes('font-medium')
-                                    ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('opacity-70')
+                                    ui.label(fmt_days(float(req.total_days or 0))).classes('opacity-70')
                                     if req.notes:
                                         ui.label(f'"{req.notes}"').classes('text-sm italic opacity-60 flex-1')
 
@@ -710,6 +731,13 @@ def reports_page():
                     PTOBalance.user_id == user_id,
                     PTOBalance.year == filter_state['year']
                 ).first()
+
+                # Check if user is Chicago employee (for LEAVE tile visibility)
+                from src.models.system_setting import SystemSetting
+                user_obj = db.query(User).filter(User.id == user_id).first()
+                is_chicago_employee = user_obj and user_obj.location_city and user_obj.location_city.lower() == 'chicago'
+                chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+                show_chicago_leave = is_chicago_employee and chicago_setting and chicago_setting.bool_value
 
                 # Get all requests for the year
                 all_requests = db.query(PTORequest).filter(
@@ -729,10 +757,11 @@ def reports_page():
                 # Apply filters to get display requests
                 filtered_requests = all_requests
 
-                # Apply PTO type filter (single-select)
-                if filter_state['selected_pto_type']:
-                    from sqlalchemy import func
-                    filtered_requests = [r for r in filtered_requests if r.pto_type.lower() == filter_state['selected_pto_type'].lower()]
+                # Apply PTO type filter (main tiles - multi-select or other types)
+                if filter_state['selected_pto_types']:
+                    filtered_requests = [r for r in filtered_requests if r.pto_type.lower() in filter_state['selected_pto_types']]
+                elif filter_state['calendar_other_type']:
+                    filtered_requests = [r for r in filtered_requests if r.pto_type.lower() == filter_state['calendar_other_type'].lower()]
 
                 # Apply status filter
                 if filter_state['status_filter'] != 'all':
@@ -742,8 +771,9 @@ def reports_page():
                 filtered_requests = sorted(filtered_requests, key=lambda r: r.start_date, reverse=True)
 
                 # Calculate stats based on current PTO type filter (for status tiles)
-                if filter_state['selected_pto_type']:
-                    type_requests = requests_by_type.get(filter_state['selected_pto_type'], [])
+                if filter_state['selected_pto_types']:
+                    # Combine requests from all selected types
+                    type_requests = [r for r in all_requests if r.pto_type.lower() in filter_state['selected_pto_types']]
                 else:
                     type_requests = all_requests
 
@@ -766,27 +796,89 @@ def reports_page():
                     dialog.open()
 
                 with ui.card().classes('w-full'):
-                    ui.label(f'My PTO Dashboard - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
+                    # Title row with inline filters (Year + Other Types)
+                    with ui.row().classes('w-full justify-between items-center mb-4 flex-wrap gap-2'):
+                        ui.label(f'My PTO Dashboard - {filter_state["year"]}').classes('text-lg font-semibold')
 
-                    # === BALANCE TILES (Clickable - Single Select) ===
-                    def hours_to_days(hours):
-                        return fmt_days(hours / 8)
+                        # Inline filters: Year selector + Other types
+                        with ui.row().classes('items-center gap-3'):
+                            # Year selector
+                            years = [current_year, current_year + 1]
+                            ui.select(
+                                {y: str(y) for y in years},
+                                label='Year',
+                                value=filter_state['year'],
+                                on_change=lambda e: update_filter('year', e.value)
+                            ).props('dense outlined').classes('w-24')
+
+                            # Other types as clickable icons
+                            other_types_list = [
+                                ('bereavement', 'Bereave.'),
+                                ('fmla', 'FMLA'),
+                                ('jury_duty', 'Jury'),
+                                ('voting', 'Voting'),
+                                ('military', 'Military'),
+                            ]
+
+                            def toggle_other_type_inline(type_code):
+                                if filter_state['calendar_other_type'] == type_code:
+                                    filter_state['calendar_other_type'] = None
+                                else:
+                                    filter_state['calendar_other_type'] = type_code
+                                    # Clear main tile selection (mutually exclusive)
+                                    filter_state['selected_pto_types'] = set()
+                                filter_state['status_filter'] = 'all'
+                                render_report()
+
+                            for type_code, label in other_types_list:
+                                style = PTO_TYPE_STYLES.get(type_code, {})
+                                is_selected = filter_state['calendar_other_type'] == type_code
+                                border = '2px solid ' + style.get('hex', '#6b7280') if is_selected else '1px solid transparent'
+                                bg = f"rgba({int(style.get('hex', '#6b7280')[1:3], 16)}, {int(style.get('hex', '#6b7280')[3:5], 16)}, {int(style.get('hex', '#6b7280')[5:7], 16)}, 0.15)" if is_selected else 'transparent'
+                                with ui.element('div').classes('flex items-center gap-1 cursor-pointer px-2 py-1 rounded').style(
+                                    f'border: {border}; background: {bg};'
+                                ).on('click', lambda tc=type_code: toggle_other_type_inline(tc)):
+                                    ui.icon(style.get('icon', 'event'), size='xs').style(f'color: {style.get("hex", "#6b7280")};')
+                                    ui.label(label).classes('text-xs').style(f'color: {style.get("hex", "#6b7280")};')
+
+                    # === BALANCE TILES (Clickable - Multi-Select) ===
+                    tile_cards = {}  # Store card references for style updates
+                    tile_border_colors = {}  # Store tile border colors for dynamic styling
+
+                    def format_days_verbose(hours):
+                        """Format hours as 'x days' or 'x days and y hours'."""
+                        whole_days = int(hours // 8)
+                        remaining_hours = int(hours % 8)
+                        if remaining_hours > 0:
+                            return f"{whole_days} days and {remaining_hours} hours"
+                        return f"{whole_days} days"
+
+                    def update_tile_styles():
+                        """Update tile card styles based on selected types - show bottom border when selected."""
+                        for pto_type, card in tile_cards.items():
+                            if card is None:
+                                continue
+                            is_selected = pto_type in filter_state['selected_pto_types']
+                            border_color = tile_border_colors.get(pto_type, '#6b7280')
+                            if is_selected:
+                                # Show bottom border when selected
+                                card.style(f'border-bottom: 4px solid {border_color}; transform: scale(1.02);')
+                            else:
+                                # Hide bottom border when not selected
+                                card.style('border-bottom: 4px solid transparent; transform: scale(1);')
 
                     def select_pto_type(type_code, type_label, request_count):
-                        """Select PTO type - click to select, click again to deselect."""
-                        if request_count == 0:
-                            show_info_dialog(
-                                f'No {type_label} Requests',
-                                f'You have no {type_label.lower()} requests for {filter_state["year"]}. Submit a request to see it here.'
-                            )
-                            return
-                        # Toggle: if already selected, deselect; otherwise select
-                        if filter_state['selected_pto_type'] == type_code:
-                            filter_state['selected_pto_type'] = None
+                        """Select PTO type - multi-select toggle behavior."""
+                        # Toggle: add or remove from selected set
+                        if type_code in filter_state['selected_pto_types']:
+                            filter_state['selected_pto_types'].discard(type_code)
                         else:
-                            filter_state['selected_pto_type'] = type_code
+                            filter_state['selected_pto_types'].add(type_code)
+                            # Clear other type selection (mutually exclusive with main tiles)
+                            filter_state['calendar_other_type'] = None
                         # Reset status filter when changing PTO type
                         filter_state['status_filter'] = 'all'
+                        update_tile_styles()
                         render_report()
 
                     # Balance data for tiles
@@ -803,121 +895,278 @@ def reports_page():
                         personal_total = float(balance.personal_total or 0) + float(balance.personal_carryover or 0)
                         personal_used = float(balance.personal_used or 0)
                         personal_avail = personal_total - personal_used
+
+                        # Chicago Leave balance
+                        chicago_avail = float(balance.chicago_paid_leave_available or 0) if hasattr(balance, 'chicago_paid_leave_available') else 0
                     else:
-                        vac_avail = sick_avail = personal_avail = vac_pending = 0
+                        vac_avail = sick_avail = personal_avail = vac_pending = chicago_avail = 0
 
                     # WFH stats
                     wfh_requests = requests_by_type['work_from_home']
                     wfh_days = sum(float(r.total_days or 0) for r in wfh_requests)
                     wfh_count = len(wfh_requests)
 
-                    # Tile data: type_code, label, value, sub_label, color, bg_active, pending_hours, request_count
+                    # Chicago Leave requests (need to add to requests_by_type)
+                    chicago_requests = [r for r in all_requests if r.pto_type.lower() == 'chicago_leave']
+                    chicago_count = len(chicago_requests)
+
+                    # Tile data: type_code, label, icon, hours_avail, color, bg_active, pending_hours, request_count, is_count_only
                     tiles = [
-                        ('vacation', 'Vacation', hours_to_days(vac_avail), 'days left', '#3b82f6', '#1e3a5f', vac_pending, len(requests_by_type['vacation'])),
-                        ('sick', 'Sick', hours_to_days(sick_avail), 'days left', '#22c55e', '#14532d', 0, len(requests_by_type['sick'])),
-                        ('personal', 'Personal', hours_to_days(personal_avail), 'days left', '#a855f7', '#581c87', 0, len(requests_by_type['personal'])),
-                        ('work_from_home', 'WFH', f'{fmt_days(wfh_days)}', f'{wfh_count} request{"s" if wfh_count != 1 else ""}', '#ef4444', '#7f1d1d', 0, wfh_count),
+                        ('vacation', 'Vacation', 'beach_access', vac_avail, '#3b82f6', '#1e3a5f', vac_pending, len(requests_by_type['vacation']), False),
+                        ('sick', 'Sick', 'local_hospital', sick_avail, '#22c55e', '#14532d', 0, len(requests_by_type['sick']), False),
+                        ('personal', 'Personal', 'person', personal_avail, '#a855f7', '#581c87', 0, len(requests_by_type['personal']), False),
                     ]
+                    # Only show Chicago Leave tile for Chicago employees with setting enabled
+                    if show_chicago_leave:
+                        tiles.append(('chicago_leave', 'Leave', 'spa', chicago_avail, '#f59e0b', '#78350f', 0, chicago_count, False))
+                    tiles.append(('work_from_home', 'WFH', 'home_work', wfh_days * 8, '#ef4444', '#7f1d1d', 0, wfh_count, True))
 
-                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4 mb-4'):
-                        for type_code, label, value, sub_label, color, bg_active, pending_hours, req_count in tiles:
-                            is_selected = filter_state['selected_pto_type'] == type_code
-                            has_requests = req_count > 0
-                            # Selected = active bg, has requests but not selected = default bg, no requests = slightly dimmed
-                            bg_color = bg_active if is_selected else '#374151'
+                    # Border class mapping for tailwind
+                    border_classes = {
+                        '#3b82f6': 'border-blue-500',
+                        '#22c55e': 'border-green-500',
+                        '#a855f7': 'border-purple-500',
+                        '#f59e0b': 'border-amber-500',
+                        '#ef4444': 'border-red-500',
+                    }
 
-                            with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if has_requests else "cursor-pointer"}').style(
-                                f'background-color: {bg_color}; border-left: 4px solid {color};'
-                            ).on('click', lambda tc=type_code, lbl=label, cnt=req_count: select_pto_type(tc, lbl, cnt)):
-                                ui.label(label).classes('text-sm font-semibold').style(f'color: {color}')
-                                with ui.row().classes('items-baseline gap-2'):
-                                    ui.label(value).classes('text-2xl font-bold')
-                                    ui.label(sub_label).classes('text-xs opacity-60')
-                                if pending_hours > 0:
-                                    ui.label(f'({hours_to_days(pending_hours)} pending)').classes('text-xs text-amber-500')
+                    # Use CSS Grid - 5 columns if Chicago leave shown, 4 otherwise
+                    grid_cols = 'grid-cols-5' if show_chicago_leave else 'grid-cols-4'
+                    with ui.element('div').classes(f'w-full grid {grid_cols} gap-3 mb-4'):
+                        for type_code, label, icon, hours_avail, color, bg_active, pending_hours, req_count, is_count_only in tiles:
+                            is_selected = type_code in filter_state['selected_pto_types']
+                            border_class = border_classes.get(color, 'border-gray-500')
+
+                            # Store the hex color for this tile type
+                            tile_border_colors[type_code] = color
+
+                            # Create card with top border only, transparent bottom (shown on select)
+                            card = ui.card().classes(f'p-3 border-t-4 {border_class} cursor-pointer hover:opacity-80 transition-all duration-200').style(
+                                'border-bottom: 4px solid transparent;'
+                            ).on(
+                                'click', lambda tc=type_code, lbl=label, cnt=req_count: select_pto_type(tc, lbl, cnt)
+                            )
+                            tile_cards[type_code] = card
+                            # Apply initial style if selected
+                            if is_selected:
+                                card.style(f'border-bottom: 4px solid {color}; transform: scale(1.02);')
+
+                            with card:
+                                # Centered icon, label, and value
+                                with ui.column().classes('items-center w-full'):
+                                    ui.icon(icon, size='1.5rem').style(f'color: {color};')
+                                    ui.label(label).classes('text-sm font-semibold text-center').style(f'color: {color}')
+
+                                    # Value display
+                                    if is_count_only:
+                                        # WFH shows count
+                                        ui.label(f'{req_count} request{"s" if req_count != 1 else ""}').classes('text-xs opacity-60 text-center')
+                                    else:
+                                        # Balance types show verbose format
+                                        ui.label(format_days_verbose(hours_avail)).classes('text-sm font-bold text-center')
+                                        if pending_hours > 0:
+                                            ui.label(f'({format_days_verbose(pending_hours)} pending)').classes('text-xs text-amber-500 text-center')
+
+                    # === STATUS INFO (for help dialogs and empty state cards) ===
+                    status_info = {
+                        'approved': {
+                            'name': 'Approved Requests',
+                            'icon': 'check_circle',
+                            'color': '#22c55e',
+                            'border': 'border-green-500',
+                            'description': 'Approved requests have been reviewed and confirmed by your manager. These hours are deducted from your balance and the time off is officially scheduled.'
+                        },
+                        'pending': {
+                            'name': 'Pending Requests',
+                            'icon': 'pending',
+                            'color': '#f59e0b',
+                            'border': 'border-amber-500',
+                            'description': 'Pending requests are awaiting manager approval. Your balance shows these hours as "pending" until approved or denied. You\'ll receive notification once a decision is made.'
+                        },
+                        'cancelled': {
+                            'name': 'Cancelled Requests',
+                            'icon': 'cancel',
+                            'color': '#ef4444',
+                            'border': 'border-red-500',
+                            'description': 'Cancelled requests were withdrawn before or after approval. Hours from cancelled requests are returned to your available balance.'
+                        },
+                        'all': {
+                            'name': 'All Requests',
+                            'icon': 'list_alt',
+                            'color': '#3b82f6',
+                            'border': 'border-blue-500',
+                            'description': 'View all your PTO requests regardless of status. This includes approved, pending, denied, and cancelled requests.'
+                        }
+                    }
+
+                    def show_status_info(status_code):
+                        """Show a dialog with information about the request status."""
+                        info = status_info.get(status_code, {})
+                        with ui.dialog() as info_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+                            with ui.row().classes('items-center gap-3 mb-4'):
+                                ui.icon(info.get('icon', 'info'), size='lg').style(f'color: {info.get("color", "#6b7280")};')
+                                ui.label(info.get('name', status_code.title())).classes('text-lg font-bold').style(f'color: {info.get("color", "#6b7280")};')
+                            ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
+                            with ui.row().classes('w-full justify-end mt-4'):
+                                ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                        info_dialog.open()
 
                     # === STATUS TILES (Clickable - filter within selected PTO type) ===
                     def filter_by_status(status, count):
-                        if count == 0 and status != 'all':
-                            type_label = filter_state['selected_pto_type'].replace('_', ' ').title() if filter_state['selected_pto_type'] else 'PTO'
-                            show_info_dialog(
-                                f'No {status.title()} Requests',
-                                f'You have no {status} {type_label.lower()} requests for {filter_state["year"]}.'
-                            )
-                            return
                         # Toggle: if already selected, go back to all; otherwise select
+                        # Allow selecting even if count is 0 - will show styled empty card
                         filter_state['status_filter'] = 'all' if filter_state['status_filter'] == status else status
                         render_report()
 
                     current_status_filter = filter_state['status_filter']
-                    with ui.element('div').classes('w-full grid grid-cols-4 gap-4 mb-4'):
+                    # Use CSS Grid for perfect 4-column alignment
+                    with ui.element('div').classes('w-full grid grid-cols-4 gap-3 mb-4'):
                         # Approved tile
                         is_active = current_status_filter == 'approved'
-                        can_click = approved_count > 0
-                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
-                            f"background-color: {'#14532d' if is_active else '#374151'}; border-top: 3px solid #22c55e;"
-                        ).on('click', lambda s='approved', c=approved_count: filter_by_status(s, c)):
+                        ring_class = 'ring-2 ring-offset-2 ring-offset-gray-900' if is_active else ''
+                        with ui.card().classes(f'p-3 border-t-4 border-green-500 cursor-pointer hover:opacity-80 {ring_class}').on(
+                            'click', lambda s='approved', c=approved_count: filter_by_status(s, c)
+                        ):
                             ui.label('Approved').classes('text-xs opacity-60 uppercase')
-                            ui.label(f'{fmt_days(approved_days)} days').classes('text-lg font-bold').style('color: #22c55e')
+                            ui.label(fmt_days(approved_days)).classes('text-lg font-bold').style('color: #22c55e')
                             ui.label(f'{approved_count} request{"s" if approved_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Pending tile
                         is_active = current_status_filter == 'pending'
-                        can_click = pending_count > 0
-                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
-                            f"background-color: {'#78350f' if is_active else '#374151'}; border-top: 3px solid #f59e0b;"
-                        ).on('click', lambda s='pending', c=pending_count: filter_by_status(s, c)):
+                        ring_class = 'ring-2 ring-offset-2 ring-offset-gray-900' if is_active else ''
+                        with ui.card().classes(f'p-3 border-t-4 border-amber-500 cursor-pointer hover:opacity-80 {ring_class}').on(
+                            'click', lambda s='pending', c=pending_count: filter_by_status(s, c)
+                        ):
                             ui.label('Pending').classes('text-xs opacity-60 uppercase')
-                            ui.label(f'{fmt_days(pending_days)} days').classes('text-lg font-bold').style('color: #f59e0b')
+                            ui.label(fmt_days(pending_days)).classes('text-lg font-bold').style('color: #f59e0b')
                             ui.label(f'{pending_count} request{"s" if pending_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Cancelled tile
                         is_active = current_status_filter == 'cancelled'
-                        can_click = cancelled_count > 0
-                        with ui.element('div').classes(f'p-3 rounded-lg {"cursor-pointer hover:opacity-80" if can_click else "cursor-pointer"}').style(
-                            f"background-color: {'#7f1d1d' if is_active else '#374151'}; border-top: 3px solid #ef4444;"
-                        ).on('click', lambda s='cancelled', c=cancelled_count: filter_by_status(s, c)):
+                        ring_class = 'ring-2 ring-offset-2 ring-offset-gray-900' if is_active else ''
+                        with ui.card().classes(f'p-3 border-t-4 border-red-500 cursor-pointer hover:opacity-80 {ring_class}').on(
+                            'click', lambda s='cancelled', c=cancelled_count: filter_by_status(s, c)
+                        ):
                             ui.label('Cancelled').classes('text-xs opacity-60 uppercase')
-                            ui.label(f'{fmt_days(cancelled_days)} days').classes('text-lg font-bold').style('color: #ef4444')
+                            ui.label(fmt_days(cancelled_days)).classes('text-lg font-bold').style('color: #ef4444')
                             ui.label(f'{cancelled_count} request{"s" if cancelled_count != 1 else ""}').classes('text-xs opacity-50')
 
                         # Total/All tile
                         is_active = current_status_filter == 'all'
                         total_count = len(type_requests)
-                        with ui.element('div').classes('p-3 rounded-lg cursor-pointer hover:opacity-80').style(
-                            f"background-color: {'#1e3a5f' if is_active else '#374151'}; border-top: 3px solid #3b82f6;"
-                        ).on('click', lambda: filter_by_status('all', 1)):
+                        ring_class = 'ring-2 ring-offset-2 ring-offset-gray-900' if is_active else ''
+                        with ui.card().classes(f'p-3 border-t-4 border-blue-500 cursor-pointer hover:opacity-80 {ring_class}').on(
+                            'click', lambda: filter_by_status('all', 1)
+                        ):
                             ui.label('Total').classes('text-xs opacity-60 uppercase')
                             ui.label(f'{total_count}').classes('text-lg font-bold').style('color: #3b82f6')
                             ui.label('requests').classes('text-xs opacity-50')
 
                     # === REQUEST LIST ===
+                    # PTO type full names and descriptions
+                    pto_type_info = {
+                        'vacation': {
+                            'name': 'Vacation',
+                            'description': 'Paid time off for personal rest, travel, or leisure activities. Accrues based on tenure and can be carried over per company policy.'
+                        },
+                        'sick': {
+                            'name': 'Sick Leave',
+                            'description': 'Time off for illness, medical appointments, or caring for sick family members. Does not require advance notice for genuine illness.'
+                        },
+                        'personal': {
+                            'name': 'Personal Day',
+                            'description': 'Flexible time off for personal matters that don\'t fall under other categories. Use for appointments, errands, or personal needs.'
+                        },
+                        'chicago_leave': {
+                            'name': 'Chicago Paid Leave',
+                            'description': 'Paid leave available to Chicago-based employees under local ordinance. Can be used for any purpose with proper notice.'
+                        },
+                        'work_from_home': {
+                            'name': 'Work From Home',
+                            'description': 'Remote work request to work from home instead of the office. Subject to manager approval and job requirements.'
+                        },
+                        'bereavement': {
+                            'name': 'Bereavement Leave',
+                            'description': 'Paid time off following the death of a family member. Immediate family: up to 5 days. Extended family: up to 3 days.'
+                        },
+                        'fmla': {
+                            'name': 'FMLA - Family and Medical Leave Act',
+                            'description': 'Up to 12 weeks of unpaid, job-protected leave per year for serious health conditions, caring for family members, or bonding with a new child. Requires 30 days advance notice when foreseeable.'
+                        },
+                        'jury_duty': {
+                            'name': 'Jury Duty',
+                            'description': 'Paid time off for mandatory jury service. Provide court documentation. You will receive full pay during service.'
+                        },
+                        'voting': {
+                            'name': 'Voting Leave',
+                            'description': 'Up to 2 hours of paid time to vote if polls are not open for 2 consecutive hours outside of work schedule.'
+                        },
+                        'military': {
+                            'name': 'Military Leave',
+                            'description': 'Leave for military service, training, or duty as required by USERRA. Job protection and benefits continuation apply.'
+                        },
+                    }
+
+                    def show_pto_type_info(type_code):
+                        """Show a dialog with information about the PTO type."""
+                        info = pto_type_info.get(type_code, {})
+                        style = get_pto_style(type_code)
+                        with ui.dialog() as info_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px; max-width: 500px;'):
+                            with ui.row().classes('items-center gap-3 mb-4'):
+                                ui.icon(style['icon'], size='lg').style(f'color: {style["hex"]};')
+                                ui.label(info.get('name', type_code.replace('_', ' ').title())).classes('text-lg font-bold').style(f'color: {style["hex"]};')
+                            ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
+                            with ui.row().classes('w-full justify-end mt-4'):
+                                ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                        info_dialog.open()
+
                     if not filtered_requests:
-                        with ui.column().classes('w-full items-center py-8'):
-                            ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
-                            ui.label('No PTO requests found for the current filters.').classes('opacity-60')
+                        # Check if a specific type is selected (main tiles or other types)
+                        selected_types = filter_state.get('selected_pto_types', set())
+                        selected_type = next(iter(selected_types), None) if selected_types else filter_state.get('calendar_other_type')
+                        current_status = filter_state.get('status_filter', 'all')
+
+                        if selected_type:
+                            # Show styled card with the type's icon, full name, and "no requests" message
+                            pto_style = get_pto_style(selected_type)
+                            type_info = pto_type_info.get(selected_type, {})
+                            type_label = type_info.get('name', selected_type.replace('_', ' ').title())
+                            status_suffix = f' {current_status}' if current_status != 'all' else ''
+                            with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {pto_style["border"]} cursor-pointer hover:shadow-md').on('click', lambda t=selected_type: show_pto_type_info(t)):
+                                with ui.row().classes('w-full items-center gap-3'):
+                                    ui.icon(pto_style['icon'], size='lg').style(f'color: {pto_style["hex"]};')
+                                    with ui.column().classes('gap-1'):
+                                        ui.label(type_label).classes('font-semibold').style(f'color: {pto_style["hex"]};')
+                                        ui.label(f'You have no{status_suffix} {type_label.lower()} requests for {filter_state["year"]}.').classes('text-sm opacity-70')
+                                        ui.label('Click for more information about this leave type').classes('text-xs opacity-50')
+
+                        elif current_status != 'all':
+                            # Show styled card for status filter with no results
+                            s_info = status_info.get(current_status, {})
+                            with ui.card().classes(f'w-full mb-3 p-4 border-t-4 {s_info.get("border", "border-gray-500")} cursor-pointer hover:shadow-md').on('click', lambda s=current_status: show_status_info(s)):
+                                with ui.row().classes('w-full items-center gap-3'):
+                                    ui.icon(s_info.get('icon', 'info'), size='lg').style(f'color: {s_info.get("color", "#6b7280")};')
+                                    with ui.column().classes('gap-1'):
+                                        ui.label(s_info.get('name', current_status.title())).classes('font-semibold').style(f'color: {s_info.get("color", "#6b7280")};')
+                                        ui.label(f'You have no {current_status} requests for {filter_state["year"]}.').classes('text-sm opacity-70')
+                                        ui.label('Click for more information about this status').classes('text-xs opacity-50')
+
+                        else:
+                            # Generic empty state when no type or status is selected
+                            with ui.column().classes('w-full items-center py-8'):
+                                ui.icon('event_busy', size='3rem').classes('opacity-30 mb-2')
+                                ui.label('No PTO requests found for the current filters.').classes('opacity-60')
                     else:
                         for req in filtered_requests:
-                            type_colors = {
-                                'vacation': 'border-blue-500',
-                                'sick': 'border-green-500',
-                                'personal': 'border-purple-500',
-                                'work_from_home': 'border-red-500'
-                            }
-                            status_icons = {
-                                'approved': 'check_circle',
-                                'pending': 'schedule',
-                                'denied': 'cancel',
-                                'cancelled': 'block'
-                            }
-                            border_color = type_colors.get(req.pto_type.lower(), 'border-gray-300')
+                            # Get PTO type styling (icon, color, border)
+                            pto_style = get_pto_style(req.pto_type)
 
-                            with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {border_color}'):
+                            with ui.card().classes(f'w-full mb-3 p-4 border-l-4 {pto_style["border"]} cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
                                 with ui.row().classes('w-full justify-between items-start'):
                                     with ui.column().classes('gap-1'):
                                         with ui.row().classes('items-center gap-2'):
-                                            ui.icon(status_icons.get(req.status, 'event')).classes('text-lg')
-                                            ui.label(req.pto_type.replace('_', ' ').title()).classes('font-semibold')
+                                            ui.icon(pto_style['icon'], size='sm').style(f'color: {pto_style["hex"]};')
+                                            ui.label(req.pto_type.replace('_', ' ').title()).classes('font-semibold').style(f'color: {pto_style["hex"]};')
                                             ui.badge(req.status.upper()).props(
                                                 f'color={"green" if req.status == "approved" else "amber" if req.status == "pending" else "red"}'
                                             )
@@ -934,7 +1183,7 @@ def reports_page():
                                                 ui.label(req.notes).classes('text-sm italic')
 
                                     with ui.column().classes('items-end'):
-                                        ui.label(f'{fmt_days(float(req.total_days or 0))} days').classes('font-bold')
+                                        ui.label(fmt_days(float(req.total_days or 0))).classes('font-bold')
 
             finally:
                 db.close()
@@ -967,36 +1216,38 @@ def reports_page():
                             ui.label(data['name']).classes('font-semibold')
                             ui.label(data['department']).classes('text-sm opacity-60')
 
-                    # Balance breakdown by type
+                    # Balance breakdown by type with icons
                     balance_types = [
-                        {'name': 'Vacation', 'color': '#3b82f6', 'total': data['vac_total'], 'used': data['vac_used'], 'pending': data['vac_pending'], 'avail': data['vac_avail']},
-                        {'name': 'Sick', 'color': '#22c55e', 'total': data['sick_total'], 'used': data['sick_used'], 'pending': 0, 'avail': data['sick_total'] - data['sick_used']},
-                        {'name': 'Personal', 'color': '#a855f7', 'total': data['personal_total'], 'used': data['personal_used'], 'pending': 0, 'avail': data['personal_total'] - data['personal_used']},
-                        {'name': 'WFH', 'color': '#ef4444', 'total': None, 'used': data.get('wfh_used', 0), 'pending': 0, 'avail': None},
+                        {'name': 'Vacation', 'icon': 'beach_access', 'color': '#3b82f6', 'total': data['vac_total'], 'used': data['vac_used'], 'pending': data['vac_pending'], 'avail': data['vac_avail']},
+                        {'name': 'Sick', 'icon': 'local_hospital', 'color': '#22c55e', 'total': data['sick_total'], 'used': data['sick_used'], 'pending': 0, 'avail': data['sick_total'] - data['sick_used']},
+                        {'name': 'Personal', 'icon': 'person', 'color': '#a855f7', 'total': data['personal_total'], 'used': data['personal_used'], 'pending': 0, 'avail': data['personal_total'] - data['personal_used']},
+                        {'name': 'WFH', 'icon': 'home_work', 'color': '#ef4444', 'total': None, 'used': data.get('wfh_used', 0), 'pending': 0, 'avail': None},
                     ]
 
                     for bt in balance_types:
                         with ui.element('div').classes('w-full mb-3 p-3 rounded').style(f'background-color: #374151; border-left: 4px solid {bt["color"]}'):
                             with ui.row().classes('w-full justify-between items-center mb-2'):
-                                ui.label(bt['name']).classes('font-semibold').style(f'color: {bt["color"]}')
+                                with ui.row().classes('items-center gap-2'):
+                                    ui.icon(bt['icon'], size='sm').style(f'color: {bt["color"]}')
+                                    ui.label(bt['name']).classes('font-semibold').style(f'color: {bt["color"]}')
                             with ui.row().classes('w-full gap-4'):
                                 # WFH has no Total/Available - just show Used
                                 if bt['total'] is not None:
                                     with ui.column().classes('gap-0 flex-1 text-center'):
                                         ui.label('Total').classes('text-xs opacity-60')
-                                        ui.label(f'{fmt_days(bt["total"])}d').classes('font-medium')
+                                        ui.label(fmt_days(bt["total"])).classes('font-medium')
                                 with ui.column().classes('gap-0 flex-1 text-center'):
                                     ui.label('Used').classes('text-xs opacity-60')
-                                    ui.label(f'{fmt_days(bt["used"])}d').classes('font-medium')
+                                    ui.label(fmt_days(bt["used"])).classes('font-medium')
                                 if bt['name'] == 'Vacation' and bt['pending'] > 0:
                                     with ui.column().classes('gap-0 flex-1 text-center'):
                                         ui.label('Pending').classes('text-xs opacity-60')
-                                        ui.label(f'{fmt_days(bt["pending"])}d').classes('font-medium').style('color: #f59e0b')
+                                        ui.label(fmt_days(bt["pending"])).classes('font-medium').style('color: #f59e0b')
                                 if bt['avail'] is not None:
                                     with ui.column().classes('gap-0 flex-1 text-center'):
                                         ui.label('Available').classes('text-xs opacity-60')
                                         avail_color = '#22c55e' if bt['avail'] > 0 else '#ef4444'
-                                        ui.label(f'{fmt_days(bt["avail"])}d').classes('font-bold').style(f'color: {avail_color}')
+                                        ui.label(fmt_days(bt["avail"])).classes('font-bold').style(f'color: {avail_color}')
 
                     # OK button
                     with ui.row().classes('w-full justify-end mt-4'):
@@ -1058,17 +1309,25 @@ def reports_page():
                     ).group_by(PTORequest.user_id).all()
                     wfh_by_user = {uid: float(days or 0) for uid, days in wfh_query}
 
-                    # Colored section header labels
+                    # Colored section header labels with icons
                     with ui.row().classes('w-full mb-2 gap-0'):
                         ui.element('div').classes('flex-none').style('width: 200px;')  # Employee column spacer
-                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #3b82f620; border-bottom: 2px solid #3b82f6;'):
-                            ui.label('VACATION').classes('text-xs font-bold').style('color: #3b82f6;')
-                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #22c55e20; border-bottom: 2px solid #22c55e;'):
-                            ui.label('SICK').classes('text-xs font-bold').style('color: #22c55e;')
-                        with ui.element('div').classes('flex-1 text-center py-1 rounded-t').style('background-color: #a855f720; border-bottom: 2px solid #a855f7;'):
-                            ui.label('PERSONAL').classes('text-xs font-bold').style('color: #a855f7;')
-                        with ui.element('div').classes('text-center py-1 rounded-t').style('width: 80px; background-color: #ef444420; border-bottom: 2px solid #ef4444;'):
-                            ui.label('WFH').classes('text-xs font-bold').style('color: #ef4444;')
+                        with ui.element('div').classes('flex-1 text-center py-2 rounded-t').style('background-color: #3b82f620; border-bottom: 2px solid #3b82f6; border-right: 1px solid #374151;'):
+                            with ui.column().classes('items-center gap-0'):
+                                ui.icon('beach_access', size='sm').style('color: #3b82f6;')
+                                ui.label('VACATION').classes('text-xs font-bold').style('color: #3b82f6;')
+                        with ui.element('div').classes('flex-1 text-center py-2 rounded-t').style('background-color: #22c55e20; border-bottom: 2px solid #22c55e; border-right: 1px solid #374151;'):
+                            with ui.column().classes('items-center gap-0'):
+                                ui.icon('local_hospital', size='sm').style('color: #22c55e;')
+                                ui.label('SICK').classes('text-xs font-bold').style('color: #22c55e;')
+                        with ui.element('div').classes('flex-1 text-center py-2 rounded-t').style('background-color: #a855f720; border-bottom: 2px solid #a855f7; border-right: 1px solid #374151;'):
+                            with ui.column().classes('items-center gap-0'):
+                                ui.icon('person', size='sm').style('color: #a855f7;')
+                                ui.label('PERSONAL').classes('text-xs font-bold').style('color: #a855f7;')
+                        with ui.element('div').classes('text-center py-2 rounded-t').style('width: 80px; background-color: #ef444420; border-bottom: 2px solid #ef4444;'):
+                            with ui.column().classes('items-center gap-0'):
+                                ui.icon('home_work', size='sm').style('color: #ef4444;')
+                                ui.label('WFH').classes('text-xs font-bold').style('color: #ef4444;')
 
                     columns = [
                         {'name': 'name', 'label': 'Employee', 'field': 'name', 'sortable': True, 'align': 'left'},
@@ -1116,14 +1375,22 @@ def reports_page():
                         rows.append({
                             'id': user_obj.id,
                             'name': f'{user_obj.first_name} {user_obj.last_name}',
-                            'vacation_total': f'{h2d(vac_total)}d',
-                            'vacation_used': f'{h2d(vac_used)}d',
-                            'vacation_available': f'{h2d(vac_avail)}d',
-                            'sick_total': f'{h2d(sick_total)}d',
-                            'sick_used': f'{h2d(sick_used)}d',
-                            'personal_total': f'{h2d(personal_total)}d',
-                            'personal_used': f'{h2d(personal_used)}d',
-                            'wfh_used': f'{fmt_days(wfh_used)}d',
+                            'vacation_total': h2d(vac_total),
+                            'vacation_used': h2d(vac_used),
+                            'vacation_available': h2d(vac_avail),
+                            '_vac_used_raw': vac_used,  # Raw values for comparison
+                            '_vac_total_raw': vac_total,
+                            '_vac_avail_raw': vac_avail,
+                            'sick_total': h2d(sick_total),
+                            'sick_used': h2d(sick_used),
+                            '_sick_used_raw': sick_used,
+                            '_sick_total_raw': sick_total,
+                            'personal_total': h2d(personal_total),
+                            'personal_used': h2d(personal_used),
+                            '_personal_used_raw': personal_used,
+                            '_personal_total_raw': personal_total,
+                            'wfh_used': fmt_days(wfh_used),
+                            '_wfh_used_raw': wfh_used,
                         })
 
                     def on_row_click(e):
@@ -1134,6 +1401,36 @@ def reports_page():
 
                     table = ui.table(columns=columns, rows=rows, row_key='id').classes('w-full cursor-pointer')
                     table.on('row-click', on_row_click)
+                    # Style the Used column: yellow normally, red if used equals total (all days used)
+                    table.add_slot('body-cell-vacation_used', '''
+                        <q-td :props="props">
+                            <span :style="{ fontWeight: 'bold', color: (props.row._vac_used_raw >= props.row._vac_total_raw && props.row._vac_total_raw > 0) ? '#ef4444' : '#eab308' }">{{ props.value }}</span>
+                        </q-td>
+                    ''')
+                    # Style the Avail column: yellow if available, red if zero
+                    table.add_slot('body-cell-vacation_available', '''
+                        <q-td :props="props">
+                            <span :style="{ fontWeight: 'bold', color: props.row._vac_avail_raw <= 0 ? '#ef4444' : '#eab308' }">{{ props.value }}</span>
+                        </q-td>
+                    ''')
+                    # Style Sick Used: yellow normally, red if used >= total
+                    table.add_slot('body-cell-sick_used', '''
+                        <q-td :props="props">
+                            <span :style="{ fontWeight: 'bold', color: (props.row._sick_used_raw >= props.row._sick_total_raw && props.row._sick_total_raw > 0) ? '#ef4444' : '#eab308' }">{{ props.value }}</span>
+                        </q-td>
+                    ''')
+                    # Style Personal Used: yellow normally, red if used >= total
+                    table.add_slot('body-cell-personal_used', '''
+                        <q-td :props="props">
+                            <span :style="{ fontWeight: 'bold', color: (props.row._personal_used_raw >= props.row._personal_total_raw && props.row._personal_total_raw > 0) ? '#ef4444' : '#eab308' }">{{ props.value }}</span>
+                        </q-td>
+                    ''')
+                    # Style WFH Used: yellow if 0, red if > 0 (has used WFH)
+                    table.add_slot('body-cell-wfh_used', '''
+                        <q-td :props="props">
+                            <span :style="{ fontWeight: 'bold', color: props.row._wfh_used_raw > 0 ? '#ef4444' : '#eab308' }">{{ props.value }}</span>
+                        </q-td>
+                    ''')
 
                     with ui.row().classes('w-full justify-between items-center mt-2'):
                         ui.label(f'Total: {len(rows)} employees (click row for details)').classes('opacity-60')
@@ -1433,9 +1730,9 @@ def reports_page():
                                 # Show "X days used with Y available"
                                 used_days = stats['days']
                                 if pto_type == 'WORK_FROM_HOME':
-                                    ui.label(f'{fmt_days(used_days)} days').classes('text-xl font-bold')
+                                    ui.label(fmt_days(used_days)).classes('text-xl font-bold')
                                 else:
-                                    ui.label(f'{fmt_days(used_days)} used with {fmt_days(available)} avail').classes('text-lg font-bold')
+                                    ui.label(f'{fmt_days(used_days)} used / {fmt_days(available)} avail').classes('text-lg font-bold')
 
                     # Table container (AFTER tiles)
                     table_container_ref['container'] = ui.column().classes('w-full')
@@ -1986,7 +2283,7 @@ def reports_page():
 
                 csv_content = output.getvalue()
                 ui.download(csv_content.encode('utf-8'), filename)
-                ui.notify(f'Downloaded {filename}', type='positive')
+                show_success_dialog('Download Complete', f'Downloaded {filename}')
 
             except Exception as e:
                 show_error_dialog('Export Error', f'Error exporting CSV: {str(e)}')
@@ -2096,8 +2393,18 @@ def reports_page():
                             ''')).props('color=primary')
                             ui.button('Close', icon='close', on_click=preview_dialog.close).props('flat')
 
-                    # Use data URI to load HTML content into iframe
-                    ui.html(f'<iframe id="print-frame" src="data:text/html;base64,{b64_content}" style="width: 100%; height: calc(100vh - 140px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
+                    # Create iframe and write content using JavaScript (avoids data URI security blocks)
+                    ui.html('<iframe id="print-frame" style="width: 100%; height: calc(100vh - 140px); border: 1px solid #ddd; background: white;"></iframe>', sanitize=False).classes('w-full')
+                    # Write HTML content to iframe using JavaScript
+                    ui.run_javascript(f'''
+                        const frame = document.getElementById('print-frame');
+                        if (frame) {{
+                            const doc = frame.contentDocument || frame.contentWindow.document;
+                            doc.open();
+                            doc.write(atob("{b64_content}"));
+                            doc.close();
+                        }}
+                    ''')
 
                     # Footer with Back to Dashboard button
                     with ui.row().classes('w-full justify-start items-center p-4 border-t'):
@@ -2118,7 +2425,7 @@ def reports_page():
                 # Generate actual PDF using ExportService
                 pdf_bytes = ExportService.generate_report_pdf(html_content, filename)
                 ui.download(pdf_bytes, filename)
-                ui.notify(f'Downloaded {filename}', type='positive')
+                show_success_dialog('Download Complete', f'Downloaded {filename}')
             except Exception as e:
                 show_error_dialog('PDF Error', f'Error generating PDF: {str(e)}')
 
@@ -2215,7 +2522,7 @@ def reports_page():
                         )
 
                         if success:
-                            ui.notify(f'Report sent to {email_input.value}', type='positive')
+                            show_success_dialog('Email Sent', f'Report sent to {email_input.value}')
                             dialog.close()
                         else:
                             show_warning_dialog('Email Not Configured', 'Email service not configured. Please configure SMTP settings.')
@@ -2299,6 +2606,6 @@ def reports_page():
 
         # Navigation buttons at bottom
         with ui.row().classes('w-full justify-between mt-6'):
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')
             if is_manager_or_admin:
                 ui.button('View Analytics', icon='insights', on_click=lambda: ui.navigate.to('/analytics')).props('outline')

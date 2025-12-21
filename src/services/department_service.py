@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, select, func
 
 from src.models import Department, User
 
@@ -24,7 +24,8 @@ class DepartmentService:
         Returns:
             List of all departments with manager info, ordered by name
         """
-        return db.query(Department).order_by(Department.name).all()
+        stmt = select(Department).order_by(Department.name)
+        return db.execute(stmt).scalars().all()
 
     @staticmethod
     def get_department_by_id(db: Session, department_id: int) -> Optional[Department]:
@@ -38,7 +39,8 @@ class DepartmentService:
         Returns:
             Department object if found, None otherwise
         """
-        return db.query(Department).filter(Department.id == department_id).first()
+        stmt = select(Department).where(Department.id == department_id)
+        return db.execute(stmt).scalar_one_or_none()
 
     @staticmethod
     def create_department(db: Session, name: str, code: str, manager_id: Optional[int] = None) -> Department:
@@ -58,18 +60,21 @@ class DepartmentService:
             ValueError: If department name or code already exists or manager_id is invalid
         """
         # Check if department name already exists
-        existing_dept = db.query(Department).filter(Department.name == name).first()
+        stmt = select(Department).where(Department.name == name)
+        existing_dept = db.execute(stmt).scalar_one_or_none()
         if existing_dept:
             raise ValueError(f"Department with name '{name}' already exists")
-        
+
         # Check if department code already exists
-        existing_code = db.query(Department).filter(Department.code == code).first()
+        stmt = select(Department).where(Department.code == code)
+        existing_code = db.execute(stmt).scalar_one_or_none()
         if existing_code:
             raise ValueError(f"Department with code '{code}' already exists")
-        
+
         # Validate manager_id if provided
         if manager_id is not None:
-            manager = db.query(User).filter(User.id == manager_id).first()
+            stmt = select(User).where(User.id == manager_id)
+            manager = db.execute(stmt).scalar_one_or_none()
             if not manager:
                 raise ValueError(f"Manager with ID {manager_id} does not exist")
         
@@ -111,32 +116,36 @@ class DepartmentService:
         Raises:
             ValueError: If department not found, name/code conflicts, or manager_id is invalid
         """
-        department = db.query(Department).filter(Department.id == department_id).first()
+        stmt = select(Department).where(Department.id == department_id)
+        department = db.execute(stmt).scalar_one_or_none()
         if not department:
             raise ValueError(f"Department with ID {department_id} not found")
-        
+
         # Check if new name conflicts with existing departments
         if name is not None and name != department.name:
-            existing_dept = db.query(Department).filter(
+            stmt = select(Department).where(
                 and_(Department.name == name, Department.id != department_id)
-            ).first()
+            )
+            existing_dept = db.execute(stmt).scalar_one_or_none()
             if existing_dept:
                 raise ValueError(f"Department with name '{name}' already exists")
             department.name = name
-        
+
         # Check if new code conflicts with existing departments
         if code is not None and code != department.code:
-            existing_code = db.query(Department).filter(
+            stmt = select(Department).where(
                 and_(Department.code == code, Department.id != department_id)
-            ).first()
+            )
+            existing_code = db.execute(stmt).scalar_one_or_none()
             if existing_code:
                 raise ValueError(f"Department with code '{code}' already exists")
             department.code = code
-        
+
         # Validate and update manager_id if provided
         if manager_id is not None:
             if manager_id != department.manager_id:
-                manager = db.query(User).filter(User.id == manager_id).first()
+                stmt = select(User).where(User.id == manager_id)
+                manager = db.execute(stmt).scalar_one_or_none()
                 if not manager:
                     raise ValueError(f"Manager with ID {manager_id} does not exist")
                 department.manager_id = manager_id
@@ -161,12 +170,14 @@ class DepartmentService:
         Raises:
             ValueError: If department has employees or department not found
         """
-        department = db.query(Department).filter(Department.id == department_id).first()
+        stmt = select(Department).where(Department.id == department_id)
+        department = db.execute(stmt).scalar_one_or_none()
         if not department:
             raise ValueError(f"Department with ID {department_id} not found")
-        
+
         # Check if department has employees
-        employee_count = db.query(User).filter(User.department_id == department_id).count()
+        stmt = select(func.count()).select_from(User).where(User.department_id == department_id)
+        employee_count = db.execute(stmt).scalar()
         if employee_count > 0:
             raise ValueError(f"Cannot delete department '{department.name}' because it has {employee_count} employee(s)")
         
@@ -187,9 +198,9 @@ class DepartmentService:
         Returns:
             List of users in the department, ordered by last_name, first_name
         """
-        return (
-            db.query(User)
-            .filter(User.department_id == department_id)
+        stmt = (
+            select(User)
+            .where(User.department_id == department_id)
             .order_by(User.last_name, User.first_name)
-            .all()
         )
+        return db.execute(stmt).scalars().all()

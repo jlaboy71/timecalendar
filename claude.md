@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TJM Time Calendar is a PTO (Paid Time Off) and Market Calendar System for Haventech Solutions/TJM Holdings. Built with Python, NiceGUI, and PostgreSQL using a three-tier architecture.
+PTO Central (formerly TJM Time Calendar) is a PTO (Paid Time Off) and Market Calendar System for Haventech Solutions/TJM Holdings. Built with Python, NiceGUI, and SQLite using a three-tier architecture.
 
 ## Commands
 
@@ -50,9 +50,9 @@ PTOService(db).create_request(request_data)
 
 **Database Sessions**: Use generator pattern with `get_db()` from `src/database.py`
 
-**NiceGUI Pages**: Decorated with `@ui.page('/path')`, use `app.storage.general` for session data
+**NiceGUI Pages**: Decorated with `@ui.page('/path')`, use `app.storage.user` for session data
 
-**Role-Based Access**: Check `app.storage.general.get('user')['role']` for Admin/Manager/Employee
+**Role-Based Access**: Check `app.storage.user.get('user')['role']` for Admin/Manager/Employee
 
 ## Development Workflow
 

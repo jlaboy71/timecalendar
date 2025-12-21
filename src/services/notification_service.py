@@ -56,7 +56,8 @@ class NotificationService:
         digest_frequency: Optional[str] = None,
         preferred_hour: Optional[int] = None,
         preferred_day: Optional[int] = None,
-        export_format: Optional[str] = None
+        export_format: Optional[str] = None,
+        auto_notify_report_frequency: Optional[str] = None
     ) -> ManagerNotificationPreference:
         """
         Update manager notification preferences.
@@ -67,6 +68,7 @@ class NotificationService:
             preferred_hour: Hour (0-23) for digest delivery
             preferred_day: Day of week (0=Mon, 6=Sun) for weekly digests
             export_format: 'pdf', 'csv', 'html'
+            auto_notify_report_frequency: 'weekly', 'bi-weekly', 'monthly' for trusted employee reports
 
         Returns:
             Updated preference record
@@ -81,6 +83,8 @@ class NotificationService:
             prefs.preferred_day = preferred_day
         if export_format:
             prefs.export_format = export_format
+        if auto_notify_report_frequency:
+            prefs.auto_notify_report_frequency = auto_notify_report_frequency
 
         prefs.updated_at = datetime.utcnow()
         self.db.commit()
@@ -344,7 +348,7 @@ class NotificationService:
                     </tr>
                     {rows}
                 </table>
-                <p style="margin-top: 20px;">Please log in to TJM Time Calendar to review pending requests.</p>
+                <p style="margin-top: 20px;">Please log in to PTO Central to review pending requests.</p>
             </div>
         </body>
         </html>

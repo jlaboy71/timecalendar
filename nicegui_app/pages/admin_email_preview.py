@@ -1,13 +1,13 @@
 """Email template preview page for admins."""
 from nicegui import ui, app
-from nicegui_app.components.header import page_header
-from src.services.email_service import _get_email_template
+from nicegui_app.components.header import page_header, go_back
+from src.services.email_service import _get_email_template, _get_pto_type_icon, _format_date_range_with_days
 from datetime import date, timedelta
 
 
 def email_preview_page():
     """Preview all email templates with sample data."""
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -17,7 +17,7 @@ def email_preview_page():
         ui.navigate.to('/dashboard')
         return
 
-    page_header(title='Email Template Preview', back_url='/dashboard')
+    page_header(title='Email Template Preview', show_back=False)
 
     # Sample data for previews
     sample_employee = "John Smith"
@@ -27,13 +27,14 @@ def email_preview_page():
     sample_end = date.today() + timedelta(days=10)
     sample_days = 4.0
 
-    # Email type selector
+    # Email type selector - clear labels showing recipient
     email_types = {
-        'submitted': 'Request Submitted (to Employee)',
-        'approved': 'Request Approved (to Employee)',
-        'denied': 'Request Denied (to Employee)',
-        'pending': 'New Request Pending (to Manager)',
-        'report': 'Report Email'
+        'submitted': 'EMP: REQUEST SUBMITTED',
+        'approved': 'EMP: REQUEST APPROVED',
+        'denied': 'EMP: REQUEST DENIED',
+        'pending': 'MAN: REQUEST ARRIVED',
+        'cancelled': 'MAN: PTO CANCELLED',
+        'report': 'ADMIN: REPORT EMAIL'
     }
 
     selected_type = {'value': 'approved'}
@@ -42,7 +43,8 @@ def email_preview_page():
     def generate_preview(email_type: str) -> str:
         """Generate HTML preview for the selected email type."""
         days_display = str(int(sample_days)) if sample_days == int(sample_days) else f"{sample_days:.1f}"
-        date_range = f"{sample_start.strftime('%B %d')} - {sample_end.strftime('%B %d, %Y')}"
+        date_range = _format_date_range_with_days(sample_start, sample_end)
+        pto_icon = _get_pto_type_icon('vacation')
 
         if email_type == 'submitted':
             content = f"""
@@ -53,7 +55,7 @@ def email_preview_page():
                 <table style="width: 100%; color: #e5e7eb;">
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                        <td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
@@ -82,7 +84,7 @@ def email_preview_page():
                 <table style="width: 100%; color: #e5e7eb;">
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                        <td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
@@ -115,7 +117,7 @@ def email_preview_page():
                 <table style="width: 100%; color: #e5e7eb;">
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                        <td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
@@ -156,7 +158,7 @@ def email_preview_page():
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
-                        <td style="padding: 8px 0; font-weight: 600;">{sample_pto_type}</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
@@ -174,6 +176,39 @@ def email_preview_page():
                 title_color="#f59e0b",
                 content=content,
                 footer_text="Please log in to TJM Time Calendar to approve or deny this request."
+            )
+
+        elif email_type == 'cancelled':
+            content = f"""
+            <p style="font-size: 16px; margin-bottom: 20px;">Hi {sample_manager},</p>
+            <p style="margin-bottom: 25px;">An employee has <span style="color: #ef4444; font-weight: 600;">cancelled</span> their previously approved time off.</p>
+
+            <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <table style="width: 100%; color: #e5e7eb;">
+                    <tr>
+                        <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
+                        <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #9ca3af;">Dates:</td>
+                        <td style="padding: 8px 0; font-weight: 600;">{date_range}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #9ca3af;">Total Days:</td>
+                        <td style="padding: 8px 0; font-weight: 600; color: #ef4444;">{days_display}</td>
+                    </tr>
+                </table>
+            </div>
+            """
+            return _get_email_template(
+                title="Approved PTO Cancelled",
+                title_color="#ef4444",
+                content=content,
+                footer_text="The employee's PTO balance has been restored automatically."
             )
 
         elif email_type == 'report':
@@ -200,46 +235,40 @@ def email_preview_page():
         with preview_container:
             html_content = generate_preview(selected_type['value'])
 
-            # Show in an iframe for accurate rendering
-            with ui.card().classes('w-full p-4'):
-                ui.label('Email Preview').classes('text-lg font-bold mb-4').style('color: #C9A227')
+            # Edge-to-edge iframe preview
+            ui.html(f'''
+                <iframe
+                    srcdoc="{html_content.replace('"', '&quot;')}"
+                    style="width: 100%; height: 650px; border: none; background: #111827;"
+                ></iframe>
+            ''', sanitize=False)
 
-                # Use iframe to render the HTML properly
-                ui.html(f'''
-                    <iframe
-                        srcdoc="{html_content.replace('"', '&quot;')}"
-                        style="width: 100%; height: 600px; border: 1px solid #374151; border-radius: 8px; background: #111827;"
-                    ></iframe>
-                ''')
+    # Email type buttons - edge to edge, larger
+    with ui.row().classes('w-full gap-3 mb-4'):
+        for key, label in email_types.items():
+            def make_handler(k=key):
+                def handler():
+                    selected_type['value'] = k
+                    render_preview()
+                return handler
 
-    # Email type buttons
-    with ui.card().classes('w-full mb-4 p-4'):
-        ui.label('Select Email Type to Preview').classes('font-semibold mb-3')
-
-        with ui.row().classes('gap-2 flex-wrap'):
-            for key, label in email_types.items():
-                def make_handler(k=key):
-                    def handler():
-                        selected_type['value'] = k
-                        render_preview()
-                    return handler
-
-                # Color code the buttons
-                colors = {
-                    'submitted': '#f59e0b',
-                    'approved': '#22c55e',
-                    'denied': '#ef4444',
-                    'pending': '#f59e0b',
-                    'report': '#C9A227'
-                }
-                color = colors.get(key, '#6b7280')
-                ui.button(
-                    label,
-                    on_click=make_handler()
-                ).props('outline').style(f'border-color: {color}; color: {color};')
+            # Color code the buttons
+            colors = {
+                'submitted': '#f59e0b',
+                'approved': '#22c55e',
+                'denied': '#ef4444',
+                'pending': '#f59e0b',
+                'cancelled': '#ef4444',
+                'report': '#C9A227'
+            }
+            color = colors.get(key, '#6b7280')
+            ui.button(
+                label,
+                on_click=make_handler()
+            ).props('outline').classes('flex-1').style(f'border-color: {color}; color: {color}; font-size: 12px; padding: 10px 6px; font-weight: 600;')
 
     # Initial preview
     render_preview()
 
-    # Back button
-    ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).classes('mt-4')
+    # Back button - gold theme color
+    ui.button('Back', on_click=go_back).props('outline').classes('mt-4').style('border-color: #C9A227 !important; color: #C9A227 !important;')

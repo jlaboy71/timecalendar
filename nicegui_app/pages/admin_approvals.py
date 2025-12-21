@@ -1,8 +1,8 @@
 """Admin page for viewing and approving all pending PTO requests."""
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_success_dialog, show_info_dialog
 from nicegui_app.components.formatting import fmt_days
 from src.services.pto_service import PTOService
 from src.services.department_service import DepartmentService
@@ -12,7 +12,7 @@ def admin_approvals_page():
     """Admin approvals page content."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
 
     if user_role not in ['admin', 'superadmin']:
@@ -77,8 +77,7 @@ def admin_approvals_page():
                                 except Exception:
                                     pass
                             db.commit()
-                            ui.notify(f'Approved {count} request(s)', type='positive')
-                            ui.navigate.to('/admin/approvals')  # Refresh page
+                            show_success_dialog('Requests Approved', f'Approved {count} request(s)', on_close=lambda: ui.navigate.to('/admin/approvals'))
 
                         def bulk_deny():
                             if not selected_requests:
@@ -100,7 +99,7 @@ def admin_approvals_page():
                                             pass
                                     db.commit()
                                     deny_dialog.close()
-                                    ui.notify(f'Denied {count} request(s)', type='info')
+                                    show_info_dialog('Requests Denied', f'Denied {count} request(s)')
                                     ui.navigate.to('/admin/approvals')  # Refresh page
 
                                 with ui.row().classes('w-full justify-end gap-2'):
@@ -184,12 +183,15 @@ def admin_approvals_page():
                             border_color = type_colors.get(pto_type_lower, 'gray')
                             has_conflict = req['request_id'] in request_conflicts
 
-                            with ui.card().classes(f'w-full p-4 border-l-4 border-{border_color}-500'):
+                            request_id = req['request_id']
+
+                            with ui.card().classes(f'w-full p-4 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-lg').on('click', lambda e, rid=request_id: ui.navigate.to(f'/manager/request/{rid}')):
                                 with ui.row().classes('w-full justify-between items-center'):
                                     with ui.row().classes('gap-3 items-center'):
-                                        # Checkbox for selection
+                                        # Checkbox for selection (click is handled separately)
                                         def make_toggle(req_id):
                                             def toggle(e):
+                                                e.args = None  # Prevent event bubbling
                                                 if e.value:
                                                     selected_requests.add(req_id)
                                                 else:
@@ -220,10 +222,7 @@ def admin_approvals_page():
                                                     ui.label(f"{req['start_date'].strftime('%A, %B %d')} - {req['end_date'].strftime('%A, %B %d, %Y')}").classes('text-sm opacity-70')
                                                 ui.label('•').classes('text-xs opacity-50')
                                                 days = float(req['total_days'])
-                                                ui.label(f'{fmt_days(days)} days').classes('text-sm font-medium')
-
-                                    ui.button('Review', icon='visibility',
-                                             on_click=lambda r=req: ui.navigate.to(f"/manager/request/{r['request_id']}")).props('color=primary')
+                                                ui.label(fmt_days(days)).classes('text-sm font-medium')
 
                 # Initial render
                 render_requests()
@@ -232,7 +231,7 @@ def admin_approvals_page():
                 selected_dept.on('update:model-value', lambda e: render_requests(e.args))
 
             # Back to Dashboard button
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
     finally:
         db.close()

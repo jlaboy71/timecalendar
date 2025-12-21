@@ -2,22 +2,23 @@
 import re
 import json
 from datetime import datetime
-from nicegui import ui, app
+from nicegui import ui, app, context
 from src.database import get_db
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog, show_success_dialog
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
 from src.services.balance_service import BalanceService
 from src.schemas.user_schemas import UserCreate, UserUpdate
+from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color, TJM_GOLD, TJM_GRAY
 
 
 def admin_employees_list_page():
     """Admin page for managing employees - list view."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -71,10 +72,10 @@ def admin_employees_list_page():
     # Pagination state
     pagination_state = {
         'page': 1,
-        'per_page': 10,
+        'per_page': 25,
     }
 
-    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='EMPLOYEE MANAGEMENT', show_back=False)
 
         # Add New Employee button
@@ -241,14 +242,14 @@ def admin_employees_list_page():
 
         filter_and_render()
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-4')
 
 
 def admin_employees_add_page():
     """Admin page for adding a new employee."""
     apply_dark_mode()
 
-    user_role = app.storage.general.get('user', {}).get('role')
+    user_role = app.storage.user.get('user', {}).get('role')
     if user_role not in ['admin', 'superadmin']:
         ui.navigate.to('/')
         return
@@ -261,12 +262,14 @@ def admin_employees_add_page():
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+    with ui.column().classes('w-full max-w-4xl mx-auto p-4 animate-fade-in'):
         page_header(title='ADD NEW EMPLOYEE', show_back=False)
 
         # Basic Information Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Basic Information').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('person', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Basic Information').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 first_name_input = ui.input('First Name').props('outlined').classes('flex-1')
@@ -297,8 +300,10 @@ def admin_employees_add_page():
             ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-1')
 
         # Employment Details Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Employment Details').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('badge', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Employment Details').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4 items-end'):
                 with ui.column().classes('flex-1'):
@@ -312,7 +317,93 @@ def admin_employees_add_page():
                             ui.icon('event').on('click', menu.open).classes('cursor-pointer')
 
                 with ui.column().classes('flex-1'):
-                    department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('w-full')
+                    with ui.row().classes('w-full items-end gap-2'):
+                        department_select = ui.select(dept_options, label='Department', value=None).props('outlined').classes('flex-grow')
+
+                        # Quick Create Department button
+                        def open_create_department_dialog():
+                            with context.client.content:
+                                with ui.dialog() as create_dialog, ui.card().classes('p-6').style(f'background-color: #1f2937; min-width: 450px;'):
+                                    with ui.row().classes('items-center gap-2 mb-4'):
+                                        ui.icon('add_business', size='sm').style(f'color: {TJM_GOLD};')
+                                        ui.label('Quick Create Department').classes('text-lg font-bold')
+
+                                    # Department name with live icon preview
+                                    with ui.row().classes('w-full items-center gap-3'):
+                                        dept_icon_preview = ui.icon('business', size='lg').style(f'color: {TJM_GOLD};')
+                                        new_dept_name = ui.input('Department Name').props('outlined').classes('flex-grow')
+
+                                    def update_icon_preview():
+                                        if new_dept_name.value:
+                                            icon = get_dept_icon(new_dept_name.value)
+                                            dept_icon_preview.props(f'name={icon}')
+                                        else:
+                                            dept_icon_preview.props('name=business')
+
+                                    new_dept_name.on('update:model-value', lambda e: update_icon_preview())
+
+                                    new_dept_code = ui.input('Department Code', placeholder='e.g., ACCT, HR, DEV').props('outlined').classes('w-full mt-2')
+                                    ui.label('The icon is auto-selected based on department name keywords').classes('text-xs opacity-60 mt-1')
+
+                                    with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                                        ui.button('Cancel', on_click=create_dialog.close).props('flat')
+
+                                        def create_quick_department():
+                                            if not new_dept_name.value or not new_dept_name.value.strip():
+                                                ui.notify('Department name is required', type='warning')
+                                                return
+                                            if not new_dept_code.value or not new_dept_code.value.strip():
+                                                ui.notify('Department code is required', type='warning')
+                                                return
+
+                                            db = next(get_db())
+                                            try:
+                                                new_dept = DepartmentService.create_department(
+                                                    db,
+                                                    name=new_dept_name.value.strip(),
+                                                    code=new_dept_code.value.strip().upper()
+                                                )
+                                                if new_dept:
+                                                    # Add to options and select it
+                                                    dept_options[new_dept.id] = new_dept.name
+                                                    department_select.options = dept_options
+                                                    department_select.value = new_dept.id
+                                                    department_select.update()
+                                                    update_dept_preview()
+                                                    create_dialog.close()
+                                                    ui.notify(f'Department "{new_dept.name}" created!', type='positive')
+                                                else:
+                                                    ui.notify('Failed to create department', type='negative')
+                                            except Exception as ex:
+                                                ui.notify(f'Error: {str(ex)}', type='negative')
+                                            finally:
+                                                db.close()
+
+                                        ui.button('Create', on_click=create_quick_department).style(f'background-color: {TJM_GOLD} !important; color: white !important;')
+
+                                create_dialog.open()
+
+                        ui.button(icon='add', on_click=open_create_department_dialog).props('flat dense').tooltip('Quick Create Department')
+
+            # Department icon preview (shows when department is selected)
+            dept_preview_container = ui.row().classes('w-full mt-2')
+
+            def update_dept_preview():
+                dept_preview_container.clear()
+                dept_id = department_select.value
+                if dept_id and dept_id in dept_options:
+                    dept_name = dept_options[dept_id]
+                    dept_icon = get_dept_icon(dept_name)
+                    dept_color = get_dept_color(dept_id)
+
+                    with dept_preview_container:
+                        with ui.card().classes('w-full p-3').style(f'border-left: 4px solid {dept_color["bg"]}; background-color: {dept_color["light"]}20;'):
+                            with ui.row().classes('items-center gap-3'):
+                                with ui.element('div').classes('rounded-lg p-2').style(f'background-color: {dept_color["bg"]};'):
+                                    ui.icon(dept_icon, size='sm', color='white')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(dept_name).classes('font-semibold')
+                                    ui.label('Selected Department').classes('text-xs opacity-60')
 
             # Manager display (auto-filled based on department selection)
             manager_display_container = ui.row().classes('w-full mt-2')
@@ -343,7 +434,11 @@ def admin_employees_add_page():
                     finally:
                         mgr_db.close()
 
-            department_select.on('update:model-value', lambda e: update_manager_display())
+            def on_department_change(e):
+                update_dept_preview()
+                update_manager_display()
+
+            department_select.on('update:model-value', on_department_change)
 
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
@@ -358,8 +453,10 @@ def admin_employees_add_page():
                     ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
 
         # Work Location Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Work Location').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('location_on', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Work Location').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
 
             with ui.row().classes('w-full gap-4'):
                 state_options = {None: 'Select State', 'IL': 'Illinois', 'NY': 'New York', 'CT': 'Connecticut', 'FL': 'Florida'}
@@ -386,8 +483,10 @@ def admin_employees_add_page():
                 location_state_select.on('update:model-value', lambda e: update_city_options())
 
         # Remote Work Schedule Section
-        with ui.card().classes('w-full p-6 mb-4'):
-            ui.label('Remote Work Schedule').classes('text-lg font-semibold mb-2').style('color: #5a6a72;')
+        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {TJM_GOLD};'):
+            with ui.row().classes('items-center gap-2 mb-2'):
+                ui.icon('home_work', size='sm').style(f'color: {TJM_GOLD};')
+                ui.label('Remote Work Schedule').classes('text-lg font-semibold').style(f'color: {TJM_GRAY};')
             ui.label('Select the days this employee works remotely').classes('text-sm opacity-60 mb-4')
 
             with ui.row().classes('w-full gap-6 justify-center'):
@@ -399,49 +498,104 @@ def admin_employees_add_page():
 
         # Action Buttons
         with ui.row().classes('w-full justify-between mt-4'):
-            ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/employees')).props('flat')
+            ui.button('Cancel', on_click=lambda: ui.run_javascript('history.back()')).props('flat')
 
             def create_employee():
-                valid = True
-                if not validate_required(first_name_input, 'First Name'):
-                    valid = False
-                if not validate_required(last_name_input, 'Last Name'):
-                    valid = False
-                if not validate_required(username_input, 'Username'):
-                    valid = False
-                if not validate_required(email_input, 'Email'):
-                    valid = False
+                # Collect all missing fields
+                missing_fields = []
+
+                # Validate required text fields
+                if not first_name_input.value or not first_name_input.value.strip():
+                    first_name_input.props('error')
+                    missing_fields.append('First Name')
+                else:
+                    first_name_input.props(remove='error')
+
+                if not last_name_input.value or not last_name_input.value.strip():
+                    last_name_input.props('error')
+                    missing_fields.append('Last Name')
+                else:
+                    last_name_input.props(remove='error')
+
+                if not username_input.value or not username_input.value.strip():
+                    username_input.props('error')
+                    missing_fields.append('Username')
+                else:
+                    username_input.props(remove='error')
+
+                if not email_input.value or not email_input.value.strip():
+                    email_input.props('error')
+                    missing_fields.append('Email')
                 elif not validate_email(email_input):
-                    valid = False
-                if not validate_required(password_input, 'Password'):
-                    valid = False
-                elif not validate_min_length(password_input, 8, 'Password'):
-                    valid = False
+                    missing_fields.append('Email (invalid format)')
+                else:
+                    email_input.props(remove='error')
+
+                if not password_input.value:
+                    password_input.props('error')
+                    missing_fields.append('Password')
+                elif len(password_input.value) < 8:
+                    password_input.props('error')
+                    missing_fields.append('Password (minimum 8 characters)')
+                else:
+                    password_input.props(remove='error')
+
                 if password_input.value != confirm_password_input.value:
                     confirm_password_input.props('error')
-                    show_error_dialog('Password Mismatch', 'The passwords you entered do not match. Please try again.')
-                    valid = False
-                if not validate_required(hire_date_input, 'Hire Date'):
-                    valid = False
+                    missing_fields.append('Confirm Password (passwords must match)')
+                else:
+                    confirm_password_input.props(remove='error')
 
-                # Employees must be assigned to a department with a manager
-                if role_select.value == 'employee':
-                    if not department_select.value:
-                        show_error_dialog('Department Required', 'Employees must be assigned to a department.')
-                        valid = False
-                    else:
-                        # Check if department has a manager
+                if not hire_date_input.value:
+                    hire_date_input.props('error')
+                    missing_fields.append('Hire Date')
+                else:
+                    hire_date_input.props(remove='error')
+
+                # Validate Department
+                if not department_select.value:
+                    department_select.props('error')
+                    missing_fields.append('Department')
+                else:
+                    department_select.props(remove='error')
+                    # Check if department has a manager (for employees)
+                    if role_select.value == 'employee':
                         check_db = next(get_db())
                         try:
                             dept = DepartmentService.get_department_by_id(check_db, department_select.value)
                             if not dept or not dept.manager_id:
-                                show_error_dialog('Manager Required', 'The selected department must have a manager assigned before adding employees.')
-                                valid = False
+                                missing_fields.append('Department (must have a manager assigned)')
                         finally:
                             check_db.close()
 
-                if not valid:
-                    show_warning_dialog('Form Incomplete', 'Please fix the highlighted errors before continuing.')
+                # Validate Role
+                if not role_select.value:
+                    role_select.props('error')
+                    missing_fields.append('Role')
+                else:
+                    role_select.props(remove='error')
+
+                # Validate State
+                if not location_state_select.value:
+                    location_state_select.props('error')
+                    missing_fields.append('State')
+                else:
+                    location_state_select.props(remove='error')
+
+                # Validate City
+                if not location_city_select.value:
+                    location_city_select.props('error')
+                    missing_fields.append('City')
+                else:
+                    location_city_select.props(remove='error')
+
+                # Show error dialog if any fields are missing
+                if missing_fields:
+                    field_list = '\n• '.join(missing_fields)
+                    show_error_dialog(
+                        'Required Fields Missing',
+                        f'Please complete the following required fields:\n\n• {field_list}'
+                    )
                     create_btn.props(remove='loading disabled')
                     return
 
@@ -485,7 +639,7 @@ def admin_employees_add_page():
                     balance_service.allocate_standard_balance(new_user.id)
 
                     # Set trusted status if checkbox was checked (only for employees)
-                    current_user = app.storage.general.get('user')
+                    current_user = app.storage.user.get('user')
                     if is_trusted_check.value and role_select.value == 'employee':
                         trust_update = UserUpdate(
                             is_trusted=True,
@@ -499,8 +653,7 @@ def admin_employees_add_page():
                         new_user.id, new_user.username
                     )
 
-                    ui.notify(f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', type='positive')
-                    ui.navigate.to('/admin/employees')
+                    show_success_dialog('Employee Created', f'Employee "{new_user.first_name} {new_user.last_name}" created successfully', on_close=lambda: ui.navigate.to('/admin/employees'))
 
                 except Exception as e:
                     show_error_dialog('Error', f'Error creating employee: {str(e)}')
@@ -519,7 +672,7 @@ def admin_employees_edit_page(user_id: int):
     """Admin page for editing an existing employee."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
     current_user_id = current_user.get('id')
     current_department_id = current_user.get('department_id')
@@ -543,15 +696,15 @@ def admin_employees_edit_page(user_id: int):
         if is_manager_editing:
             if user.department_id != current_department_id:
                 show_error_dialog('Access Denied', 'You can only edit employees in your department.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
             if user.role in ['manager', 'admin', 'superadmin']:
                 show_error_dialog('Access Denied', 'You cannot edit managers or administrators.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
             if user.id == current_user_id:
                 show_warning_dialog('Use Profile', 'Please use your profile page to edit your own information.')
-                ui.navigate.to('/dashboard')
+                ui.navigate.to('/manager/team')
                 return
 
         departments = DepartmentService.get_all_departments(db)
@@ -568,7 +721,7 @@ def admin_employees_edit_page(user_id: int):
             except (json.JSONDecodeError, TypeError, ValueError):
                 remote_schedule = {}
 
-        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+        with ui.column().classes('w-full max-w-4xl mx-auto p-4 animate-fade-in'):
             page_header(title='EDIT EMPLOYEE', show_back=False)
 
             with ui.row().classes('w-full gap-4 mb-4'):
@@ -676,7 +829,7 @@ def admin_employees_edit_page(user_id: int):
                                             try:
                                                 user_service = UserService(db)
                                                 if user_service.delete_user(user_id):
-                                                    current_user = app.storage.general.get('user')
+                                                    current_user = app.storage.user.get('user')
                                                     AuditService.log(
                                                         db, action='user_delete',
                                                         user_id=current_user.get('id'),
@@ -744,8 +897,7 @@ def admin_employees_edit_page(user_id: int):
 
             # Action Buttons
             with ui.row().classes('w-full justify-between mt-4'):
-                back_url = '/manager/team' if is_manager_editing else '/admin/employees'
-                ui.button('Cancel', on_click=lambda: ui.navigate.to(back_url)).props('flat')
+                ui.button('Cancel', on_click=lambda: ui.run_javascript('history.back()')).props('flat')
 
                 def save_changes():
                     valid = True
@@ -829,14 +981,14 @@ def admin_employees_edit_page(user_id: int):
                         updated_user = user_service.update_user(user_id, user_update)
 
                         if updated_user:
-                            logged_user = app.storage.general.get('user')
+                            logged_user = app.storage.user.get('user')
                             AuditService.log_user_update(
                                 db, logged_user.get('id'),
                                 f"{logged_user.get('first_name')} {logged_user.get('last_name')}",
                                 user_id, {'fields_updated': list(update_data.keys())}
                             )
-                            ui.notify(f'Employee updated successfully', type='positive')
-                            ui.navigate.to(back_url)
+                            nav_url = '/manager/team' if is_manager_editing else '/admin/employees'
+                            show_success_dialog('Employee Updated', 'Employee updated successfully', on_close=lambda: ui.navigate.to(nav_url))
                         else:
                             show_error_dialog('Update Failed', 'There was an error updating the employee. Please try again.')
                             save_btn.props(remove='loading disabled')
@@ -853,7 +1005,7 @@ def admin_employees_edit_page(user_id: int):
 
                 save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
 
-            ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 
     finally:
         db.close()

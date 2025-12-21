@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog, show_success_dialog
 from src.services.notification_service import NotificationService
 
@@ -23,7 +23,7 @@ def manager_settings_page():
     """Manager settings including notification preferences."""
     apply_dark_mode()
 
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -45,19 +45,74 @@ def manager_settings_page():
         current_hour = prefs.preferred_hour
         current_day = prefs.preferred_day
         current_format = prefs.export_format
+        current_auto_notify_freq = getattr(prefs, 'auto_notify_report_frequency', 'weekly')
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-3xl mx-auto p-4'):
+    # Help dialog functions
+    def show_pto_notification_help():
+        with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 550px;'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('help_outline').style('color: #C9A227')
+                ui.label('Team PTO Request Notifications').classes('text-lg font-bold')
+
+            ui.markdown('''
+**What is this?**
+
+This controls how you're notified when **any team member submits a PTO request** (regardless of whether it's auto-approved or needs your approval).
+
+**Options:**
+- **Immediate**: Get an email the moment a request is submitted
+- **Daily/Weekly/etc.**: Receive a summary digest at your preferred time
+
+**Note:** You receive notifications for ALL requests, including auto-approved ones from trusted employees.
+            ''').classes('text-sm opacity-90')
+
+            with ui.row().classes('w-full justify-end mt-4'):
+                ui.button('Got it', on_click=dialog.close).props('color=primary')
+
+        dialog.open()
+
+    def show_auto_notify_report_help():
+        with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 550px;'):
+            with ui.row().classes('items-center gap-2 mb-4'):
+                ui.icon('help_outline').style('color: #C9A227')
+                ui.label('Trusted Employee Auto-Approve Reports').classes('text-lg font-bold')
+
+            ui.markdown('''
+**What is this?**
+
+This controls how often the system generates **summary reports** specifically for PTO requests that were **auto-approved for trusted employees**.
+
+**Options:**
+- **Weekly**: Report generated every Sunday
+- **Bi-Weekly**: Report generated on the 1st and 15th of each month
+- **Monthly**: Report generated at the end of each month
+
+**View Reports:**
+
+Click the "View Auto Notify Reports" button below, or access from Admin → Auto Notify Reports.
+
+**Note:** These reports are separate from immediate/digest notifications. They provide a historical summary you can review, print, or email.
+            ''').classes('text-sm opacity-90')
+
+            with ui.row().classes('w-full justify-end mt-4'):
+                ui.button('Got it', on_click=dialog.close).props('color=primary')
+
+        dialog.open()
+
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         page_header(title='MANAGER SETTINGS', show_back=True)
 
-        # Notification Preferences Card
+        # Team PTO Request Notifications Card
         with ui.card().classes('w-full p-6 mb-4'):
-            with ui.row().classes('items-center gap-3 mb-4'):
-                ui.icon('notifications', size='md').style('color: #c9a227')
-                ui.label('PTO Notification Preferences').classes('text-xl font-semibold')
+            with ui.row().classes('w-full items-center justify-between mb-2'):
+                with ui.row().classes('items-center gap-3'):
+                    ui.icon('notifications', size='md').style('color: #c9a227')
+                    ui.label('Team PTO Request Notifications').classes('text-xl font-semibold')
+                ui.button(icon='help_outline', on_click=show_pto_notification_help).props('flat round size=sm').tooltip('What is this?')
 
-            ui.label('Configure how you receive notifications when team members submit PTO requests.').classes('text-sm opacity-60 mb-6')
+            ui.label('Get notified when team members submit PTO requests (all requests, including auto-approved).').classes('text-sm opacity-60 mb-6')
 
             # Digest Frequency
             ui.label('Email Frequency').classes('font-semibold mb-2')
@@ -141,8 +196,8 @@ def manager_settings_page():
 
             # Save button
             with ui.row().classes('w-full justify-end mt-4'):
-                def save_preferences():
-                    save_btn.props('loading disabled')
+                def save_notification_prefs():
+                    save_notification_btn.props('loading disabled')
                     db = next(get_db())
                     try:
                         notification_service = NotificationService(db)
@@ -158,9 +213,56 @@ def manager_settings_page():
                         show_error_dialog('Error', f'Failed to save preferences: {str(e)}')
                     finally:
                         db.close()
-                        save_btn.props(remove='loading disabled')
+                        save_notification_btn.props(remove='loading disabled')
 
-                save_btn = ui.button('Save Preferences', icon='save', on_click=save_preferences).props('color=primary')
+                save_notification_btn = ui.button('Save Preferences', icon='save', on_click=save_notification_prefs).props('color=primary')
+
+        # Trusted Employee Auto-Approve Reports Card
+        with ui.card().classes('w-full p-6 mb-4'):
+            with ui.row().classes('w-full items-center justify-between mb-2'):
+                with ui.row().classes('items-center gap-3'):
+                    ui.icon('verified_user', size='md').style('color: #22c55e')
+                    ui.label('Trusted Employee Auto-Approve Reports').classes('text-xl font-semibold')
+                ui.button(icon='help_outline', on_click=show_auto_notify_report_help).props('flat round size=sm').tooltip('What is this?')
+
+            ui.label('Summary reports of PTO auto-approved for trusted employees. View these from the Auto Notify Reports page.').classes('text-sm opacity-60 mb-6')
+
+            # Auto-notify report frequency
+            ui.label('Report Frequency').classes('font-semibold mb-2')
+            ui.label('Choose how often auto-approve summary reports are generated').classes('text-xs opacity-60 mb-2')
+
+            auto_notify_freq_options = {
+                'weekly': 'Weekly - Generated every Sunday',
+                'bi-weekly': 'Bi-Weekly - Generated on 1st and 15th of month',
+                'monthly': 'Monthly - Generated at end of each month'
+            }
+            auto_notify_freq_select = ui.select(
+                options=auto_notify_freq_options,
+                value=current_auto_notify_freq,
+                label='Report Frequency'
+            ).classes('w-full mb-4').props('outlined')
+
+            # Save button for auto-notify
+            with ui.row().classes('w-full justify-between items-center mt-4'):
+                ui.button('View Auto Notify Reports', icon='folder_open', on_click=lambda: ui.navigate.to('/admin/auto-notify-reports')).props('outline')
+
+                def save_auto_notify_prefs():
+                    save_auto_notify_btn.props('loading disabled')
+                    db = next(get_db())
+                    try:
+                        notification_service = NotificationService(db)
+                        notification_service.update_preferences(
+                            manager_id=user_id,
+                            auto_notify_report_frequency=auto_notify_freq_select.value
+                        )
+                        show_success_dialog('Success', 'Auto-notify report frequency has been saved.')
+                    except Exception as e:
+                        show_error_dialog('Error', f'Failed to save preferences: {str(e)}')
+                    finally:
+                        db.close()
+                        save_auto_notify_btn.props(remove='loading disabled')
+
+                save_auto_notify_btn = ui.button('Save Frequency', icon='save', on_click=save_auto_notify_prefs).props('color=primary')
 
         # Digest Queue Info Card
         with ui.card().classes('w-full p-6 mb-4'):
@@ -382,4 +484,4 @@ def manager_settings_page():
 **Trusted Employees**: Employees marked as "trusted" have their standard PTO (Vacation, Sick, Personal) auto-approved. You still receive notifications for all requests regardless of auto-approval status.
             ''').classes('text-sm opacity-80')
 
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-4')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-4')

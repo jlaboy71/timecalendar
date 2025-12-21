@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from ..models.pto_balance import PTOBalance
+from ..models.user import User
+from ..models.system_setting import SystemSetting
 from ..schemas.pto_schemas import PTOBalanceUpdate
 
 
@@ -19,23 +21,56 @@ class BalanceService:
     PTO balances for users across different years.
     """
     
+    # Chicago Paid Leave annual max (40 hours per ordinance)
+    CHICAGO_PAID_LEAVE_ANNUAL_MAX = Decimal('40.00')
+
     def __init__(self, db: Session) -> None:
         """
         Initialize the BalanceService with a database session.
-        
+
         Args:
             db: SQLAlchemy database session
         """
         self.db = db
-    
-    def get_or_create_balance(self, user_id: int, year: int) -> PTOBalance:
+
+    def _is_chicago_leave_applicable(self, user_id: int) -> bool:
+        """
+        Check if Chicago Paid Leave should be applied to a user.
+
+        Returns True if:
+        1. Chicago leave feature is enabled in system settings
+        2. User's location_city is 'Chicago' (case-insensitive)
+
+        Args:
+            user_id: ID of the user to check
+
+        Returns:
+            bool: True if Chicago leave should be applied
+        """
+        # Check if feature is enabled
+        stmt = select(SystemSetting).where(SystemSetting.key == 'chicago.safe_leave_enabled')
+        chicago_setting = self.db.execute(stmt).scalar_one_or_none()
+
+        if not chicago_setting or not chicago_setting.bool_value:
+            return False
+
+        # Check if user is in Chicago
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
+        if not user or not user.location_city:
+            return False
+
+        return user.location_city.lower() == 'chicago'
+
+    def get_or_create_balance(self, user_id: int, year: int, commit: bool = True) -> PTOBalance:
         """
         Get existing balance for user/year or create new one with zeros.
-        
+
         Args:
             user_id: ID of the user
             year: Year for the balance
-            
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
         Returns:
             PTOBalance: The existing or newly created balance
         """
@@ -45,9 +80,14 @@ class BalanceService:
             PTOBalance.year == year
         )
         balance = self.db.execute(stmt).scalar_one_or_none()
-        
+
         if balance is None:
-            # Create new balance with zeros
+            # Check if Chicago Paid Leave applies to this user
+            chicago_paid_leave_total = Decimal('0.00')
+            if self._is_chicago_leave_applicable(user_id):
+                chicago_paid_leave_total = self.CHICAGO_PAID_LEAVE_ANNUAL_MAX
+
+            # Create new balance with zeros (Chicago Paid Leave set if applicable)
             balance = PTOBalance(
                 user_id=user_id,
                 year=year,
@@ -58,12 +98,19 @@ class BalanceService:
                 sick_used=Decimal('0.00'),
                 personal_total=Decimal('0.00'),
                 personal_used=Decimal('0.00'),
-                remote_weekly_used=0
+                remote_weekly_used=0,
+                chicago_paid_leave_total=chicago_paid_leave_total,
+                chicago_paid_leave_used=Decimal('0.00'),
+                chicago_paid_leave_pending=Decimal('0.00'),
+                chicago_paid_leave_carryover=Decimal('0.00')
             )
             self.db.add(balance)
-            self.db.commit()
-            self.db.refresh(balance)
-        
+            if commit:
+                self.db.commit()
+                self.db.refresh(balance)
+            else:
+                self.db.flush()
+
         return balance
     
     def get_balance_by_id(self, balance_id: int) -> Optional[PTOBalance]:
@@ -142,118 +189,194 @@ class BalanceService:
         return balance
     
     def adjust_vacation_used(
-        self, 
-        balance_id: int, 
-        days: Decimal, 
-        is_pending: bool = False
+        self,
+        balance_id: int,
+        days: Decimal,
+        is_pending: bool = False,
+        commit: bool = True
     ) -> PTOBalance:
         """
         Adjust vacation used or pending days.
-        
+
         Args:
             balance_id: ID of the balance
             days: Number of days to adjust (can be negative)
             is_pending: If True, adjust pending; otherwise adjust used
-            
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
         Returns:
             PTOBalance: Updated balance
-            
+
         Raises:
             ValueError: If balance not found
         """
         balance = self.get_balance_by_id(balance_id)
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
-        
+
+        # Convert days to hours (balance fields store hours)
+        hours = days * Decimal('8')
+
         if is_pending:
-            balance.vacation_pending += days
+            balance.vacation_pending += hours
         else:
-            balance.vacation_used += days
-        
-        self.db.commit()
-        self.db.refresh(balance)
+            balance.vacation_used += hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
         return balance
-    
-    def adjust_sick_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+
+    def adjust_sick_used(self, balance_id: int, days: Decimal, is_pending: bool = False, commit: bool = True) -> PTOBalance:
         """
-        Adjust sick days used.
-        
+        Adjust sick days used or pending.
+
         Args:
             balance_id: ID of the balance
             days: Number of days to adjust (can be negative)
-            
+            is_pending: If True, adjust pending; otherwise adjust used
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
         Returns:
             PTOBalance: Updated balance
-            
+
         Raises:
             ValueError: If balance not found
         """
         balance = self.get_balance_by_id(balance_id)
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
-        
-        balance.sick_used += days
-        
-        self.db.commit()
-        self.db.refresh(balance)
+
+        # Convert days to hours (balance fields store hours)
+        hours = days * Decimal('8')
+
+        if is_pending:
+            balance.sick_pending += hours
+        else:
+            balance.sick_used += hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
         return balance
-    
-    def adjust_personal_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+
+    def adjust_personal_used(self, balance_id: int, days: Decimal, is_pending: bool = False, commit: bool = True) -> PTOBalance:
         """
-        Adjust personal days used.
-        
+        Adjust personal days used or pending.
+
         Args:
             balance_id: ID of the balance
             days: Number of days to adjust (can be negative)
-            
+            is_pending: If True, adjust pending; otherwise adjust used
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
         Returns:
             PTOBalance: Updated balance
-            
+
         Raises:
             ValueError: If balance not found
         """
         balance = self.get_balance_by_id(balance_id)
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
-        
-        balance.personal_used += days
-        
-        self.db.commit()
-        self.db.refresh(balance)
+
+        # Convert days to hours (balance fields store hours)
+        hours = days * Decimal('8')
+
+        if is_pending:
+            balance.personal_pending += hours
+        else:
+            balance.personal_used += hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
         return balance
-    
-    def move_pending_to_used(self, balance_id: int, days: Decimal) -> PTOBalance:
+
+    def adjust_chicago_leave_used(self, balance_id: int, days: Decimal, is_pending: bool = False, commit: bool = True) -> PTOBalance:
+        """
+        Adjust Chicago Paid Leave days used or pending.
+
+        Args:
+            balance_id: ID of the balance
+            days: Number of days to adjust (can be negative)
+            is_pending: If True, adjust pending; otherwise adjust used
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
+        Returns:
+            PTOBalance: Updated balance
+
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        # Chicago Leave is stored in hours, convert days to hours
+        hours = days * Decimal('8')
+
+        if is_pending:
+            balance.chicago_paid_leave_pending += hours
+        else:
+            balance.chicago_paid_leave_used += hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
+        return balance
+
+    def move_pending_to_used(self, balance_id: int, days: Decimal, pto_type: str = 'vacation', commit: bool = True) -> PTOBalance:
         """
         Move days from pending to used (when request is approved).
-        
+
         Args:
             balance_id: ID of the balance
             days: Number of days to move
-            
+            pto_type: Type of PTO ('vacation', 'sick', 'personal')
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
+
         Returns:
             PTOBalance: Updated balance
-            
+
         Raises:
             ValueError: If balance not found
         """
         balance = self.get_balance_by_id(balance_id)
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
-        
-        balance.vacation_pending -= days
-        balance.vacation_used += days
-        
-        self.db.commit()
-        self.db.refresh(balance)
+
+        # Convert days to hours (balance fields store hours)
+        hours = days * Decimal('8')
+
+        pto_type_lower = pto_type.lower()
+        if pto_type_lower == 'vacation':
+            balance.vacation_pending -= hours
+            balance.vacation_used += hours
+        elif pto_type_lower == 'sick':
+            balance.sick_pending -= hours
+            balance.sick_used += hours
+        elif pto_type_lower == 'personal':
+            balance.personal_pending -= hours
+            balance.personal_used += hours
+        elif pto_type_lower == 'chicago_leave':
+            balance.chicago_paid_leave_pending -= hours
+            balance.chicago_paid_leave_used += hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
         return balance
-    
-    def remove_pending(self, balance_id: int, days: Decimal) -> PTOBalance:
+
+    def remove_pending(self, balance_id: int, days: Decimal, pto_type: str = 'vacation', commit: bool = True) -> PTOBalance:
         """
         Remove days from pending (when request is denied).
 
         Args:
             balance_id: ID of the balance
             days: Number of days to remove from pending
+            pto_type: Type of PTO ('vacation', 'sick', 'personal')
+            commit: If True, commit the transaction (default). Set to False for transaction participation.
 
         Returns:
             PTOBalance: Updated balance
@@ -265,10 +388,22 @@ class BalanceService:
         if balance is None:
             raise ValueError(f"Balance with ID {balance_id} not found")
 
-        balance.vacation_pending -= days
+        # Convert days to hours (balance fields store hours)
+        hours = days * Decimal('8')
 
-        self.db.commit()
-        self.db.refresh(balance)
+        pto_type_lower = pto_type.lower()
+        if pto_type_lower == 'vacation':
+            balance.vacation_pending -= hours
+        elif pto_type_lower == 'sick':
+            balance.sick_pending -= hours
+        elif pto_type_lower == 'personal':
+            balance.personal_pending -= hours
+        elif pto_type_lower == 'chicago_leave':
+            balance.chicago_paid_leave_pending -= hours
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(balance)
         return balance
 
     def allocate_standard_balance(self, user_id: int, year: int = None) -> PTOBalance:
@@ -297,6 +432,75 @@ class BalanceService:
         balance.vacation_total = Decimal('160.00')
         balance.sick_total = Decimal('40.00')
         balance.personal_total = Decimal('16.00')
+
+        # Set Chicago Paid Leave if applicable
+        if self._is_chicago_leave_applicable(user_id):
+            balance.chicago_paid_leave_total = self.CHICAGO_PAID_LEAVE_ANNUAL_MAX
+
+        self.db.commit()
+        self.db.refresh(balance)
+        return balance
+
+    def restore_balance(
+        self,
+        balance_id: int,
+        pto_type: str,
+        hours: float,
+        was_approved: bool
+    ) -> PTOBalance:
+        """
+        Restore balance when a request is cancelled or deleted.
+
+        This centralized method handles all balance restoration consistently,
+        using Decimal arithmetic and preventing negative values.
+
+        Args:
+            balance_id: ID of the balance record
+            pto_type: Type of PTO ('vacation', 'sick', 'personal')
+            hours: Number of hours to restore
+            was_approved: True if request was approved (restore from used),
+                         False if pending (restore from pending)
+
+        Returns:
+            PTOBalance: Updated balance
+
+        Raises:
+            ValueError: If balance not found or invalid pto_type
+        """
+        balance = self.get_balance_by_id(balance_id)
+        if balance is None:
+            raise ValueError(f"Balance with ID {balance_id} not found")
+
+        # Convert hours to Decimal for consistent arithmetic
+        hours_decimal = Decimal(str(hours))
+        pto_type_lower = pto_type.lower()
+
+        if pto_type_lower == 'vacation':
+            if was_approved:
+                # Restore from used
+                current = Decimal(str(balance.vacation_used or 0))
+                balance.vacation_used = max(Decimal('0'), current - hours_decimal)
+            else:
+                # Restore from pending
+                current = Decimal(str(balance.vacation_pending or 0))
+                balance.vacation_pending = max(Decimal('0'), current - hours_decimal)
+        elif pto_type_lower == 'sick':
+            if was_approved:
+                current = Decimal(str(balance.sick_used or 0))
+                balance.sick_used = max(Decimal('0'), current - hours_decimal)
+            else:
+                # Restore from pending
+                current = Decimal(str(balance.sick_pending or 0))
+                balance.sick_pending = max(Decimal('0'), current - hours_decimal)
+        elif pto_type_lower == 'personal':
+            if was_approved:
+                current = Decimal(str(balance.personal_used or 0))
+                balance.personal_used = max(Decimal('0'), current - hours_decimal)
+            else:
+                # Restore from pending
+                current = Decimal(str(balance.personal_pending or 0))
+                balance.personal_pending = max(Decimal('0'), current - hours_decimal)
+        # WFH and other types don't affect balance
 
         self.db.commit()
         self.db.refresh(balance)

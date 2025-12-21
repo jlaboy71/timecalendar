@@ -1,7 +1,7 @@
 """Manager team management page."""
 from nicegui import ui, app
 from src.database import get_db
-from nicegui_app.components.header import page_header
+from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
@@ -11,7 +11,7 @@ def manager_team_page():
     """Manager team management page content."""
     apply_dark_mode()
 
-    current_user = app.storage.general.get('user', {})
+    current_user = app.storage.user.get('user', {})
     user_role = current_user.get('role')
     department_id = current_user.get('department_id')
 
@@ -21,7 +21,7 @@ def manager_team_page():
         return
 
     if not department_id:
-        with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+        with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
             page_header(title='MY TEAM', show_back=False)
             ui.label('You are not assigned to a department').classes('text-lg text-center')
         return
@@ -41,7 +41,7 @@ def manager_team_page():
     finally:
         db.close()
 
-    with ui.column().classes('w-full max-w-4xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4'):
         page_header(title=f'MY TEAM - {dept_name.upper()}', show_back=False)
 
         if not team_members:
@@ -104,4 +104,4 @@ def manager_team_page():
 
         # Navigation buttons
         with ui.row().classes('w-full justify-start mt-6'):
-            ui.button('Back to Dashboard', icon='dashboard', on_click=lambda: ui.navigate.to('/dashboard')).props('outline')
+            ui.button('Back', icon='arrow_back', on_click=go_back).props('outline')

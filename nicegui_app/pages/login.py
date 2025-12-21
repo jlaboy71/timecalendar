@@ -14,11 +14,10 @@ def login_page(timeout: str = None):
     apply_dark_mode()
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
-        with ui.card().classes('w-96 p-8'):
-            # Logo and title
+        with ui.card().classes('w-96 p-8 animate-fade-in-up'):
+            # Logo
             with ui.column().classes('w-full items-center mb-6'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto; margin-bottom: 16px;')
-                ui.label('TJM TIME CALENDAR').classes('text-xl font-bold text-center').style('color: #5a6a72;')
+                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto;')
 
             # Show timeout message if session expired
             if timeout == '1':
@@ -36,8 +35,8 @@ def login_page(timeout: str = None):
             error_message = ui.label('').classes('text-red-500 text-sm mb-4')
             error_message.set_visibility(False)
 
-            # Login button
-            login_btn = ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message, login_btn)).classes('w-full bg-blue-500 text-white mb-4')
+            # Login button (TJM Gold gradient)
+            login_btn = ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message, login_btn)).classes('w-full btn-gold mb-4')
 
             # Support Enter key to submit login form
             def handle_enter():
@@ -100,14 +99,15 @@ def authenticate(username_input, password_input, error_message, login_btn):
                 pass
 
             # Store user in app storage and redirect
-            app.storage.general['user'] = {
+            app.storage.user['user'] = {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'role': user.role,
-                'department_id': user.department_id
+                'department_id': user.department_id,
+                'is_trusted': user.is_trusted  # For trusted employee auto-approve features
             }
             ui.navigate.to('/dashboard')
         else:

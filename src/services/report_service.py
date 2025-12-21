@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Any
 from io import BytesIO
 from pathlib import Path
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def _fmt_days(value: float) -> str:
 
 # Load TJM logo as base64 at module level
 _LOGO_BASE64 = None
-_logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+_logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
 if _logo_path.exists():
     try:
         with open(_logo_path, 'rb') as f:
@@ -74,7 +75,7 @@ class ReportService:
         # Logo HTML - embedded as base64
         logo_html = ""
         if self.LOGO_BASE64:
-            logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="TJM" style="height: 50px; width: auto;">'
+            logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="PTO Central" style="height: 50px; width: auto;">'
         else:
             logo_html = f'<div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">TJM</div>'
 
@@ -126,14 +127,16 @@ class ReportService:
         from src.models.pto_balance import PTOBalance
         from src.models.department import Department
 
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
         if not user:
             return "<p>User not found</p>"
 
-        balance = self.db.query(PTOBalance).filter(
+        stmt = select(PTOBalance).where(
             PTOBalance.user_id == user_id,
             PTOBalance.year == year
-        ).first()
+        )
+        balance = self.db.execute(stmt).scalar_one_or_none()
 
         dept_name = user.department.name if user.department else "No Department"
         employee_name = f"{user.first_name} {user.last_name}"
@@ -242,23 +245,24 @@ class ReportService:
         from src.models.pto_request import PTORequest
         from sqlalchemy.orm import joinedload
 
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
         if not user:
             return "<p>User not found</p>"
 
         # Load requests with approver relationship
-        query = self.db.query(PTORequest).options(
+        stmt = select(PTORequest).options(
             joinedload(PTORequest.approver)
-        ).filter(
+        ).where(
             PTORequest.user_id == user_id,
             PTORequest.start_date >= date(year, 1, 1),
             PTORequest.end_date <= date(year, 12, 31)
         )
 
         if status_filter != 'all':
-            query = query.filter(PTORequest.status == status_filter)
+            stmt = stmt.where(PTORequest.status == status_filter)
 
-        requests = query.order_by(PTORequest.start_date.desc()).all()
+        requests = self.db.execute(stmt.order_by(PTORequest.start_date.desc())).scalars().all()
 
         dept_name = user.department.name if user.department else "No Department"
         employee_name = f"{user.first_name} {user.last_name}"
@@ -266,11 +270,12 @@ class ReportService:
         # Find department manager
         manager_name = "N/A"
         if user.department:
-            manager = self.db.query(User).filter(
+            stmt = select(User).where(
                 User.department_id == user.department_id,
                 User.role == 'manager',
                 User.is_active == True
-            ).first()
+            )
+            manager = self.db.execute(stmt).scalar_one_or_none()
             if manager:
                 manager_name = f"{manager.first_name} {manager.last_name}"
 
@@ -425,27 +430,29 @@ class ReportService:
         from src.models.pto_balance import PTOBalance
         from src.models.department import Department
 
-        query = self.db.query(User, PTOBalance).outerjoin(
+        stmt = select(User, PTOBalance).outerjoin(
             PTOBalance,
             (PTOBalance.user_id == User.id) & (PTOBalance.year == year)
-        ).filter(User.is_active == True)
+        ).where(User.is_active == True)
 
         dept_name = "All Departments"
         employee_name = None
 
         # If specific employee is selected, filter to just that employee
         if employee_id:
-            query = query.filter(User.id == employee_id)
-            emp = self.db.query(User).filter(User.id == employee_id).first()
+            stmt = stmt.where(User.id == employee_id)
+            emp_stmt = select(User).where(User.id == employee_id)
+            emp = self.db.execute(emp_stmt).scalar_one_or_none()
             if emp:
                 employee_name = f"{emp.first_name} {emp.last_name}"
                 dept_name = emp.department.name if emp.department else "No Department"
         elif department_id:
-            query = query.filter(User.department_id == department_id)
-            dept = self.db.query(Department).filter(Department.id == department_id).first()
+            stmt = stmt.where(User.department_id == department_id)
+            dept_stmt = select(Department).where(Department.id == department_id)
+            dept = self.db.execute(dept_stmt).scalar_one_or_none()
             dept_name = dept.name if dept else "Unknown Department"
 
-        results = query.order_by(User.last_name, User.first_name).all()
+        results = self.db.execute(stmt.order_by(User.last_name, User.first_name)).all()
 
         # Dynamic title based on filter
         if employee_name:
@@ -558,16 +565,18 @@ class ReportService:
         from src.models.user import User
         from src.models.pto_request import PTORequest
 
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
         if not user:
             return "<p>User not found</p>"
 
-        requests = self.db.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.user_id == user_id,
             PTORequest.status == 'approved',
             PTORequest.start_date >= date(year, 1, 1),
             PTORequest.end_date <= date(year, 12, 31)
-        ).order_by(PTORequest.start_date).all()
+        ).order_by(PTORequest.start_date)
+        requests = self.db.execute(stmt).scalars().all()
 
         dept_name = user.department.name if user.department else "No Department"
         employee_name = f"{user.first_name} {user.last_name}"

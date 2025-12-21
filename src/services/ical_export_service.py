@@ -7,6 +7,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from io import BytesIO
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class ICalExportService:
         department_id: Optional[int] = None,
         include_holidays: bool = True,
         include_pto: bool = True,
-        calendar_name: str = "TJM Time Calendar"
+        calendar_name: str = "PTO Central"
     ) -> str:
         """
         Generate iCal content for the specified date range.
@@ -60,10 +61,11 @@ class ICalExportService:
 
         from src.models.market_holiday import MarketHoliday
 
-        holidays = self._db_session.query(MarketHoliday).filter(
+        stmt = select(MarketHoliday).where(
             MarketHoliday.holiday_date >= start_date,
             MarketHoliday.holiday_date <= end_date
-        ).all()
+        )
+        holidays = self._db_session.execute(stmt).scalars().all()
 
         # Group by date and name to avoid duplicates
         holiday_map = {}
@@ -106,29 +108,39 @@ class ICalExportService:
         from src.models.pto_request import PTORequest
         from src.models.user import User
 
-        query = self._db_session.query(PTORequest).filter(
+        stmt = select(PTORequest).where(
             PTORequest.status == 'approved',
             PTORequest.start_date <= end_date,
             PTORequest.end_date >= start_date
         )
 
         if user_id:
-            query = query.filter(PTORequest.user_id == user_id)
+            # Personal calendar: show all requests including private ones
+            stmt = stmt.where(PTORequest.user_id == user_id)
         elif department_id:
-            user_ids = [u.id for u in self._db_session.query(User).filter(
+            # Team/department calendar: exclude private requests for privacy
+            user_stmt = select(User).where(
                 User.department_id == department_id,
                 User.is_active == True
-            ).all()]
-            if user_ids:
-                query = query.filter(PTORequest.user_id.in_(user_ids))
+            )
+            dept_users = self._db_session.execute(user_stmt).scalars().all()
+            dept_user_ids = [u.id for u in dept_users]
+            if dept_user_ids:
+                stmt = stmt.where(
+                    PTORequest.user_id.in_(dept_user_ids),
+                    PTORequest.is_private == False  # Exclude private requests from team calendar
+                )
 
-        pto_requests = query.all()
+        pto_requests = self._db_session.execute(stmt).scalars().all()
 
         # Get user info
-        user_ids = set(p.user_id for p in pto_requests)
-        users = {u.id: u for u in self._db_session.query(User).filter(
-            User.id.in_(user_ids)
-        ).all()} if user_ids else {}
+        pto_user_ids = set(p.user_id for p in pto_requests)
+        if pto_user_ids:
+            user_stmt = select(User).where(User.id.in_(pto_user_ids))
+            user_list = self._db_session.execute(user_stmt).scalars().all()
+            users = {u.id: u for u in user_list}
+        else:
+            users = {}
 
         events = []
         for pto in pto_requests:
@@ -158,7 +170,7 @@ class ICalExportService:
         lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//TJM Holdings//TJM Time Calendar//EN',
+            'PRODID:-//TJM Holdings//PTO Central//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             f'X-WR-CALNAME:{calendar_name}',

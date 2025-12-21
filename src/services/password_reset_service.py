@@ -4,6 +4,7 @@ Password reset service for managing password reset tokens.
 from typing import Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import select, update
 
 from src.models.password_reset import PasswordResetToken
 from src.models.user import User
@@ -29,10 +30,11 @@ class PasswordResetService:
             The plain_token should be given to the user (only shown once)
         """
         # Invalidate any existing unused tokens for this user
-        self.db.query(PasswordResetToken).filter(
+        stmt = update(PasswordResetToken).where(
             PasswordResetToken.user_id == user_id,
             PasswordResetToken.used == False
-        ).update({'used': True, 'used_at': datetime.now()})
+        ).values(used=True, used_at=datetime.now())
+        self.db.execute(stmt)
 
         # Generate new token
         plain_token = PasswordResetToken.generate_token()
@@ -61,9 +63,8 @@ class PasswordResetService:
         Returns:
             Tuple of (is_valid, user, error_message)
         """
-        token_record = self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.token == token
-        ).first()
+        stmt = select(PasswordResetToken).where(PasswordResetToken.token == token)
+        token_record = self.db.execute(stmt).scalar_one_or_none()
 
         if not token_record:
             return False, None, "Invalid or expired reset link"
@@ -74,7 +75,8 @@ class PasswordResetService:
         if token_record.is_expired:
             return False, None, "This reset link has expired"
 
-        user = self.db.query(User).filter(User.id == token_record.user_id).first()
+        stmt = select(User).where(User.id == token_record.user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
         if not user:
             return False, None, "User not found"
 
@@ -104,9 +106,8 @@ class PasswordResetService:
         user.updated_at = datetime.now()
 
         # Mark token as used
-        token_record = self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.token == token
-        ).first()
+        stmt = select(PasswordResetToken).where(PasswordResetToken.token == token)
+        token_record = self.db.execute(stmt).scalar_one_or_none()
         token_record.used = True
         token_record.used_at = datetime.now()
 
@@ -116,17 +117,13 @@ class PasswordResetService:
 
     def get_user_by_email(self, email: str) -> Optional[User]:
         """Get a user by their email address."""
-        return self.db.query(User).filter(
-            User.email == email,
-            User.is_active == True
-        ).first()
+        stmt = select(User).where(User.email == email, User.is_active == True)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def get_user_by_username(self, username: str) -> Optional[User]:
         """Get a user by their username."""
-        return self.db.query(User).filter(
-            User.username == username,
-            User.is_active == True
-        ).first()
+        stmt = select(User).where(User.username == username, User.is_active == True)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def admin_reset_password(self, user_id: int, new_password: str, admin_id: int) -> Tuple[bool, str]:
         """
@@ -140,7 +137,8 @@ class PasswordResetService:
         Returns:
             Tuple of (success, message)
         """
-        user = self.db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        user = self.db.execute(stmt).scalar_one_or_none()
 
         if not user:
             return False, "User not found"

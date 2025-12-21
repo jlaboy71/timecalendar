@@ -4,16 +4,17 @@ from src.database import get_db
 from src.models.market_holiday import MarketHoliday
 from src.models.pto_request import PTORequest
 from src.models.user import User
-from src.models.department import Department
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from datetime import date, timedelta
 from calendar import monthcalendar, month_name
 from collections import defaultdict
-from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog
+from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
+from nicegui_app.components.realtime_updates import setup_calendar_updates
 from src.services.balance_service import BalanceService
+from src.services.audit_service import AuditService
 from datetime import datetime as dt
 
 
@@ -23,7 +24,7 @@ def calendar_page():
     apply_dark_mode()
 
     # Check if user is logged in
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return
@@ -31,13 +32,19 @@ def calendar_page():
     user_id = user.get('id')
     user_role = user.get('role')
 
-    # Get user's department ID (needed for all users - employees can now see department view)
+    # Get user's department ID and Chicago status
     user_department_id = None
+    is_chicago_employee = False
     db = next(get_db())
     try:
+        from src.models.system_setting import SystemSetting
         current_user = db.query(User).filter(User.id == user_id).first()
         if current_user:
             user_department_id = current_user.department_id
+            # Check if user is in Chicago AND Chicago leave is enabled
+            user_is_in_chicago = current_user.location_city and current_user.location_city.lower() == 'chicago'
+            chicago_setting = db.query(SystemSetting).filter(SystemSetting.key == 'chicago.safe_leave_enabled').first()
+            is_chicago_employee = user_is_in_chicago and chicago_setting and chicago_setting.bool_value
     finally:
         db.close()
 
@@ -46,7 +53,7 @@ def calendar_page():
     current_month = {'month': today.month, 'year': today.year}
 
     # Load persisted preferences from session or use defaults
-    calendar_prefs = app.storage.general.get('calendar_prefs', {})
+    calendar_prefs = app.storage.user.get('calendar_prefs', {})
 
     # State for filters with persistence
     selected_department = {'id': calendar_prefs.get('department_id', None)}
@@ -59,6 +66,7 @@ def calendar_page():
         'sick': calendar_prefs.get('filter_sick', True),
         'personal': calendar_prefs.get('filter_personal', True),
         'work_from_home': calendar_prefs.get('filter_work_from_home', True),
+        'chicago_leave': calendar_prefs.get('filter_chicago_leave', True),  # Chicago leave (both types)
         'other': calendar_prefs.get('filter_other', True)
     }
     current_view = {'view': calendar_prefs.get('current_view', 'month')}  # 'month' or 'year'
@@ -69,7 +77,7 @@ def calendar_page():
 
     def save_preferences():
         """Save current filter preferences to session."""
-        app.storage.general['calendar_prefs'] = {
+        app.storage.user['calendar_prefs'] = {
             'department_id': selected_department['id'],
             'employee_id': selected_employee['id'],
             'view_mode': view_mode['mode'],
@@ -79,6 +87,7 @@ def calendar_page():
             'filter_sick': leave_type_filters['sick'],
             'filter_personal': leave_type_filters['personal'],
             'filter_work_from_home': leave_type_filters['work_from_home'],
+            'filter_chicago_leave': leave_type_filters['chicago_leave'],
             'filter_other': leave_type_filters['other'],
             'current_view': current_view['view'],
             'highlight_half_days': highlight_half_days['value']
@@ -173,7 +182,7 @@ def calendar_page():
                         pto_service.approve_request(pto_request.id, user_id)
 
                     wfh_db.commit()
-                    ui.notify(f'WFH submitted for {employee_options[employee_select.value]}', type='positive')
+                    show_success_dialog('WFH Submitted', f'WFH submitted for {employee_options[employee_select.value]}')
                     wfh_dialog.close()
                     render_current_view()
                 except Exception as e:
@@ -188,7 +197,7 @@ def calendar_page():
         wfh_dialog.open()
 
     # Main container
-    with ui.column().classes('w-full max-w-6xl mx-auto mt-8 p-6'):
+    with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Print CSS styles - printer-friendly with white background
         ui.add_head_html('''
         <style>
@@ -292,7 +301,7 @@ def calendar_page():
             ui.label('Team Calendar').classes('text-xl font-bold')
 
         # Header with greeting
-        page_header(title='TEAM CALENDAR', show_back=False)
+        page_header(title='CALENDAR', show_back=False)
 
         # ===== VIEW TOGGLE + ACTION BUTTONS ===== (hidden in print)
         with ui.row().classes('w-full mb-4 gap-2 justify-between items-center no-print'):
@@ -302,7 +311,7 @@ def calendar_page():
 
                 # Create buttons first, then define handlers that reference them
                 my_btn = ui.button('My Calendar')
-                team_label = 'Department Calendar' if user_role == 'employee' else 'Team Calendar'
+                team_label = 'TEAM CALENDAR'
                 team_btn = ui.button(team_label)
 
                 def update_view_button_styles():
@@ -332,7 +341,7 @@ def calendar_page():
 
             # Right side: Action buttons
             with ui.row().classes('gap-2 items-center'):
-                ui.button('New PTO Request', icon='add', on_click=lambda: ui.navigate.to('/submit-request')).props('color=primary')
+                ui.button('PTO Request', icon='add', on_click=lambda: ui.navigate.to('/submit-request')).props('color=primary')
 
                 # Submit WFH for Employee button (managers/admins only)
                 if user_role in ['manager', 'admin', 'superadmin']:
@@ -497,6 +506,19 @@ def calendar_page():
                                 personal_hours = personal_total - personal_used
                                 personal_display, personal_tooltip = format_days_hours(personal_hours)
                                 ui.label(f'Personal: {personal_display}').classes('font-medium text-purple-600').tooltip(personal_tooltip)
+
+                            # Chicago Paid Leave (only for Chicago employees)
+                            if is_chicago_employee:
+                                chicago_total = float(balance.chicago_paid_leave_total or 0) + float(balance.chicago_paid_leave_carryover or 0)
+                                chicago_used = float(balance.chicago_paid_leave_used or 0)
+                                chicago_pending = float(balance.chicago_paid_leave_pending or 0)
+                                chicago_hours = chicago_total - chicago_used - chicago_pending
+                                if chicago_total > 0:
+                                    ui.element('div').classes('w-px h-6').style('background: rgba(128,128,128,0.3)')
+                                    with ui.row().classes('gap-2 items-center'):
+                                        ui.element('div').classes('w-4 h-4 bg-amber-500 rounded-full')
+                                        chicago_display, chicago_tooltip = format_days_hours(chicago_hours)
+                                        ui.label(f'Leave: {chicago_display}').classes('font-medium text-amber-600').tooltip(chicago_tooltip)
                 finally:
                     db.close()
 
@@ -522,18 +544,18 @@ def calendar_page():
                     def export_my_calendar():
                         year = current_month['year']
                         ui.download(f'/api/calendar/export?type=my&year={year}')
-                        ui.notify(f'Downloading My PTO Calendar {year}...', type='info')
+                        show_info_dialog('Downloading', f'Downloading My PTO Calendar {year}...')
 
                     def export_team_calendar():
                         year = current_month['year']
                         dept_param = f'&department_id={selected_department["id"]}' if selected_department['id'] else ''
                         ui.download(f'/api/calendar/export?type=team&year={year}{dept_param}')
-                        ui.notify(f'Downloading Team Calendar {year}...', type='info')
+                        show_info_dialog('Downloading', f'Downloading Team Calendar {year}...')
 
                     def export_holidays():
                         year = current_month['year']
                         ui.download(f'/api/calendar/export?type=holidays&year={year}')
-                        ui.notify(f'Downloading Market Holidays {year}...', type='info')
+                        show_info_dialog('Downloading', f'Downloading Market Holidays {year}...')
 
                     ui.item('My PTO Calendar', on_click=export_my_calendar).props('clickable')
                     if user_role in ['manager', 'admin', 'superadmin']:
@@ -609,7 +631,7 @@ def calendar_page():
                         'Market Holiday',
                         value=show_holidays['value'],
                         on_change=on_legend_holidays_change
-                    ).props('dense').classes('text-sm font-medium text-red-500')
+                    ).props('dense').classes('text-sm font-medium text-orange-500')
 
                     # Vacation - filterable
                     ui.checkbox(
@@ -639,6 +661,14 @@ def calendar_page():
                         on_change=create_legend_filter_handler('work_from_home')
                     ).props('dense').classes('text-sm font-medium text-red-600')
 
+                    # Chicago Leave - filterable (only for Chicago employees)
+                    if is_chicago_employee:
+                        ui.checkbox(
+                            'Leave',
+                            value=leave_type_filters['chicago_leave'],
+                            on_change=create_legend_filter_handler('chicago_leave')
+                        ).props('dense').classes('text-sm font-medium text-amber-600')
+
                     # Other - filterable
                     ui.checkbox(
                         'Other',
@@ -654,7 +684,7 @@ def calendar_page():
                     ).props('dense').classes('text-sm font-medium text-orange-600')
 
         # Back button (hidden in print)
-        ui.button('Back to Dashboard', icon='arrow_back', on_click=lambda: ui.navigate.to('/dashboard')).props('outline').classes('mt-6 no-print')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6 no-print')
 
         # ===== MODAL FUNCTIONS =====
 
@@ -726,8 +756,8 @@ def calendar_page():
                                 ui.label('End Date').classes('text-xs opacity-60 uppercase tracking-wide')
                                 ui.label(pto_request.end_date.strftime("%A, %B %d, %Y")).classes('font-medium')
                             with ui.column().classes('gap-1'):
-                                ui.label('Total Days').classes('text-xs opacity-60 uppercase tracking-wide')
-                                ui.label(str(pto_request.total_days)).classes('font-medium text-xl')
+                                ui.label('Duration').classes('text-xs opacity-60 uppercase tracking-wide')
+                                ui.label(fmt_days(float(pto_request.total_days))).classes('font-medium text-xl')
                             with ui.column().classes('gap-1'):
                                 ui.label('Leave Type').classes('text-xs opacity-60 uppercase tracking-wide')
                                 with ui.element('div').classes(f'inline-flex items-center gap-1 bg-{accent_color}-100 text-{accent_color}-700 px-2 py-1 rounded'):
@@ -774,7 +804,7 @@ def calendar_page():
                                         if req:
                                             req.notes = notes_input.value if notes_input.value.strip() else None
                                             save_db.commit()
-                                            ui.notify('Notes saved successfully', type='positive')
+                                            show_success_dialog('Success', 'Notes saved successfully')
                                         else:
                                             show_error_dialog('Not Found', 'The request was not found.')
                                     except Exception as e:
@@ -807,6 +837,7 @@ def calendar_page():
                             req_year = pto_request.start_date.year
                             req_user_id = pto_request.user_id
                             req_status = pto_request.status
+                            req_employee_name = pto_request.user.full_name if pto_request.user else 'Unknown'
 
                             def delete_request_direct():
                                 """Direct delete for admin/superadmin/manager's own requests."""
@@ -840,7 +871,19 @@ def calendar_page():
                                                 balance.personal_used = max(0, float(balance.personal_used or 0) - hours_to_restore)
 
                                     del_db.commit()
-                                    ui.notify('Request deleted and balance restored', type='positive')
+
+                                    # Audit log the cancellation
+                                    current_user = app.storage.user.get('user', {})
+                                    AuditService.log_pto_cancel(
+                                        db=del_db,
+                                        user_id=current_user.get('id'),
+                                        username=current_user.get('username'),
+                                        request_id=req_id,
+                                        employee_name=req_employee_name,
+                                        cancelled_by_self=(req_user_id == current_user.get('id'))
+                                    )
+
+                                    show_success_dialog('Success', 'Request deleted and balance restored')
                                     dialog.close()
                                     render_current_view()
                                 finally:
@@ -850,24 +893,31 @@ def calendar_page():
                                 """Cancel pending request for employee."""
                                 cancel_db = next(get_db())
                                 try:
-                                    req = cancel_db.query(PTORequest).filter(PTORequest.id == req_id).first()
-                                    if not req:
-                                        show_error_dialog('Not Found', 'The request was not found.')
-                                        return
+                                    current_user = app.storage.user.get('user', {})
+                                    user_id = current_user.get('id')
 
-                                    req.status = 'cancelled'
+                                    # Use PTOService.cancel_request which handles ALL PTO types correctly
+                                    from src.services.pto_service import PTOService
+                                    pto_service = PTOService(cancel_db)
+                                    pto_service.cancel_request(req_id, user_id)
 
-                                    # Restore pending balance
-                                    if req_type.lower() == 'vacation':
-                                        balance_service = BalanceService(cancel_db)
-                                        balance = balance_service.get_or_create_balance(req_user_id, req_year)
-                                        hours_to_restore = req_total_days * 8
-                                        balance.vacation_pending = max(0, float(balance.vacation_pending or 0) - hours_to_restore)
+                                    # Audit log the cancellation
+                                    AuditService.log_pto_cancel(
+                                        db=cancel_db,
+                                        user_id=user_id,
+                                        username=current_user.get('username'),
+                                        request_id=req_id,
+                                        employee_name=req_employee_name,
+                                        cancelled_by_self=True
+                                    )
 
-                                    cancel_db.commit()
-                                    ui.notify('Request cancelled successfully', type='positive')
+                                    show_success_dialog('Success', 'Request cancelled successfully')
                                     dialog.close()
                                     render_current_view()
+                                except ValueError as e:
+                                    show_warning_dialog('Cannot Cancel', str(e))
+                                except Exception as e:
+                                    show_error_dialog('Error', f'Error cancelling request: {str(e)}')
                                 finally:
                                     cancel_db.close()
 
@@ -896,7 +946,7 @@ def calendar_page():
                                             req.cancellation_requested_at = dt.now()
 
                                             req_db.commit()
-                                            ui.notify('Cancellation request submitted to your manager', type='positive')
+                                            show_success_dialog('Request Submitted', 'Cancellation request submitted to your manager')
                                             cancel_dialog.close()
                                             render_current_view()
                                         finally:
@@ -986,23 +1036,36 @@ def calendar_page():
 
         def show_quick_request_popup(click_date: date):
             """Show popup for quick PTO request on empty day (employees only)."""
+            from src.services.policy_engine import PolicyEngine
+
             if user_role != 'employee':
                 return
 
-            if click_date < today:
-                show_warning_dialog('Past Date', 'Cannot request time off for past dates. Please select a future date.')
+            # Use PolicyEngine for date validation
+            policy = PolicyEngine()
+            result = policy.validate_request_dates(click_date, click_date, 'vacation')
+
+            if not result.is_valid:
+                show_warning_dialog('Invalid Date', result.rejection_reason)
                 return
 
             with ui.dialog() as dialog, ui.card().classes('min-w-80'):
                 ui.label('Request Time Off').classes('text-xl font-bold mb-2')
                 ui.label(f'{click_date.strftime("%A, %B %d, %Y")}').classes('opacity-70 mb-4')
 
+                # Show backdating notice if applicable
+                if result.is_backdated:
+                    with ui.element('div').classes('p-3 rounded-lg mb-4').style('background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b;'):
+                        with ui.row().classes('items-start gap-2'):
+                            ui.icon('info', size='xs', color='amber')
+                            ui.label('This date is in the past. Your request will require manager approval.').classes('text-sm')
+
                 ui.label('Would you like to submit a PTO request for this date?').classes('mb-4')
 
                 with ui.row().classes('w-full justify-end gap-2'):
                     def go_to_request():
                         dialog.close()
-                        app.storage.general['prefill_pto_date'] = click_date.isoformat()
+                        app.storage.user['prefill_pto_date'] = click_date.isoformat()
                         ui.navigate.to('/submit-request')
 
                     ui.button('Submit Request', on_click=go_to_request).props('color=primary')
@@ -1039,6 +1102,8 @@ def calendar_page():
             pto_type_lower = pto_type.lower()
             if 'vacation' in pto_type_lower:
                 return 'bg-blue-500 text-white'
+            elif 'chicago' in pto_type_lower:
+                return 'bg-amber-500 text-white'
             elif 'sick' in pto_type_lower:
                 return 'bg-green-500 text-white'
             elif 'personal' in pto_type_lower:
@@ -1053,6 +1118,8 @@ def calendar_page():
             pto_type_lower = pto_type.lower()
             if 'vacation' in pto_type_lower:
                 return 'vacation'
+            elif 'chicago' in pto_type_lower:
+                return 'chicago_leave'
             elif 'sick' in pto_type_lower:
                 return 'sick'
             elif 'personal' in pto_type_lower:
@@ -1148,7 +1215,9 @@ def calendar_page():
                     current_date = max(pto.start_date, year_start)
                     end = min(pto.end_date, year_end)
                     while current_date <= end:
-                        pto_by_date[current_date].append(pto.pto_type)
+                        # Skip weekends - this is a Mon-Fri system (Mon=0, Fri=4)
+                        if current_date.weekday() < 5:
+                            pto_by_date[current_date].append(pto.pto_type)
                         current_date += timedelta(days=1)
 
             finally:
@@ -1156,8 +1225,8 @@ def calendar_page():
 
             # Fixed 6-column grid layout (Jan-Jun / Jul-Dec) - full width
             with calendar_container:
-                # 6-column CSS grid that fills full width
-                with ui.element('div').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%;'):
+                # 6-column CSS grid that fills full width (calendar-year-grid class for mobile responsive targeting)
+                with ui.element('div').classes('calendar-year-grid').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%;'):
                     for month_num in range(1, 13):
                         is_current_month = month_num == today.month and year == today.year
 
@@ -1328,18 +1397,20 @@ def calendar_page():
                     current_date = max(pto.start_date, first_day)
                     end = min(pto.end_date, last_day)
                     while current_date <= end:
-                        pto_user = users.get(pto.user_id)
-                        if pto_user:
-                            initials = f"{pto_user.first_name[0]}{pto_user.last_name[0]}"
-                            pto_by_date[current_date].append({
-                                'request_id': pto.id,
-                                'user': pto_user,
-                                'initials': initials,
-                                'type': pto.pto_type,
-                                'full_name': f"{pto_user.first_name} {pto_user.last_name}",
-                                'total_days': float(pto.total_days or 1),
-                                'is_half_day': float(pto.total_days or 1) < 1
-                            })
+                        # Skip weekends - this is a Mon-Fri system (Mon=0, Fri=4)
+                        if current_date.weekday() < 5:
+                            pto_user = users.get(pto.user_id)
+                            if pto_user:
+                                initials = f"{pto_user.first_name[0]}{pto_user.last_name[0]}"
+                                pto_by_date[current_date].append({
+                                    'request_id': pto.id,
+                                    'user': pto_user,
+                                    'initials': initials,
+                                    'type': pto.pto_type,
+                                    'full_name': f"{pto_user.first_name} {pto_user.last_name}",
+                                    'total_days': float(pto.total_days or 1),
+                                    'is_half_day': float(pto.total_days or 1) < 1
+                                })
                         current_date += timedelta(days=1)
 
             finally:
@@ -1416,7 +1487,7 @@ def calendar_page():
 
                                         def create_day_click_handler(d):
                                             def handler():
-                                                app.storage.general['prefill_pto_date'] = d.isoformat()
+                                                app.storage.user['prefill_pto_date'] = d.isoformat()
                                                 ui.navigate.to('/submit-request')
                                             return handler
 
@@ -1474,7 +1545,7 @@ def calendar_page():
                                                 is_half = pto_entry.get('is_half_day', False)
                                                 half_day_indicator = " ½" if is_half else ""
                                                 display_text = f"{first_name} - {leave_label}{half_day_indicator}"
-                                                days_text = f"{fmt_days(pto_entry.get('total_days', 1))} day(s)"
+                                                days_text = fmt_days(pto_entry.get('total_days', 1))
                                                 tooltip_text = f"{pto_entry['full_name']} - {pto_entry['type'].title()} ({days_text}) - Click for details"
 
                                                 # Highlight half-day events if toggle is enabled
@@ -1502,3 +1573,7 @@ def calendar_page():
 
         # Initial render
         render_current_view()
+
+        # ============ REAL-TIME UPDATES ============
+        # Set up automatic refresh when PTO requests change (30 second interval)
+        setup_calendar_updates(None, user_id, interval=30.0)

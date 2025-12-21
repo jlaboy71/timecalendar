@@ -1,11 +1,11 @@
-"""Logo helper module for TJM Time Calendar."""
+"""Logo helper module for PTO Central (TJM Time Calendar)."""
 import base64
 from pathlib import Path
 
 
 def get_logo_data_url():
-    """Return the TJM logo as a base64 data URL."""
-    logo_path = Path(__file__).parent / 'static' / 'TJMLogo.png'
+    """Return the PTO Central logo as a base64 data URL."""
+    logo_path = Path(__file__).parent / 'static' / 'PTOCentralLogo.png'
     with open(logo_path, 'rb') as f:
         logo_bytes = f.read()
     logo_base64 = base64.b64encode(logo_bytes).decode('utf-8')

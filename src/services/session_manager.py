@@ -19,13 +19,13 @@ class SessionManager:
     @classmethod
     def update_activity(cls) -> None:
         """Update the last activity timestamp for the current user."""
-        if app.storage.general.get('user'):
-            app.storage.general['last_activity'] = datetime.now().isoformat()
+        if app.storage.user.get('user'):
+            app.storage.user['last_activity'] = datetime.now().isoformat()
 
     @classmethod
     def get_last_activity(cls) -> datetime | None:
         """Get the last activity timestamp."""
-        last_activity_str = app.storage.general.get('last_activity')
+        last_activity_str = app.storage.user.get('last_activity')
         if last_activity_str:
             try:
                 return datetime.fromisoformat(last_activity_str)
@@ -41,7 +41,7 @@ class SessionManager:
         Returns:
             True if session is expired, False otherwise
         """
-        user = app.storage.general.get('user')
+        user = app.storage.user.get('user')
         if not user:
             return True  # No session
 
@@ -72,9 +72,9 @@ class SessionManager:
     @classmethod
     def clear_session(cls) -> None:
         """Clear all session data."""
-        app.storage.general.pop('user', None)
-        app.storage.general.pop('dark_mode', None)
-        app.storage.general.pop('last_activity', None)
+        app.storage.user.pop('user', None)
+        app.storage.user.pop('dark_mode', None)
+        app.storage.user.pop('last_activity', None)
 
     @classmethod
     def check_and_redirect_if_expired(cls) -> bool:
@@ -104,7 +104,7 @@ def require_auth():
     Returns:
         True if authenticated and session valid, False otherwise
     """
-    user = app.storage.general.get('user')
+    user = app.storage.user.get('user')
     if not user:
         ui.navigate.to('/')
         return False

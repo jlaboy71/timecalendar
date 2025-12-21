@@ -4,6 +4,7 @@ Audit logging service for tracking system actions.
 import json
 from typing import Optional, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from src.models.audit_log import AuditLog
 
@@ -152,20 +153,75 @@ class AuditService:
         )
 
     @staticmethod
+    def log_pto_cancel(db: Session, user_id: int, username: str, request_id: int, employee_name: str, cancelled_by_self: bool = True):
+        """Log a PTO request cancellation."""
+        return AuditService.log(
+            db=db,
+            action='pto_cancel',
+            user_id=user_id,
+            username=username,
+            entity_type='pto_request',
+            entity_id=request_id,
+            details={'employee': employee_name, 'cancelled_by_self': cancelled_by_self}
+        )
+
+    @staticmethod
+    def log_carryover_request(db: Session, user_id: int, username: str, request_id: int, hours: float, from_year: int, to_year: int):
+        """Log a carryover request submission."""
+        return AuditService.log(
+            db=db,
+            action='carryover_request',
+            user_id=user_id,
+            username=username,
+            entity_type='carryover_request',
+            entity_id=request_id,
+            details={'hours_requested': hours, 'from_year': from_year, 'to_year': to_year}
+        )
+
+    @staticmethod
+    def log_carryover_approve(db: Session, approver_id: int, approver_name: str, request_id: int, employee_name: str, hours_approved: float):
+        """Log a carryover approval."""
+        return AuditService.log(
+            db=db,
+            action='carryover_approve',
+            user_id=approver_id,
+            username=approver_name,
+            entity_type='carryover_request',
+            entity_id=request_id,
+            details={'employee': employee_name, 'hours_approved': hours_approved}
+        )
+
+    @staticmethod
+    def log_carryover_deny(db: Session, approver_id: int, approver_name: str, request_id: int, employee_name: str, reason: str = None):
+        """Log a carryover denial."""
+        return AuditService.log(
+            db=db,
+            action='carryover_deny',
+            user_id=approver_id,
+            username=approver_name,
+            entity_type='carryover_request',
+            entity_id=request_id,
+            details={'employee': employee_name, 'reason': reason}
+        )
+
+    @staticmethod
     def get_recent_logs(db: Session, limit: int = 100) -> list:
         """Get recent audit log entries."""
-        return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
+        stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+        return list(db.execute(stmt).scalars().all())
 
     @staticmethod
     def get_logs_by_user(db: Session, user_id: int, limit: int = 50) -> list:
         """Get audit logs for a specific user."""
-        return db.query(AuditLog).filter(
+        stmt = select(AuditLog).where(
             AuditLog.user_id == user_id
-        ).order_by(AuditLog.created_at.desc()).limit(limit).all()
+        ).order_by(AuditLog.created_at.desc()).limit(limit)
+        return list(db.execute(stmt).scalars().all())
 
     @staticmethod
     def get_logs_by_action(db: Session, action: str, limit: int = 50) -> list:
         """Get audit logs for a specific action type."""
-        return db.query(AuditLog).filter(
+        stmt = select(AuditLog).where(
             AuditLog.action == action
-        ).order_by(AuditLog.created_at.desc()).limit(limit).all()
+        ).order_by(AuditLog.created_at.desc()).limit(limit)
+        return list(db.execute(stmt).scalars().all())

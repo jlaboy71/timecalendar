@@ -62,6 +62,14 @@ class ManagerNotificationPreference(Base):
         nullable=False
     )
 
+    # Auto-notify report frequency for trusted employee auto-approvals
+    # Options: 'weekly', 'bi-weekly', 'monthly'
+    auto_notify_report_frequency: Mapped[str] = mapped_column(
+        String(20),
+        default='weekly',
+        nullable=False
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -1,0 +1,101 @@
+{
+  "version": "1.0",
+  "chapters": {
+    "getting-started": {
+      "title": "Getting Started",
+      "icon": "play_circle",
+      "order": 1,
+      "required_role": null,
+      "articles": [
+        {"id": "overview", "title": "System Overview"},
+        {"id": "first-login", "title": "Logging In"},
+        {"id": "dashboard", "title": "Understanding Your Dashboard"}
+      ]
+    },
+    "pto-requests": {
+      "title": "PTO Requests",
+      "icon": "event_available",
+      "order": 2,
+      "required_role": null,
+      "articles": [
+        {"id": "submit-request", "title": "Submitting a PTO Request"},
+        {"id": "view-requests", "title": "Viewing Your Requests"},
+        {"id": "cancel-request", "title": "Cancelling a Request"},
+        {"id": "view-balance", "title": "Understanding Your Balance"}
+      ]
+    },
+    "calendar": {
+      "title": "Team Calendar",
+      "icon": "calendar_month",
+      "order": 3,
+      "required_role": null,
+      "articles": [
+        {"id": "calendar-overview", "title": "Calendar Overview"},
+        {"id": "calendar-filters", "title": "Calendar Filters"},
+        {"id": "calendar-export", "title": "Calendar Export"},
+        {"id": "market-holidays", "title": "Market Holidays"}
+      ]
+    },
+    "carryover": {
+      "title": "Leave Carryover",
+      "icon": "sync",
+      "order": 4,
+      "required_role": null,
+      "articles": [
+        {"id": "carryover-overview", "title": "Carryover Overview"},
+        {"id": "submit-carryover", "title": "Submitting a Carryover Request"},
+        {"id": "carryover-status", "title": "Tracking Carryover Status"}
+      ]
+    },
+    "managers": {
+      "title": "For Managers",
+      "icon": "supervisor_account",
+      "order": 5,
+      "required_role": "manager",
+      "articles": [
+        {"id": "approve-requests", "title": "Approving PTO Requests"},
+        {"id": "carryover-approvals", "title": "Carryover Approvals"},
+        {"id": "team-overview", "title": "Team Calendar & Overview"},
+        {"id": "handbook-ai", "title": "Handbook AI Assistant"},
+        {"id": "trusted-employees", "title": "Trusted Employees & Auto-Approve"},
+        {"id": "auto-notify-reports", "title": "Auto Notify Reports"},
+        {"id": "manager-settings", "title": "Manager Settings & Notification Preferences"}
+      ]
+    },
+    "reports": {
+      "title": "Reports & Analytics",
+      "icon": "analytics",
+      "order": 6,
+      "required_role": "manager",
+      "articles": [
+        {"id": "reports-overview", "title": "Reports Overview"},
+        {"id": "export-reports", "title": "Exporting Reports"},
+        {"id": "analytics-dashboard", "title": "Analytics Dashboard"}
+      ]
+    },
+    "admin": {
+      "title": "Administration",
+      "icon": "admin_panel_settings",
+      "order": 7,
+      "required_role": "admin",
+      "articles": [
+        {"id": "employee-management", "title": "Employee Management"},
+        {"id": "department-management", "title": "Department Management"},
+        {"id": "pending-approvals", "title": "Bulk Pending Approvals"},
+        {"id": "year-end-processing", "title": "Year-End Processing"},
+        {"id": "handbook-management", "title": "Handbook Management"},
+        {"id": "system-settings", "title": "System Settings & Backup"}
+      ]
+    },
+    "technical": {
+      "title": "Troubleshooting & Tips",
+      "icon": "help_outline",
+      "order": 8,
+      "required_role": null,
+      "articles": [
+        {"id": "troubleshooting", "title": "Troubleshooting Guide"},
+        {"id": "keyboard-shortcuts", "title": "Keyboard Shortcuts"}
+      ]
+    }
+  }
+}
