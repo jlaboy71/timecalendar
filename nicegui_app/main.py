@@ -36,6 +36,7 @@ from nicegui_app.pages.admin_system import admin_system_page
 from nicegui_app.pages.admin_email_preview import email_preview_page
 from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
+from nicegui_app.pages.testing_console import testing_console_page
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.theme import apply_dark_mode
 from src.services.session_manager import require_auth
@@ -45,7 +46,7 @@ from src.services.email_service import email_service
 init_db()
 
 # Set up basic app configuration
-app.title = "TJM Time Calendar"
+app.title = "PTO Central"
 
 # Add static file serving for logo
 STATIC_DIR = Path(__file__).parent / 'static'
@@ -105,7 +106,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             error_html = """
             <!DOCTYPE html>
             <html>
-            <head><title>Error - TJM Time Calendar</title></head>
+            <head><title>Error - PTO Central</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
                 <h1 style="color: #5a6a72;">Something went wrong</h1>
                 <p>We encountered an unexpected error processing your request.</p>
@@ -373,6 +374,19 @@ def admin_policy():
     if not require_auth():
         return
     admin_policy_viewer_page()
+
+
+@ui.page('/admin/testing-console')
+def admin_testing_console():
+    """Testing Console for admins - multi-user simulation and documentation generation."""
+    if not require_auth():
+        return
+    # Check for admin/superadmin role
+    user = app.storage.user.get('user')
+    if user and user.get('role') not in ['admin', 'superadmin']:
+        ui.label('Access denied. Admin or SuperAdmin role required.').classes('text-red-500 p-4')
+        return
+    testing_console_page()
 
 
 # ============================================================
@@ -700,12 +714,12 @@ def health_check():
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-    logger.info("Starting TJM Time Calendar application")
+    logger.info("Starting PTO Central application")
 
     # Build run options
     run_options = {
-        'title': 'TJM Time Calendar',
-        'favicon': STATIC_DIR / 'favicon.ico',
+        'title': 'PTO Central',
+        'favicon': STATIC_DIR / 'PTOIcon.png',
         'port': config.PORT,
         'host': config.HOST,
         'storage_secret': config.SECRET_KEY,

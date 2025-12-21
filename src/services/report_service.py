@@ -25,7 +25,7 @@ def _fmt_days(value: float) -> str:
 
 # Load TJM logo as base64 at module level
 _LOGO_BASE64 = None
-_logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+_logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
 if _logo_path.exists():
     try:
         with open(_logo_path, 'rb') as f:
@@ -75,7 +75,7 @@ class ReportService:
         # Logo HTML - embedded as base64
         logo_html = ""
         if self.LOGO_BASE64:
-            logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="TJM" style="height: 50px; width: auto;">'
+            logo_html = f'<img src="data:image/png;base64,{self.LOGO_BASE64}" alt="PTO Central" style="height: 50px; width: auto;">'
         else:
             logo_html = f'<div style="font-size: 24px; font-weight: bold; color: {self.TJM_GRAY};">TJM</div>'
 

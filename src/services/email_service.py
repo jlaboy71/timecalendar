@@ -47,7 +47,7 @@ def _format_date_range_with_days(start_date: date, end_date: date) -> str:
 def _get_logo_base64() -> str:
     """Get the TJM logo as base64 string for email embedding."""
     try:
-        logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
         with open(logo_path, 'rb') as f:
             return base64.b64encode(f.read()).decode('utf-8')
     except Exception:
@@ -67,7 +67,7 @@ def _get_email_template(title: str, title_color: str, content: str, footer_text:
     logo_base64 = _get_logo_base64()
     logo_html = ""
     if logo_base64:
-        logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="TJM Logo" style="height: 50px; width: auto; margin-bottom: 15px;">'
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="PTO Central" style="height: 50px; width: auto; margin-bottom: 15px;">'
 
     footer_html = ""
     if footer_text:
@@ -102,7 +102,7 @@ def _get_email_template(title: str, title_color: str, content: str, footer_text:
                         <!-- Footer -->
                         <tr>
                             <td style="background-color: #374151; padding: 20px; text-align: center; border-radius: 0 0 12px 12px;">
-                                <p style="margin: 0; color: #6b7280; font-size: 12px;">TJM Time Calendar</p>
+                                <p style="margin: 0; color: #6b7280; font-size: 12px;">PTO Central</p>
                                 <p style="margin: 5px 0 0 0; color: #4b5563; font-size: 11px;">This is an automated notification</p>
                             </td>
                         </tr>
@@ -125,7 +125,7 @@ class EmailService:
         self.smtp_user = os.getenv('SMTP_USER', '')
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
         self.from_email = os.getenv('EMAIL_FROM', 'noreply@tjm.com')
-        self.from_name = os.getenv('EMAIL_FROM_NAME', 'TJM Calendar')
+        self.from_name = os.getenv('EMAIL_FROM_NAME', 'PTO Central')
         self.enabled = os.getenv('EMAIL_ENABLED', 'false').lower() == 'true'
 
         # Format the From address with display name
@@ -185,7 +185,7 @@ class EmailService:
         """Send confirmation email when PTO request is submitted."""
         pto_icon = _get_pto_type_icon(pto_type)
         pto_label = pto_type.replace('_', ' ').title()
-        subject = f"TJM Time Calendar: Your {pto_label} Request Submitted"
+        subject = f"PTO Central: Your {pto_label} Request Submitted"
 
         date_range = _format_date_range_with_days(start_date, end_date)
 
@@ -246,7 +246,7 @@ class EmailService:
         """Send email when PTO request is approved."""
         pto_icon = _get_pto_type_icon(pto_type)
         pto_label = pto_type.replace('_', ' ').title()
-        subject = f"TJM Time Calendar: Your {pto_label} Request Approved"
+        subject = f"PTO Central: Your {pto_label} Request Approved"
 
         date_range = _format_date_range_with_days(start_date, end_date)
 
@@ -312,7 +312,7 @@ class EmailService:
         """Send email when PTO request is denied."""
         pto_icon = _get_pto_type_icon(pto_type)
         pto_label = pto_type.replace('_', ' ').title()
-        subject = f"TJM Time Calendar: Your {pto_label} Request Denied"
+        subject = f"PTO Central: Your {pto_label} Request Denied"
 
         date_range = _format_date_range_with_days(start_date, end_date)
 
@@ -376,7 +376,7 @@ class EmailService:
         """Send email to manager when new PTO request needs approval."""
         pto_icon = _get_pto_type_icon(pto_type)
         pto_label = pto_type.replace('_', ' ').title()
-        subject = f"TJM Time Calendar: New {pto_label} Request from {employee_name}"
+        subject = f"PTO Central: New {pto_label} Request from {employee_name}"
 
         date_range = _format_date_range_with_days(start_date, end_date)
 
@@ -424,7 +424,7 @@ class EmailService:
             title="New Request Pending",
             title_color="#f59e0b",
             content=content,
-            footer_text="Please log in to TJM Time Calendar to approve or deny this request."
+            footer_text="Please log in to PTO Central to approve or deny this request."
         )
         return self._send_email(manager_email, subject, html)
 
@@ -441,7 +441,7 @@ class EmailService:
         """Send email to manager when an employee cancels their approved PTO."""
         pto_icon = _get_pto_type_icon(pto_type)
         pto_label = pto_type.replace('_', ' ').title()
-        subject = f"TJM Time Calendar: {employee_name} Cancelled Approved {pto_label}"
+        subject = f"PTO Central: {employee_name} Cancelled Approved {pto_label}"
 
         date_range = _format_date_range_with_days(start_date, end_date)
 

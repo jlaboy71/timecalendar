@@ -96,3 +96,10 @@ certs/
 *.pem
 *.key
 *.crt
+
+# Testing secrets
+.env.testing
+
+# Generated test outputs (screenshots, docs, audio, video)
+nicegui_app/static/help/
+static/help/

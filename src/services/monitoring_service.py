@@ -104,10 +104,10 @@ class MonitoringService:
         # Build alert content
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        subject = f"[TJM Calendar ALERT] {error_type}: {error_message[:50]}"
+        subject = f"[PTO Central ALERT] {error_type}: {error_message[:50]}"
 
         body_parts = [
-            f"<h2>TJM Time Calendar - Critical Error Alert</h2>",
+            f"<h2>PTO Central - Critical Error Alert</h2>",
             f"<p><strong>Time:</strong> {timestamp}</p>",
             f"<p><strong>Error Type:</strong> {error_type}</p>",
             f"<p><strong>Message:</strong> {error_message}</p>",
@@ -123,7 +123,7 @@ class MonitoringService:
             body_parts.append(f"<h3>Details</h3><pre>{error_details}</pre>")
 
         body_parts.append(
-            "<hr><p><em>This is an automated alert from TJM Time Calendar. "
+            "<hr><p><em>This is an automated alert from PTO Central."
             f"Alert count for this error type: {self._alert_counts[error_type] + 1}</em></p>"
         )
 

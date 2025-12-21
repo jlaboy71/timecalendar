@@ -21,7 +21,7 @@ class ExportService:
     @staticmethod
     def _get_logo_path() -> Path:
         """Get the path to the TJM logo."""
-        return Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'TJMLogo.png'
+        return Path(__file__).parent.parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
 
     @staticmethod
     def generate_analytics_pdf(
@@ -156,7 +156,7 @@ class ExportService:
         # Footer
         elements.append(Spacer(1, 30))
         elements.append(Paragraph(
-            "TJM Time Calendar - Confidential",
+            "PTO Central - Confidential",
             ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
         ))
 
@@ -352,7 +352,7 @@ class ExportService:
         # Footer
         elements.append(Spacer(1, 30))
         elements.append(Paragraph(
-            "TJM Time Calendar - Confidential",
+            "PTO Central - Confidential",
             ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
         ))
 

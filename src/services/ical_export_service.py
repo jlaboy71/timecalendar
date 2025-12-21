@@ -27,7 +27,7 @@ class ICalExportService:
         department_id: Optional[int] = None,
         include_holidays: bool = True,
         include_pto: bool = True,
-        calendar_name: str = "TJM Time Calendar"
+        calendar_name: str = "PTO Central"
     ) -> str:
         """
         Generate iCal content for the specified date range.
@@ -170,7 +170,7 @@ class ICalExportService:
         lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//TJM Holdings//TJM Time Calendar//EN',
+            'PRODID:-//TJM Holdings//PTO Central//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             f'X-WR-CALNAME:{calendar_name}',

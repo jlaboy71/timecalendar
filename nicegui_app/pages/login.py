@@ -15,10 +15,9 @@ def login_page(timeout: str = None):
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
         with ui.card().classes('w-96 p-8 animate-fade-in-up'):
-            # Logo and title
+            # Logo
             with ui.column().classes('w-full items-center mb-6'):
-                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto; margin-bottom: 16px;')
-                ui.label('TJM TIME CALENDAR').classes('text-xl font-bold text-center').style('color: #5a6a72;')
+                ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto;')
 
             # Show timeout message if session expired
             if timeout == '1':

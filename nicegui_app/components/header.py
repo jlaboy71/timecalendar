@@ -37,7 +37,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
 
     Args:
         title: Optional page title to show (e.g., 'REPORTS', 'REQUEST TIME OFF')
-        show_back: Whether to show back button
+        show_back: Whether to show back button (appears before title)
         back_url: Optional fallback URL (if provided, uses direct navigation instead of history.back())
     """
     user = app.storage.user.get('user')
@@ -53,18 +53,18 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
     is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
     greeting_color = '#C9A227' if is_dark else '#5a6a72'
 
-    with ui.row().classes('w-full justify-between items-start mb-6 no-print'):
-        with ui.column().classes('gap-1'):
-            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto; cursor: pointer;').on('click', lambda: ui.navigate.to('/dashboard'))
+    with ui.row().classes('w-full justify-between items-center mb-6 no-print'):
+        # Left side: Logo + Title in a row
+        with ui.row().classes('items-center gap-4'):
+            ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 70px; width: auto; cursor: pointer;').on('click', lambda: ui.navigate.to('/dashboard'))
             if title:
-                with ui.row().classes('items-center gap-2').style('padding-left: 52px; margin-top: -8px;'):
-                    if show_back:
-                        # Use browser history back for natural navigation, or fallback URL if specified
-                        if back_url:
-                            ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to(back_url)).props('flat round dense aria-label="Go back"')
-                        else:
-                            ui.button(icon='arrow_back', on_click=go_back).props('flat round dense aria-label="Go back"')
-                    ui.label(title).classes('text-lg font-bold uppercase').style(f'color: {greeting_color};')
+                # Optional back button + title
+                if show_back:
+                    if back_url:
+                        ui.button(icon='arrow_back', on_click=lambda: ui.navigate.to(back_url)).props('flat round dense aria-label="Go back"')
+                    else:
+                        ui.button(icon='arrow_back', on_click=go_back).props('flat round dense aria-label="Go back"')
+                ui.label(title).classes('text-xl font-bold uppercase').style(f'color: {greeting_color};')
 
         # Define logout handler before using it
         def do_logout():

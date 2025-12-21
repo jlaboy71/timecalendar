@@ -229,7 +229,7 @@ def admin_system_page():
                             ('event_repeat', 'Year-End', 'EOY processing status', '/admin/year-end'),
                             ('analytics', 'Analytics', 'Usage insights', '/analytics'),
                             ('assessment', 'Reports', 'Generate reports', '/reports'),
-                            ('approval', 'Approvals', 'Pending requests', '/admin/approvals'),
+                            ('movie', 'Studio', 'Testing console', '/admin/testing-console'),
                             ('verified', 'Policy Reference', 'Formulas & business rules', '/admin/policy'),
                         ]
                         for icon, title, desc, url in nav_items:
@@ -255,7 +255,7 @@ def admin_system_page():
                             # App version
                             with ui.row().classes('items-center gap-2'):
                                 ui.icon('info', size='xs').classes('opacity-40')
-                                ui.label('TJM Calendar v1.0').classes('text-xs opacity-40')
+                                ui.label('PTO Central v1.0').classes('text-xs opacity-40')
                         # Refresh button
                         ui.button('Refresh Dashboard', icon='refresh', on_click=lambda: ui.navigate.to('/admin/system')).props('flat dense size=sm').style('color: #C9A227 !important;')
 
@@ -490,12 +490,18 @@ def admin_system_page():
                         ui.label('Data Integrity Check').classes('text-lg font-semibold')
                         create_help_button(
                             'Data Integrity Check',
-                            'Verify the integrity of your PTO balance data.<br><br>'
-                            '<b>Checks performed:</b><br>'
-                            '• <b>Stale Pending</b> - Detects pending balances that don\'t match actual pending requests<br>'
-                            '• <b>Orphaned Requests</b> - Finds PTO requests without valid users<br>'
-                            '• <b>Negative Balances</b> - Identifies unexpected negative balances<br>'
-                            '• <b>Formula Integrity</b> - Verifies balance calculations are correct<br><br>'
+                            'Comprehensive integrity and policy validation for your PTO data.<br><br>'
+                            '<b>Data Consistency Checks (7):</b><br>'
+                            '• <b>Stale Pending (4)</b> - Vacation/Sick/Personal/Chicago pending vs actual requests<br>'
+                            '• <b>Orphaned Requests</b> - PTO requests referencing deleted users<br>'
+                            '• <b>Orphaned Balances</b> - PTO balances referencing deleted users<br>'
+                            '• <b>Formula Integrity</b> - Verifies available = total + carryover - used - pending<br><br>'
+                            '<b>Policy Validation Checks (5):</b><br>'
+                            '• <b>Negative Balances</b> - Warns about extreme vacation overdraft (>160hrs)<br>'
+                            '• <b>Hard Cap Violations</b> - Sick/Personal/Chicago cannot be negative<br>'
+                            '• <b>Backdated Auto-Approve</b> - Backdated requests should not self-approve<br>'
+                            '• <b>Request Date Limits</b> - 7-day backdate and 5-year future limits<br>'
+                            '• <b>Approved Metadata</b> - Approved requests must have approver recorded<br><br>'
                             '<b>How to use:</b><br>'
                             '• Click "Run Integrity Check" to scan for issues<br>'
                             '• Review any issues found in the results panel<br>'
@@ -540,15 +546,19 @@ def admin_system_page():
                                     ui.label(f'Run: {results["timestamp"][:19]}').classes('text-xs opacity-50')
 
                                 # Individual check results
-                                with ui.expansion('Check Details', icon='checklist').classes('w-full mb-4'):
+                                with ui.expansion('Check Details (12 checks)', icon='checklist').classes('w-full mb-4'):
                                     for check in results['checks']:
                                         check_icon = 'check_circle' if check['status'] == 'PASS' else 'error' if check['status'] == 'FAIL' else 'warning'
                                         check_color = 'green' if check['status'] == 'PASS' else 'red' if check['status'] == 'FAIL' else 'amber'
-                                        with ui.row().classes('w-full items-center gap-3 p-2 border-b'):
-                                            ui.icon(check_icon, color=check_color, size='xs')
-                                            ui.label(check['name']).classes('flex-1')
-                                            ui.badge(check['status'], color=check_color).props('dense')
-                                            ui.label(check.get('details', '')).classes('text-xs opacity-50')
+                                        with ui.column().classes('w-full p-2 border-b gap-1'):
+                                            with ui.row().classes('w-full items-center gap-3'):
+                                                ui.icon(check_icon, color=check_color, size='xs')
+                                                ui.label(check['name']).classes('font-medium flex-1')
+                                                ui.badge(check['status'], color=check_color).props('dense')
+                                            # Show description if available
+                                            if check.get('description'):
+                                                ui.label(check['description']).classes('text-xs opacity-60 ml-6')
+                                            ui.label(check.get('details', '')).classes('text-xs opacity-40 ml-6')
 
                                 # Issues list (if any)
                                 if results['issues']:
@@ -596,7 +606,7 @@ def admin_system_page():
                         with ui.row().classes('w-full items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg'):
                             with ui.column():
                                 ui.label('Click to run integrity checks on your PTO balance data').classes('text-sm')
-                                ui.label('Checks for stale pending, orphaned requests, and formula integrity').classes('text-xs opacity-50')
+                                ui.label('12 checks: data consistency, policy validation, and formula integrity').classes('text-xs opacity-50')
                             ui.button('Run Integrity Check', icon='play_arrow', on_click=run_integrity_check).props('color=teal')
 
                 # Market Calendar Sync Card with Visual Feedback
@@ -1121,7 +1131,7 @@ def admin_system_page():
                                 </table>
                             </div>
                             """
-                            return _get_email_template(title="New Request Pending", title_color="#f59e0b", content=content, footer_text="Please log in to TJM Time Calendar to approve or deny this request.")
+                            return _get_email_template(title="New Request Pending", title_color="#f59e0b", content=content, footer_text="Please log in to PTO Central to approve or deny this request.")
 
                         elif email_type == 'cancelled':
                             content = f"""
@@ -1223,8 +1233,8 @@ def admin_system_page():
                                 from src.services.email_service import email_service
                                 success = email_service.send_email(
                                     to_email=test_email_input.value,
-                                    subject='TJM Calendar - Test Email',
-                                    body='This is a test email from the TJM Time Calendar system.\n\nIf you received this, your email configuration is working correctly!'
+                                    subject='PTO Central - Test Email',
+                                    body='This is a test email from PTO Central.\n\nIf you received this, your email configuration is working correctly!'
                                 )
                                 if success:
                                     show_success_dialog('Email Sent', 'Test email sent successfully!')
@@ -1563,27 +1573,22 @@ def admin_system_page():
                                         ui.button('Analyze Selection', icon='psychology', on_click=analyze_selection).props('color=secondary')
 
                     def run_ai_analysis(content: str, is_selection: bool = False):
-                        """Run AI analysis on log content."""
-                        ai_analysis_container.clear()
-                        ai_analysis_container.set_visibility(True)
-
-                        # Show loading state
-                        with ai_analysis_container:
-                            with ui.card().classes('w-full p-4 border-l-4 border-blue-500'):
-                                with ui.row().classes('items-center gap-2'):
-                                    ui.spinner('dots', size='sm')
-                                    ui.label('Analyzing logs... This may take a moment.').classes('text-sm')
+                        """Run AI analysis on log content - shows results in popup dialog."""
+                        # Create loading dialog
+                        with ui.dialog() as loading_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 300px;'):
+                            with ui.row().classes('items-center gap-3'):
+                                ui.spinner('dots', size='lg', color='purple')
+                                ui.label('Analyzing logs...').classes('text-lg')
+                            ui.label('This may take a moment.').classes('text-sm opacity-70 mt-2')
+                        loading_dialog.open()
 
                         try:
                             import anthropic
                             api_key = os.getenv('ANTHROPIC_API_KEY')
 
                             if not api_key:
-                                ai_analysis_container.clear()
-                                with ai_analysis_container:
-                                    with ui.card().classes('w-full p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-900/20'):
-                                        ui.label('AI Analysis Unavailable').classes('font-semibold text-amber-700 dark:text-amber-400')
-                                        ui.label('ANTHROPIC_API_KEY not configured in .env file.').classes('text-sm')
+                                loading_dialog.close()
+                                show_warning_dialog('AI Analysis Unavailable', 'ANTHROPIC_API_KEY not configured in .env file.')
                                 return
 
                             client = anthropic.Anthropic(api_key=api_key)
@@ -1634,29 +1639,26 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                             )
 
                             analysis_text = response.content[0].text
+                            loading_dialog.close()
 
-                            ai_analysis_container.clear()
-                            with ai_analysis_container:
-                                with ui.card().classes('w-full p-4 border-l-4 border-green-500 bg-green-50 dark:bg-green-900/10'):
-                                    with ui.row().classes('w-full justify-between items-center mb-3'):
-                                        with ui.row().classes('items-center gap-2'):
-                                            ui.icon('check_circle', color='green')
-                                            ui.label('AI Analysis Complete').classes('font-semibold text-green-700 dark:text-green-400')
-                                        ui.label(f'{"Selection" if is_selection else "Full Log"} Analysis').classes('text-xs opacity-60')
+                            # Show results in popup dialog
+                            analysis_type = 'Selection' if is_selection else 'Full Log'
+                            with ui.dialog() as result_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 600px; max-width: 800px; max-height: 80vh;'):
+                                with ui.row().classes('w-full justify-between items-center mb-4'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('smart_toy', color='purple', size='md')
+                                        ui.label(f'AI Log Analysis').classes('text-xl font-semibold')
+                                    ui.badge(f'{analysis_type}', color='purple').props('dense')
 
+                                with ui.scroll_area().classes('w-full').style('max-height: 60vh;'):
                                     ui.markdown(analysis_text).classes('text-sm')
 
-                                    with ui.row().classes('w-full justify-end mt-3'):
-                                        ui.button('Close', icon='close', on_click=lambda: ai_analysis_container.set_visibility(False)).props('flat dense')
-
-                            show_success_dialog('Analysis Complete', 'Storage analysis completed')
+                                with ui.row().classes('w-full justify-end mt-4 gap-2'):
+                                    ui.button('Close', icon='close', on_click=result_dialog.close).props('flat')
+                            result_dialog.open()
 
                         except Exception as e:
-                            ai_analysis_container.clear()
-                            with ai_analysis_container:
-                                with ui.card().classes('w-full p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20'):
-                                    ui.label('Analysis Failed').classes('font-semibold text-red-700 dark:text-red-400')
-                                    ui.label(f'Error: {str(e)}').classes('text-sm')
+                            loading_dialog.close()
                             show_error_dialog('Analysis Failed', f'Error during log analysis: {str(e)}')
 
                 # ========== SETTINGS SECTION ==========

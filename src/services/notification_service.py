@@ -348,7 +348,7 @@ class NotificationService:
                     </tr>
                     {rows}
                 </table>
-                <p style="margin-top: 20px;">Please log in to TJM Time Calendar to review pending requests.</p>
+                <p style="margin-top: 20px;">Please log in to PTO Central to review pending requests.</p>
             </div>
         </body>
         </html>

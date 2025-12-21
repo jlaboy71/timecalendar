@@ -99,7 +99,7 @@ class AlertService:
             from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
 
-            subject = f"[TJM Calendar ALERT] {error_type}: {message[:50]}"
+            subject = f"[PTO Central ALERT] {error_type}: {message[:50]}"
 
             # Build HTML email
             details_html = ""
@@ -116,7 +116,7 @@ class AlertService:
             <html>
             <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <div style="background-color: #ef4444; color: white; padding: 20px; text-align: center;">
-                    <h1 style="margin: 0;">TJM Calendar Alert</h1>
+                    <h1 style="margin: 0;">PTO Central Alert</h1>
                 </div>
                 <div style="padding: 20px;">
                     <p><strong>Error Type:</strong> {error_type}</p>
@@ -126,7 +126,7 @@ class AlertService:
                     {details_html}
                 </div>
                 <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px;">
-                    This is an automated alert from TJM Time Calendar.
+                    This is an automated alert from PTO Central.
                     Alert rate limit: 1 per error type per hour.
                 </div>
             </body>
