@@ -1,4 +1,4 @@
-"""Logo helper module for PTO Central (TJM Time Calendar)."""
+"""Logo helper module for PTO Central."""
 import base64
 from pathlib import Path
 

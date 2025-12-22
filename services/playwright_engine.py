@@ -44,6 +44,7 @@ class StepResult:
     success: bool = True
     error_message: Optional[str] = None
     selector_used: Optional[str] = None
+    element_bbox: Optional[Dict[str, float]] = None  # {x, y, width, height} of interacted element
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -60,6 +61,7 @@ class StepResult:
             'screenshot_path': str(self.screenshot_path) if self.screenshot_path else None,
             'success': self.success,
             'error_message': self.error_message,
+            'element_bbox': self.element_bbox,
             'metadata': self.metadata
         }
 
@@ -96,6 +98,17 @@ class ScenarioResult:
 
 
 @dataclass
+class SetupAction:
+    """
+    Pre-scenario setup action to create required test data.
+    Runs before the browser automation starts.
+    """
+    action_type: str  # 'create_pto_request', 'create_user', 'create_carryover_request', etc.
+    params: Dict[str, Any] = field(default_factory=dict)
+    description: str = ""  # Human-readable description of what this does
+
+
+@dataclass
 class ScenarioStep:
     """Definition of a single step in a scenario"""
     step_id: str
@@ -127,6 +140,10 @@ class Scenario:
     default_account: str  # Default test account to use
     steps: List[ScenarioStep] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
+    # Setup actions run before browser automation to create required test data
+    setup_actions: List[SetupAction] = field(default_factory=list)
+    # Whether to clean up test data after scenario completes
+    cleanup_after: bool = True
 
 
 class PlaywrightEngine:
@@ -136,7 +153,7 @@ class PlaywrightEngine:
 
     Usage:
         engine = PlaywrightEngine()
-        result = engine.run_scenario_sync(scenario, 'techuser')
+        result = engine.run_scenario_sync(scenario, 'ptouser')
     """
 
     def __init__(self, config=None):
@@ -181,11 +198,14 @@ class PlaywrightEngine:
                     video_dir.mkdir(parents=True, exist_ok=True)
 
                 # Create browser context
+                # CRITICAL: device_scale_factor=1 forces 100% DPI rendering
+                # This prevents Windows display scaling from shrinking content
                 context_options = {
                     'viewport': {
                         'width': self.config.viewport_width,
                         'height': self.config.viewport_height
                     },
+                    'device_scale_factor': 1,  # Force 100% DPI - fixes Windows scaling
                     'ignore_https_errors': self.config.ignore_https_errors,
                 }
 
@@ -200,10 +220,84 @@ class PlaywrightEngine:
                 self.page = self.context.new_page()
                 self.page.set_default_timeout(self.config.default_timeout)
 
+                # Store cursor script for injection after each navigation
+                self._cursor_script = """
+                    (function() {
+                        // Only run in top-level frame
+                        if (window.self !== window.top) return;
+
+                        // Remove existing cursor if any (prevents duplicates)
+                        var existing = document.getElementById('pw-cursor');
+                        if (existing) existing.remove();
+
+                        // Create cursor element
+                        var cursor = document.createElement('div');
+                        cursor.id = 'pw-cursor';
+                        cursor.style.cssText = 'position:fixed;width:30px;height:30px;background:rgba(201,162,39,0.95);border:4px solid #fff;border-radius:50%;pointer-events:none;z-index:2147483647;transform:translate(-50%,-50%);box-shadow:0 0 20px rgba(201,162,39,1),0 0 40px rgba(201,162,39,0.6),0 0 8px rgba(0,0,0,0.8);left:50%;top:50%;transition:transform 0.15s,background 0.15s;';
+
+                        // Append to body (wait for body if needed)
+                        function appendCursor() {
+                            if (document.body) {
+                                document.body.appendChild(cursor);
+                                console.log('[CURSOR] Injected successfully');
+                            } else {
+                                setTimeout(appendCursor, 50);
+                            }
+                        }
+                        appendCursor();
+
+                        // Track mouse - use capture phase
+                        window.addEventListener('mousemove', function(e) {
+                            cursor.style.left = e.clientX + 'px';
+                            cursor.style.top = e.clientY + 'px';
+                        }, true);
+
+                        // Click feedback
+                        window.addEventListener('mousedown', function() {
+                            cursor.style.transform = 'translate(-50%,-50%) scale(0.6)';
+                            cursor.style.background = 'rgba(255,255,255,0.95)';
+                        }, true);
+                        window.addEventListener('mouseup', function() {
+                            cursor.style.transform = 'translate(-50%,-50%) scale(1)';
+                            cursor.style.background = 'rgba(201,162,39,0.95)';
+                        }, true);
+                    })();
+                """
+
+                # Helper to inject cursor
+                def inject_cursor():
+                    try:
+                        self.page.evaluate(self._cursor_script)
+                    except Exception as e:
+                        print(f"[CURSOR] Injection failed: {e}")
+
+                # Inject on every navigation
+                self.page.on("load", lambda: inject_cursor())
+                self.page.on("domcontentloaded", lambda: inject_cursor())
+
                 # Login
                 login_success = self._login(account)
                 if not login_success:
                     raise Exception(f"Failed to login as {account.username}")
+
+                # Explicitly inject cursor after login (dashboard is now loaded)
+                time.sleep(1)  # Wait for page to stabilize
+                inject_cursor()
+
+                # Verify cursor was injected
+                cursor_exists = self.page.evaluate("!!document.getElementById('pw-cursor')")
+                print(f"[CURSOR] Injection verified: {cursor_exists}")
+
+                # Activate cursor by moving mouse to center of viewport
+                # This triggers the mousemove listener and makes cursor visible
+                try:
+                    center_x = self.config.viewport_width / 2
+                    center_y = self.config.viewport_height / 2
+                    self.page.mouse.move(center_x, center_y, steps=20)
+                    time.sleep(0.5)  # Let cursor settle
+                    print(f"[CURSOR] Mouse moved to center ({center_x}, {center_y})")
+                except Exception as e:
+                    print(f"[CURSOR] Mouse move failed: {e}")
 
                 # Record scenario start time
                 self._scenario_start_time = time.time()
@@ -314,6 +408,22 @@ class PlaywrightEngine:
         )
 
         try:
+            # Capture element bounding box before action (for video effects)
+            if step.selector:
+                try:
+                    locator = self.page.locator(step.selector).first
+                    if locator.count() > 0:
+                        bbox = locator.bounding_box()
+                        if bbox:
+                            result.element_bbox = {
+                                'x': bbox['x'],
+                                'y': bbox['y'],
+                                'width': bbox['width'],
+                                'height': bbox['height']
+                            }
+                except Exception:
+                    pass  # Element may not be visible yet
+
             # Execute the action
             if step.action == 'navigate':
                 url = step.url or self.config.base_url
@@ -325,26 +435,87 @@ class PlaywrightEngine:
                     # Focus and highlight element before clicking
                     if step.focus_element:
                         self._focus_element(step.selector)
+
+                    # Smooth mouse movement to element center (for visible cursor in video)
+                    try:
+                        locator = self.page.locator(step.selector).first
+                        if locator.count() > 0:
+                            bbox = locator.bounding_box()
+                            if bbox:
+                                # Calculate element center
+                                center_x = bbox['x'] + bbox['width'] / 2
+                                center_y = bbox['y'] + bbox['height'] / 2
+                                # Move mouse smoothly to center (50 interpolated steps)
+                                self.page.mouse.move(center_x, center_y, steps=50)
+                                time.sleep(0.3)  # Pause so viewer sees cursor arrive
+                    except Exception:
+                        pass  # Continue even if mouse move fails
+
                     self.page.click(step.selector)
                     time.sleep(1)  # Allow page to update
+                    # Re-capture bbox after click in case element moved
+                    try:
+                        locator = self.page.locator(step.selector).first
+                        if locator.count() > 0:
+                            bbox = locator.bounding_box()
+                            if bbox:
+                                result.element_bbox = {
+                                    'x': bbox['x'],
+                                    'y': bbox['y'],
+                                    'width': bbox['width'],
+                                    'height': bbox['height']
+                                }
+                    except Exception:
+                        pass
 
             elif step.action == 'fill':
                 if step.selector and step.value is not None:
                     if step.focus_element:
                         self._focus_element(step.selector)
+
+                    # Smooth mouse movement to input field
+                    try:
+                        locator = self.page.locator(step.selector).first
+                        if locator.count() > 0:
+                            bbox = locator.bounding_box()
+                            if bbox:
+                                center_x = bbox['x'] + bbox['width'] / 2
+                                center_y = bbox['y'] + bbox['height'] / 2
+                                self.page.mouse.move(center_x, center_y, steps=50)
+                                time.sleep(0.3)
+                    except Exception:
+                        pass
+
                     self.page.fill(step.selector, step.value)
 
             elif step.action == 'select':
                 if step.selector and step.value:
                     if step.focus_element:
                         self._focus_element(step.selector)
+
+                    # Smooth mouse movement to select field
+                    try:
+                        locator = self.page.locator(step.selector).first
+                        if locator.count() > 0:
+                            bbox = locator.bounding_box()
+                            if bbox:
+                                center_x = bbox['x'] + bbox['width'] / 2
+                                center_y = bbox['y'] + bbox['height'] / 2
+                                self.page.mouse.move(center_x, center_y, steps=50)
+                                time.sleep(0.3)
+                    except Exception:
+                        pass
+
                     self.page.select_option(step.selector, step.value)
 
             elif step.action == 'wait':
                 time.sleep(step.wait_time)
 
             elif step.action == 'screenshot':
-                pass  # Just take screenshot, handled below
+                # Scroll to element if specified (critical for capturing full page sections)
+                if step.selector and step.focus_element:
+                    self._focus_element(step.selector)
+                    time.sleep(0.5)  # Wait for scroll animation to complete
 
             # Wait after action
             if step.wait_time > 0:
@@ -636,7 +807,7 @@ def get_pto_request_scenario() -> Scenario:
         name="Submit PTO Request",
         description="Employee submits a new PTO request through the calendar interface",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "pto", "request", "core-workflow"],
         steps=[
             ScenarioStep(
@@ -731,20 +902,35 @@ def get_pto_request_scenario() -> Scenario:
 def get_manager_approval_scenario() -> Scenario:
     """
     Scenario: Manager reviews and approves a PTO request
+    Requires: A pending PTO request from a team member
     """
     return Scenario(
         scenario_id="manager-approval",
         name="Manager Approval Workflow",
         description="Manager reviews pending requests and approves or denies them",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "approval", "workflow"],
+        # Setup: Create a pending request for the manager to approve
+        setup_actions=[
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'vacation',
+                    'days': 2,
+                    'status': 'pending',
+                    'start_offset': 14  # Two weeks from now
+                },
+                description="Create pending vacation request from employee"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
                 title="Manager Login",
                 description="Manager logs into the application",
-                script="As a manager, log in to access your approval queue.",
+                script="Welcome to PTO Central. As a manager, you'll review and approve time-off requests from your team. Let's log in.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -752,7 +938,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="dashboard",
                 title="Manager Dashboard",
                 description="Manager dashboard shows pending approvals count",
-                script="Your manager dashboard displays the number of pending requests awaiting your review.",
+                script="Your manager dashboard shows you have a pending vacation request awaiting your review. Notice the pending count indicator.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -760,7 +946,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="click-approvals",
                 title="Access Pending Requests",
                 description="Navigate to the pending requests section",
-                script="Click on the Pending Requests section to view requests awaiting your decision.",
+                script="Click on the Pending Requests section to see the full details of requests awaiting your decision.",
                 action="click",
                 selector="button:has-text('View All'), button:has-text('Pending'), .cursor-pointer:has-text('Pending')",
                 wait_time=2.0
@@ -769,7 +955,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="approval-queue",
                 title="View Pending Requests",
                 description="List of all pending PTO requests from team members",
-                script="The approval queue shows all pending requests from your team members with key details.",
+                script="Here's the approval queue. You can see a two-day vacation request from a team member scheduled for two weeks from now.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -777,7 +963,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="select-request",
                 title="Select Request to Review",
                 description="Click on a request to view details",
-                script="Click on a request to view the full details before making your decision.",
+                script="Click on the request to review the complete details, including the employee's current balance and team coverage.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -785,7 +971,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="review-details",
                 title="Review Request Details",
                 description="Review employee details, dates, and team coverage",
-                script="Review the employee's balance, requested dates, and team coverage before approving.",
+                script="Review the employee's available balance, the requested dates, and check if there are any coverage conflicts with other team members.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -793,7 +979,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="approve-action",
                 title="Approve or Deny",
                 description="Make approval decision",
-                script="Click Approve to grant the request, or Deny with a reason if you cannot approve.",
+                script="Once you've reviewed the request, click Approve to grant the time off, or Deny if there's a coverage issue.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -801,7 +987,7 @@ def get_manager_approval_scenario() -> Scenario:
                 step_id="confirmation",
                 title="Decision Confirmed",
                 description="Confirmation of the approval action",
-                script="Your decision has been recorded and the employee will be notified automatically.",
+                script="Your decision has been recorded. The employee receives an automatic email notification with your response.",
                 action="screenshot",
                 wait_time=2.0
             )
@@ -818,7 +1004,7 @@ def get_admin_user_management_scenario() -> Scenario:
         name="Admin User Management",
         description="Administrator creates and manages user accounts",
         required_role="admin",
-        default_account="netadmin",
+        default_account="ptoadmin",
         tags=["admin", "users", "management"],
         steps=[
             ScenarioStep(
@@ -875,7 +1061,7 @@ def get_calendar_navigation_scenario() -> Scenario:
         name="Calendar Navigation",
         description="Learn how to view, navigate, and understand the PTO calendar",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "calendar", "navigation", "tutorial"],
         steps=[
             ScenarioStep(
@@ -952,20 +1138,57 @@ def get_calendar_navigation_scenario() -> Scenario:
 def get_filter_requests_scenario() -> Scenario:
     """
     Scenario: Filter PTO requests by type and status
+    Requires: Multiple historical requests to filter
     """
     return Scenario(
         scenario_id="filter-requests",
         name="Filter PTO Requests",
         description="Learn how to filter and search PTO requests by type, status, and date range",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "filter", "search", "requests"],
+        # Setup: Create multiple requests with different types and statuses to demonstrate filtering
+        setup_actions=[
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'vacation',
+                    'days': 3,
+                    'status': 'approved',
+                    'start_offset': -30  # Past request
+                },
+                description="Create past approved vacation"
+            ),
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'sick',
+                    'days': 1,
+                    'status': 'approved',
+                    'start_offset': -14
+                },
+                description="Create past approved sick day"
+            ),
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'vacation',
+                    'days': 2,
+                    'status': 'pending',
+                    'start_offset': 21
+                },
+                description="Create future pending vacation"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
                 title="Login to Application",
-                description="Access the TJM Time Calendar",
-                script="Log in to access your request history and filtering options.",
+                description="Access the PTO Central",
+                script="Welcome to PTO Central. Let's learn how to filter and search through your request history.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -982,7 +1205,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="requests-list",
                 title="Request History",
                 description="View all your PTO requests",
-                script="Your request history shows all submitted requests with their current status.",
+                script="Here's your request history. You can see a mix of vacation, sick, and other leave types with different statuses.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -990,7 +1213,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="filter-section",
                 title="Filter Controls",
                 description="The filtering options at the top",
-                script="Use the filter controls at the top to narrow down your request list.",
+                script="The filter controls at the top let you quickly find specific requests. Let's try filtering by leave type.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -998,7 +1221,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="filter-by-type",
                 title="Filter by Leave Type",
                 description="Select a specific leave type to filter",
-                script="Click the Leave Type dropdown to filter by Vacation, Sick, Personal, or other leave types.",
+                script="Click the Leave Type dropdown to see your options. You can filter by Vacation, Sick, Personal, or other leave types.",
                 action="click",
                 selector=".q-select:has-text('Type'), .q-select:has-text('Leave'), select[name*='type']",
                 wait_time=1.5
@@ -1007,7 +1230,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="select-vacation",
                 title="Select Vacation Type",
                 description="Choose Vacation to see only vacation requests",
-                script="Select Vacation to filter the list to show only your vacation requests.",
+                script="Select Vacation to filter the list. This is helpful when you want to see only your vacation days.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1015,7 +1238,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="filtered-results",
                 title="Filtered Results",
                 description="View the filtered request list",
-                script="The list now shows only vacation requests. Notice the count updates to reflect the filter.",
+                script="Now you see only vacation requests. The count at the top updates to show how many match your filter.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1023,7 +1246,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="filter-by-status",
                 title="Filter by Status",
                 description="Add status filter to narrow further",
-                script="You can also filter by status to see only Pending, Approved, or Denied requests.",
+                script="You can combine filters. Add a status filter to see only Pending, Approved, or Denied vacation requests.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1031,7 +1254,7 @@ def get_filter_requests_scenario() -> Scenario:
                 step_id="clear-filters",
                 title="Clear All Filters",
                 description="Reset filters to see all requests",
-                script="Click Clear or the X buttons to remove filters and see all requests again.",
+                script="To see all requests again, click Clear or remove individual filters using the X buttons.",
                 action="screenshot",
                 wait_time=2.0
             )
@@ -1042,20 +1265,32 @@ def get_filter_requests_scenario() -> Scenario:
 def get_team_calendar_scenario() -> Scenario:
     """
     Scenario: Manager views team calendar and coverage
+    Requires: Approved and pending requests from team members to display
     """
     return Scenario(
         scenario_id="team-calendar",
         name="Team Calendar View",
         description="Manager views team calendar to check coverage and plan approvals",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "calendar", "team", "coverage"],
+        # Setup: Create team requests so the calendar has data to display
+        setup_actions=[
+            SetupAction(
+                action_type='create_team_requests',
+                params={
+                    'manager_username': 'ptomanager',
+                    'count': 3
+                },
+                description="Create mix of approved and pending team requests"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
                 title="Manager Login",
                 description="Log in with manager credentials",
-                script="Log in as a manager to access the team calendar and coverage views.",
+                script="Welcome to PTO Central. As a manager, you can view your entire team's time-off schedule in one place. Let's log in.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1063,7 +1298,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="dashboard",
                 title="Manager Dashboard",
                 description="View team status from dashboard",
-                script="Your dashboard shows who's currently out and upcoming absences for your team.",
+                script="Your dashboard shows team activity at a glance. You can see several team members have upcoming time off scheduled.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1071,7 +1306,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="open-team-calendar",
                 title="Open Team Calendar",
                 description="Navigate to the team calendar view",
-                script="Click on Team Calendar to see all team members' scheduled time off.",
+                script="Click on Team Calendar to see a visual overview of all scheduled time off for your team.",
                 action="click",
                 selector="a:has-text('Team Calendar'), button:has-text('Team'), .cursor-pointer:has-text('Team')",
                 wait_time=2.0
@@ -1080,7 +1315,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="team-calendar-view",
                 title="Team Calendar Overview",
                 description="View all team members' PTO on one calendar",
-                script="The team calendar shows everyone's approved and pending time off color-coded by employee.",
+                script="Here's the team calendar. Notice the mix of vacation, sick, and personal time shown with different colors for each employee.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1088,7 +1323,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="coverage-indicator",
                 title="Coverage Indicators",
                 description="Check team coverage levels",
-                script="Coverage indicators show days where too many team members are scheduled off.",
+                script="Coverage indicators help you spot days when multiple team members are scheduled off. This helps prevent understaffing.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1096,7 +1331,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="filter-by-employee",
                 title="Filter by Employee",
                 description="Show only specific team members",
-                script="Use the employee filter to focus on specific team members' schedules.",
+                script="Use the employee filter to focus on specific team members' schedules when planning projects or approving requests.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1104,7 +1339,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="hover-details",
                 title="View Request Details",
                 description="Hover or click for request details",
-                script="Hover over or click any event to see the full request details including leave type and notes.",
+                script="Click on any time-off event to see full details including the leave type, dates, and any notes the employee added.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1112,7 +1347,7 @@ def get_team_calendar_scenario() -> Scenario:
                 step_id="conflict-detection",
                 title="Conflict Detection",
                 description="Identify scheduling conflicts",
-                script="Days highlighted in red indicate potential coverage issues that need attention.",
+                script="Days highlighted in red indicate potential coverage issues. Use this to make informed approval decisions.",
                 action="screenshot",
                 wait_time=2.0
             )
@@ -1129,7 +1364,7 @@ def get_reporting_scenario() -> Scenario:
         name="PTO Reporting",
         description="Learn how to access and generate PTO reports for analysis",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "reports", "analytics", "export"],
         steps=[
             ScenarioStep(
@@ -1218,7 +1453,7 @@ def get_balance_dashboard_scenario() -> Scenario:
         name="Understanding Your Balances",
         description="Learn how to read and understand your PTO balances on the dashboard",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "dashboard", "balances", "tutorial"],
         steps=[
             ScenarioStep(
@@ -1311,7 +1546,7 @@ def get_wfh_request_scenario() -> Scenario:
         name="Work From Home Request",
         description="Submit a WFH request for special circumstances like train delays or emergencies",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "wfh", "remote", "special-circumstances", "training"],
         steps=[
             ScenarioStep(
@@ -1391,6 +1626,154 @@ def get_wfh_request_scenario() -> Scenario:
     )
 
 
+def get_wfh_swap_scenario() -> Scenario:
+    """
+    Scenario: WFH Day Swap - peer-to-peer WFH day exchange
+
+    Demonstrates how employees can swap their designated WFH days with teammates.
+    This is a peer-to-peer system - no manager approval required.
+
+    INTERACTIVE VERSION: Uses real clicks, fills, and navigation for authentic recording.
+    """
+    return Scenario(
+        scenario_id="wfh-swap",
+        name="WFH Day Swap",
+        description="Exchange your WFH day with a teammate - no manager approval needed",
+        required_role="employee",
+        default_account="ptouser01",
+        tags=["employee", "wfh", "swap", "remote", "peer-to-peer", "training"],
+        steps=[
+            # Step 1: Show dashboard (already logged in)
+            ScenarioStep(
+                step_id="dashboard",
+                title="Dashboard",
+                description="Starting from the dashboard",
+                script="Welcome to PTO Central. Let's learn how to swap your Work From Home day with a teammate.",
+                action="wait",
+                wait_time=2.0
+            ),
+            # Step 2: Click the WFH Day Swap button
+            ScenarioStep(
+                step_id="click-swap-button",
+                title="Click WFH Swap",
+                description="Click the WFH Day Swap button",
+                script="From the dashboard, click the Work From Home Day Swap button. This is a peer-to-peer feature - no manager approval required.",
+                action="click",
+                selector="button:has-text('WFH Day Swap')",
+                wait_time=3.0,
+                highlight_element=True
+            ),
+            # Step 3: View the swap page
+            ScenarioStep(
+                step_id="view-swap-page",
+                title="Swap Page",
+                description="View the WFH Swap page",
+                script="The page shows five day columns from Monday through Friday. Each column lists teammates who work from home that day. Your day is marked with a gold star.",
+                action="wait",
+                wait_time=3.0
+            ),
+            # Step 4: Click on a teammate to open dialog
+            ScenarioStep(
+                step_id="click-teammate",
+                title="Select Teammate",
+                description="Click a teammate's name",
+                script="Click on a teammate's name to open the swap request dialog. Let's click on PTO Manager who works from home on Wednesday.",
+                action="click",
+                selector=".employee-item >> nth=0",
+                wait_time=2.0
+            ),
+            # Step 5: View the dialog
+            ScenarioStep(
+                step_id="view-dialog",
+                title="Swap Dialog",
+                description="View the swap request dialog",
+                script="The dialog shows the teammate's information and available dates. You can select from the next two occurrences of their Work From Home day.",
+                action="wait",
+                wait_time=2.0
+            ),
+            # Step 6: Type a message
+            ScenarioStep(
+                step_id="type-message",
+                title="Enter Message",
+                description="Type your swap reason",
+                script="Enter your reason for the swap request. This helps your teammate understand why you need to swap days.",
+                action="fill",
+                selector="textarea",
+                value="Hi! I have a doctor appointment on my usual WFH day. Would you be willing to swap with me this week?",
+                wait_time=2.0
+            ),
+            # Step 7: Show the filled form
+            ScenarioStep(
+                step_id="review-request",
+                title="Review Request",
+                description="Review before sending",
+                script="Review your request. When ready, click Send Request. Your teammate will receive an email notification immediately.",
+                action="wait",
+                wait_time=3.0
+            ),
+            # Step 8: Close dialog (don't actually send for demo)
+            ScenarioStep(
+                step_id="close-dialog",
+                title="Close Dialog",
+                description="Close the dialog",
+                script="For this demo, we'll close the dialog. In practice, you would click Send Request to submit.",
+                action="click",
+                selector="button:has-text('Cancel')",
+                wait_time=2.0
+            ),
+            # Step 9: Show incoming requests section
+            ScenarioStep(
+                step_id="incoming-requests",
+                title="Incoming Requests",
+                description="View incoming swap requests",
+                script="When teammates request a swap with you, their requests appear in the Incoming Requests section at the top. You can accept or decline with a response message.",
+                action="wait",
+                wait_time=3.0
+            ),
+            # Step 10: Summary
+            ScenarioStep(
+                step_id="summary",
+                title="Summary",
+                description="Key takeaways",
+                script="Work From Home Day Swap is peer-to-peer with no manager approval. Click a teammate, enter your reason, and send your request. They have three business days to respond.",
+                action="wait",
+                wait_time=3.0
+            )
+        ],
+        setup_actions=[
+            # Set up WFH days for test users
+            SetupAction(
+                action_type='set_wfh_day',
+                params={
+                    'username': 'ptouser01',
+                    'wfh_day': 'monday'
+                },
+                description="Set ptouser01 WFH day to Monday"
+            ),
+            SetupAction(
+                action_type='set_wfh_day',
+                params={
+                    'username': 'ptomanager',
+                    'wfh_day': 'wednesday'
+                },
+                description="Set ptomanager WFH day to Wednesday"
+            ),
+            # Create a pending swap request so the user can see incoming requests
+            # Note: days_ahead must be within 2-week window (current week + next week)
+            SetupAction(
+                action_type='create_wfh_swap_request',
+                params={
+                    'requester_username': 'ptomanager',
+                    'target_username': 'ptouser01',
+                    'days_ahead': 5,
+                    'message': 'Hi! I have a doctor appointment on my usual WFH day. Would you be willing to swap with me?'
+                },
+                description="Create sample incoming swap request"
+            )
+        ]
+    )
+
+
 def get_leave_type_rules_scenario() -> Scenario:
     """
     Scenario: Understanding leave type rules
@@ -1401,7 +1784,7 @@ def get_leave_type_rules_scenario() -> Scenario:
         name="Leave Type Rules & Policies",
         description="Comprehensive guide to leave types, carryover rules, accrual requirements, and date restrictions",
         required_role="employee",
-        default_account="techuser",
+        default_account="ptouser",
         tags=["employee", "rules", "policy", "carryover", "training"],
         steps=[
             ScenarioStep(
@@ -1511,20 +1894,33 @@ def get_leave_type_rules_scenario() -> Scenario:
 def get_manager_carryover_scenario() -> Scenario:
     """
     Scenario: Manager approves carryover exception requests
+    Requires: Pending carryover requests from team members
     """
     return Scenario(
         scenario_id="manager-carryover",
         name="Carryover Exception Approvals",
         description="Review and approve employee vacation carryover exception requests",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "carryover", "approvals", "year-end", "training"],
+        # Setup: Create a pending carryover request for the manager to review
+        setup_actions=[
+            SetupAction(
+                action_type='create_carryover_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'hours_requested': 24,
+                    'status': 'pending'
+                },
+                description="Create pending carryover exception request"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
                 title="Manager Login",
                 description="Access the management dashboard",
-                script="As a manager, you'll approve carryover exception requests from employees who need to carry unused vacation into the next year.",
+                script="Welcome to PTO Central. As a manager, you can approve carryover exception requests from employees who need to carry unused vacation into the next year.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1532,7 +1928,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="carryover-intro",
                 title="Understanding Carryover",
                 description="What is carryover",
-                script="Carryover exceptions allow employees to carry unused vacation days into the next year as a BONUS - it doesn't reduce their new allocation.",
+                script="Carryover exceptions allow employees to carry unused vacation days into the next year as a BONUS. It doesn't reduce their new year allocation.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1540,7 +1936,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="dashboard",
                 title="Manager Dashboard",
                 description="View pending carryover requests",
-                script="Your dashboard shows any pending carryover requests awaiting your approval, separate from regular PTO requests.",
+                script="Your dashboard shows you have a pending carryover request. An employee is requesting to carry over 24 hours of unused vacation.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1548,7 +1944,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="open-carryover",
                 title="Access Carryover Queue",
                 description="Navigate to carryover management",
-                script="Click on the Carryover section to view pending exception requests from your team.",
+                script="Click on the Carryover section to review the exception request details.",
                 action="click",
                 selector="a:has-text('Carryover'), button:has-text('Carryover'), .cursor-pointer:has-text('Carryover')",
                 wait_time=2.0
@@ -1557,7 +1953,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="carryover-queue",
                 title="Carryover Request Queue",
                 description="View all pending carryover requests",
-                script="The carryover queue shows each employee's request with the hours they want to carry over and their reason.",
+                script="Here's the carryover queue. You can see the employee's request for 24 hours of exception carryover from this year to next.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1565,7 +1961,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="review-request",
                 title="Review Request Details",
                 description="Evaluate the carryover request",
-                script="Review the employee's current balance, requested hours, and reason. Consider workload and why they couldn't use the time.",
+                script="Review the employee's current balance, requested hours, and reason. Consider their workload and why they couldn't use the time this year.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1573,7 +1969,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="partial-approval",
                 title="Partial Approval Option",
                 description="You can approve partial hours",
-                script="You can approve the full amount or a partial amount. For example, approve 16 hours out of 24 requested.",
+                script="You have flexibility here. You can approve all 24 hours, a partial amount like 16 hours, or deny the request entirely.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1581,7 +1977,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="approve-deny",
                 title="Approve or Deny",
                 description="Make your decision",
-                script="Click Approve to grant the carryover exception, or Deny with a reason. The employee will be notified of your decision.",
+                script="Click Approve to grant the carryover exception, or Deny with a reason. The employee receives an automatic notification of your decision.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1589,7 +1985,7 @@ def get_manager_carryover_scenario() -> Scenario:
                 step_id="carryover-impact",
                 title="Understanding Impact",
                 description="How carryover appears",
-                script="Approved carryover hours appear as 'Exception Carryover' in the employee's balance for the next year - it's a BONUS on top of their regular allocation.",
+                script="Approved hours appear as Exception Carryover in the employee's next year balance. This is a bonus on top of their regular allocation.",
                 action="screenshot",
                 wait_time=2.0
             )
@@ -1600,14 +1996,26 @@ def get_manager_carryover_scenario() -> Scenario:
 def get_manager_team_overview_scenario() -> Scenario:
     """
     Scenario: Manager views and manages team overview
+    Requires: Team members with balances and some requests
     """
     return Scenario(
         scenario_id="manager-team-overview",
         name="Team Management Overview",
         description="View team balances, usage patterns, and manage employee time off",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "team", "balances", "management", "training"],
+        # Setup: Create team requests to show meaningful data
+        setup_actions=[
+            SetupAction(
+                action_type='create_team_requests',
+                params={
+                    'manager_username': 'ptomanager',
+                    'count': 4
+                },
+                description="Create team request data for overview"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
@@ -1681,20 +2089,35 @@ def get_manager_team_overview_scenario() -> Scenario:
 def get_manager_backdated_scenario() -> Scenario:
     """
     Scenario: Manager handles backdated request approvals
+    Requires: Pending backdated request from team member
     """
     return Scenario(
         scenario_id="manager-backdated-requests",
         name="Backdated Request Approvals",
         description="Handle requests for past dates within the 7-day window",
         required_role="manager",
-        default_account="techmanager",
+        default_account="ptomanager",
         tags=["manager", "backdated", "approvals", "policy", "training"],
+        # Setup: Create a backdated pending request
+        setup_actions=[
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'sick',
+                    'days': 1,
+                    'status': 'pending',
+                    'start_offset': -3  # 3 days ago (within 7-day window)
+                },
+                description="Create backdated sick day request"
+            )
+        ],
         steps=[
             ScenarioStep(
                 step_id="login",
                 title="Manager Login",
                 description="Access approval queue",
-                script="Backdated requests require special attention. Let's learn how to handle time-off requests for past dates.",
+                script="Welcome to PTO Central. Backdated requests require special attention. Let's learn how to handle time-off requests for past dates.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1702,7 +2125,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="backdating-rule",
                 title="7-Day Backdating Rule",
                 description="Understanding the policy",
-                script="Employees can submit requests up to 7 calendar days in the past. Beyond 7 days, they must contact you directly for manual entry.",
+                script="Employees can submit requests up to 7 calendar days in the past. This sick day request is from 3 days ago, so it's within the allowed window.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1710,7 +2133,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="approval-queue",
                 title="Pending Approvals",
                 description="View pending requests",
-                script="Backdated requests appear in your regular approval queue but are flagged with a special indicator showing they're for past dates.",
+                script="You can see a backdated sick day request in your queue. Notice how it's flagged as backdated to draw your attention.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1718,7 +2141,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="identify-backdated",
                 title="Identify Backdated Requests",
                 description="Recognize backdated requests",
-                script="Look for the 'Backdated' badge or past date indicator. These requests always require your approval, even for trusted employees.",
+                script="Look for the Backdated badge or past date indicator. These requests always require your review, even for trusted employees.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1726,7 +2149,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="review-reason",
                 title="Review the Reason",
                 description="Why was it submitted late",
-                script="Consider why the request is backdated. Common valid reasons include: forgot to submit, emergency situations, or system access issues.",
+                script="Consider why this sick day request is backdated. Common valid reasons include illness preventing immediate access, or simply forgetting to submit.",
                 action="screenshot",
                 wait_time=2.0
             ),
@@ -1734,7 +2157,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="verify-absence",
                 title="Verify the Absence",
                 description="Confirm the employee was actually out",
-                script="Verify that the employee was actually absent on those dates. Check attendance records or your memory of that period.",
+                script="Verify the employee was actually out sick that day. Check your memory of team attendance or any communications from that date.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1742,7 +2165,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="approve-backdated",
                 title="Approve or Deny",
                 description="Make your decision",
-                script="Approve if the absence was legitimate, or deny with explanation if there are concerns about the request.",
+                script="If the sick day was legitimate, click Approve. If you have concerns, you can Deny with an explanation.",
                 action="screenshot",
                 wait_time=1.5
             ),
@@ -1750,7 +2173,7 @@ def get_manager_backdated_scenario() -> Scenario:
                 step_id="beyond-7-days",
                 title="Beyond 7 Days",
                 description="Handling older requests",
-                script="For requests beyond 7 days ago, employees must contact you directly. As manager, you can submit on their behalf if needed through admin functions.",
+                script="For requests beyond 7 days ago, employees must contact you directly. You can submit on their behalf through admin functions if needed.",
                 action="screenshot",
                 wait_time=2.0
             )
@@ -1771,7 +2194,7 @@ def get_admin_department_scenario() -> Scenario:
         name="Department Management",
         description="Create, edit, and manage organizational departments",
         required_role="admin",
-        default_account="netadmin",
+        default_account="ptoadmin",
         tags=["admin", "departments", "organization", "training"],
         steps=[
             ScenarioStep(
@@ -1844,7 +2267,7 @@ def get_admin_system_settings_scenario() -> Scenario:
         name="System Administration",
         description="Configure system-wide settings, policies, and email notifications",
         required_role="admin",
-        default_account="netadmin",
+        default_account="ptoadmin",
         tags=["admin", "settings", "configuration", "training"],
         steps=[
             ScenarioStep(
@@ -1916,6 +2339,202 @@ def get_admin_system_settings_scenario() -> Scenario:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ADDITIONAL TRAINING SCENARIOS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_employee_cancel_scenario() -> Scenario:
+    """
+    Scenario: Employee cancels their pending PTO request
+    Requires: A pending PTO request to cancel
+    """
+    return Scenario(
+        scenario_id="employee-cancel-request",
+        name="Cancel Pending Request",
+        description="Employee cancels their own pending PTO request before approval",
+        required_role="employee",
+        default_account="ptouser",
+        tags=["employee", "cancel", "pending", "training"],
+        # Setup: Create a pending request for the employee to cancel
+        setup_actions=[
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'vacation',
+                    'days': 2,
+                    'status': 'pending',
+                    'start_offset': 21  # Three weeks from now
+                },
+                description="Create pending vacation request to cancel"
+            )
+        ],
+        steps=[
+            ScenarioStep(
+                step_id="login",
+                title="Login to Application",
+                description="Access your dashboard",
+                script="Welcome to PTO Central. Let's learn how to cancel a pending vacation request before your manager reviews it.",
+                action="screenshot",
+                wait_time=2.0
+            ),
+            ScenarioStep(
+                step_id="dashboard",
+                title="View Dashboard",
+                description="Dashboard shows pending requests",
+                script="Your dashboard shows you have a two-day vacation request pending approval. Let's say your plans changed and you need to cancel it.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="open-requests",
+                title="Open My Requests",
+                description="Navigate to request history",
+                script="Click on My Requests to see all your submitted requests and find the one to cancel.",
+                action="click",
+                selector="a:has-text('My Requests'), button:has-text('My Requests'), .cursor-pointer:has-text('Requests')",
+                wait_time=2.0
+            ),
+            ScenarioStep(
+                step_id="find-pending",
+                title="Find Pending Request",
+                description="Locate the request to cancel",
+                script="Here's your request history. Find the pending vacation request - it has an amber status badge showing it's still awaiting approval.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="click-cancel",
+                title="Click Cancel Button",
+                description="Cancel the pending request",
+                script="Click the Cancel button next to your pending request. You can only cancel requests before they're approved by your manager.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="confirm-cancel",
+                title="Confirm Cancellation",
+                description="Confirm you want to cancel",
+                script="Confirm the cancellation. Your 16 pending hours will be immediately returned to your available vacation balance.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="cancellation-complete",
+                title="Request Cancelled",
+                description="Cancellation confirmed",
+                script="Done! Your request status now shows Cancelled and your vacation balance has been restored. Your manager won't see this in their queue anymore.",
+                action="screenshot",
+                wait_time=2.0
+            )
+        ]
+    )
+
+
+def get_manager_deny_scenario() -> Scenario:
+    """
+    Scenario: Manager denies a PTO request with a reason
+    Requires: A pending PTO request to deny
+    """
+    return Scenario(
+        scenario_id="manager-deny-request",
+        name="Deny PTO Request",
+        description="Manager reviews and denies a PTO request, providing a reason",
+        required_role="manager",
+        default_account="ptomanager",
+        tags=["manager", "deny", "approval", "training"],
+        # Setup: Create a pending request for the manager to deny
+        setup_actions=[
+            SetupAction(
+                action_type='create_pto_request',
+                params={
+                    'employee_username': 'ptouser',
+                    'pto_type': 'vacation',
+                    'days': 5,
+                    'status': 'pending',
+                    'start_offset': 7  # One week from now
+                },
+                description="Create pending vacation request to deny"
+            )
+        ],
+        steps=[
+            ScenarioStep(
+                step_id="login",
+                title="Manager Login",
+                description="Access the approval queue",
+                script="Welcome to PTO Central. Sometimes you need to deny a PTO request. Let's learn how to do this professionally.",
+                action="screenshot",
+                wait_time=2.0
+            ),
+            ScenarioStep(
+                step_id="dashboard",
+                title="Manager Dashboard",
+                description="View pending approvals",
+                script="You have a five-day vacation request in your queue. After reviewing, you've determined there's a coverage issue for those dates.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="open-approvals",
+                title="Open Approval Queue",
+                description="Navigate to pending requests",
+                script="Click on Pending Requests to review the full details before making your decision.",
+                action="click",
+                selector="button:has-text('View All'), button:has-text('Pending'), .cursor-pointer:has-text('Pending')",
+                wait_time=2.0
+            ),
+            ScenarioStep(
+                step_id="select-request",
+                title="Select Request",
+                description="Choose the request to deny",
+                script="Review the five-day vacation request. The dates conflict with a critical project deadline and another team member's approved leave.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="review-coverage",
+                title="Review Team Coverage",
+                description="Check team availability",
+                script="The team coverage check shows too many people would be out during this period. This is a valid reason for denial.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="click-deny",
+                title="Click Deny Button",
+                description="Initiate the denial",
+                script="Click Deny to open the denial dialog. Always provide a clear, helpful reason.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="enter-reason",
+                title="Enter Denial Reason",
+                description="Provide explanation for the denial",
+                script="Enter a constructive reason like: Team coverage issue - please try different dates. Suggest alternative dates if possible.",
+                action="screenshot",
+                wait_time=2.0
+            ),
+            ScenarioStep(
+                step_id="confirm-deny",
+                title="Confirm Denial",
+                description="Submit the denial",
+                script="Click Confirm to submit the denial. The employee receives an automatic notification with your reason.",
+                action="screenshot",
+                wait_time=1.5
+            ),
+            ScenarioStep(
+                step_id="denial-complete",
+                title="Request Denied",
+                description="Denial confirmed",
+                script="The request is denied. The employee's 40 pending hours are restored to their balance and they can resubmit for different dates.",
+                action="screenshot",
+                wait_time=2.0
+            )
+        ]
+    )
+
+
 def get_all_scenarios() -> Dict[str, Scenario]:
     """Get all pre-built scenarios"""
     return {
@@ -1929,12 +2548,16 @@ def get_all_scenarios() -> Dict[str, Scenario]:
         'balance-dashboard': get_balance_dashboard_scenario(),
         # New training scenarios
         'wfh-request': get_wfh_request_scenario(),
+        'wfh-swap': get_wfh_swap_scenario(),
         'leave-type-rules': get_leave_type_rules_scenario(),
         'manager-carryover': get_manager_carryover_scenario(),
         'manager-team-overview': get_manager_team_overview_scenario(),
         'manager-backdated-requests': get_manager_backdated_scenario(),
         'admin-departments': get_admin_department_scenario(),
         'admin-system-settings': get_admin_system_settings_scenario(),
+        # Additional scenarios
+        'employee-cancel-request': get_employee_cancel_scenario(),
+        'manager-deny-request': get_manager_deny_scenario(),
     }
 
 

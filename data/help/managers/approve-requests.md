@@ -60,7 +60,7 @@ If other team members have overlapping time off:
 
 Always provide a clear reason:
 - "Insufficient coverage during this period"
-- "Please coordinate with [colleague] first"
+- "Please coordinate with [teammate] first"
 - "Business needs require your presence"
 
 ## Best Practices

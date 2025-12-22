@@ -1,4 +1,5 @@
 from nicegui import ui, app
+from sqlalchemy import select
 from src.services.balance_service import BalanceService
 from src.services.pto_service import PTOService
 from src.services.accrual_service import AccrualService
@@ -8,10 +9,11 @@ from src.services.audit_service import AuditService
 from nicegui_app.components.policy_change_indicator import whats_new_section
 from src.services.department_service import DepartmentService
 from src.services.email_service import email_service
+from src.services.wfh_swap_service import WFHSwapService
 from src.models.carryover_request import CarryoverRequest
 from src.models.system_setting import SystemSetting
 from src.database import get_db
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
@@ -100,6 +102,7 @@ def dashboard_page():
         accrual_service = AccrualService(db)
         user_service = UserService(db)
         policy_change_service = PolicyChangeService(db)
+        swap_service = WFHSwapService(db)
 
         # Get current user object for policy lookups
         current_user = user_service.get_user_by_id(user_id)
@@ -116,6 +119,9 @@ def dashboard_page():
         # Sort by approved_at descending (most recently approved first)
         approved_requests.sort(key=lambda x: x.approved_at or x.submitted_at, reverse=True)
         recent_requests = approved_requests  # Show all approved requests (scrollable)
+
+        # Get pending WFH swap requests (incoming requests needing response)
+        pending_wfh_swaps = swap_service.get_pending_for_user(user_id)
 
         # Get team approved requests for managers (for My/Team toggle)
         team_approved_requests = []
@@ -143,7 +149,7 @@ def dashboard_page():
             greeting_color = '#C9A227' if is_dark else '#5a6a72'
             with ui.row().classes('w-full justify-between items-start mb-6'):
                 with ui.column().classes('gap-1'):
-                    ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 50px; width: auto;')
+                    ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 70px; width: auto;')
 
                 with ui.column().classes('items-end gap-1'):
                     # Greeting at top right
@@ -541,6 +547,91 @@ def dashboard_page():
                 # Initial render
                 render_balances(current_year)
 
+            # ============ QUICK ACTIONS (employees and managers only) ============
+            if user_role not in ['admin', 'superadmin']:
+                with ui.card().classes('w-full mb-4 p-4'):
+                    # Row 1: My Time Off Actions
+                    with ui.column().classes('w-full gap-3'):
+                        def show_time_off_help():
+                            with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                with ui.row().classes('w-full p-4 bg-primary text-white items-center'):
+                                    ui.icon('schedule', size='md').classes('mr-2')
+                                    ui.label('PTO TIME OFF').classes('text-lg font-bold')
+                                with ui.column().classes('p-4 gap-3'):
+                                    ui.label('Quick actions for managing your time off:').classes('font-semibold')
+                                    with ui.column().classes('pl-4 gap-2'):
+                                        ui.markdown('**Request/Submit Time Off** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
+                                        ui.markdown('**My Requests/History** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
+                                        ui.markdown('**WFH Day Swap** - Request to swap your designated WFH day with a teammate (peer-to-peer, no manager approval needed)').classes('text-sm')
+                                        ui.markdown('**Leave Rollover** - View year-end rollover status:').classes('text-sm')
+                                        ui.markdown('&nbsp;&nbsp;• **Sick**: Auto-rolls over (up to 80 hrs) - no action needed').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Vacation**: Use-it-or-lose-it (exception carryover with manager approval)').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Personal**: Use-it-or-lose-it (no carryover)').classes('text-xs opacity-80')
+                                        ui.markdown('&nbsp;&nbsp;• **Chicago Paid Leave**: Auto-rolls over (up to 16 hrs)').classes('text-xs opacity-80')
+                                    with ui.row().classes('w-full justify-end mt-2'):
+                                        ui.button('Got it', on_click=help_dialog.close).props('color=primary')
+                            help_dialog.open()
+
+                        with ui.row().classes('items-center gap-2'):
+                            ui.label('PTO TIME OFF').classes('text-xs font-semibold uppercase opacity-60')
+                            ui.button(icon='help_outline', on_click=show_time_off_help).props('flat dense round size=xs').style('color: #3b82f6')
+                        with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
+                            # Managers auto-approve, so show "Submit" instead of "Request"
+                            time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
+                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new time off request')
+                            # For managers: "My Time Off History" shows their submitted time with color-coded view
+                            # For employees: "My Requests" shows pending/approved requests
+                            history_label = 'My Time Off History' if user_role == 'manager' else 'My Requests'
+                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
+                            # WFH Day Swap - peer-to-peer swap of WFH days
+                            ui.button('WFH Day Swap', icon='swap_horiz', on_click=lambda: ui.navigate.to('/wfh-swap')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Swap your WFH day with a teammate')
+                            # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
+                            if user_role != 'manager':
+                                ui.button('Leave Rollover', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View leave rollover status')
+
+                    # Row 2: Resources (employees only - managers use Manager Tools)
+                    if user_role != 'manager':
+                        ui.separator().classes('my-2')
+                        with ui.column().classes('w-full gap-3'):
+                            def show_resources_help():
+                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
+                                    with ui.row().classes('w-full p-4 bg-secondary text-white items-center'):
+                                        ui.icon('folder_open', size='md').classes('mr-2')
+                                        ui.label('Resources').classes('text-lg font-bold')
+                                    with ui.column().classes('p-4 gap-3'):
+                                        ui.label('Helpful tools and information:').classes('font-semibold')
+                                        with ui.column().classes('pl-4 gap-2'):
+                                            ui.markdown('**My Profile** - View your profile information including hire date, department, and manager').classes('text-sm')
+                                            ui.markdown('**Calendar** - View the team calendar showing holidays, your time off, and team schedules').classes('text-sm')
+                                            ui.markdown('**Reports** - Generate reports on your PTO usage and balances').classes('text-sm')
+                                            ui.markdown('**Handbook** - Access company policies, PTO guidelines, and leave information').classes('text-sm')
+                                        with ui.row().classes('w-full justify-end mt-2'):
+                                            ui.button('Got it', on_click=help_dialog.close).props('color=secondary')
+                                help_dialog.open()
+
+                            with ui.row().classes('items-center gap-2'):
+                                ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
+                                ui.button(icon='help_outline', on_click=show_resources_help).props('flat dense round size=xs').style('color: #6b7280')
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
+                                ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View your profile and account information')
+                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View team calendar with holidays and time off')
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Generate reports on your PTO usage')
+                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Access company policies and PTO guidelines')
+
+                    # Row 3: Manager Tools (managers only)
+                    if user_role == 'manager':
+                        ui.separator().classes('my-2')
+                        with ui.column().classes('w-full gap-3'):
+                            ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
+                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
+                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
+                                ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
+
             # ============ TEAM PENDING REQUESTS (Managers only - admins don't approve requests) ============
             if user_role == 'manager' and team_pending_requests:
                 # Pre-compute conflicts for each pending request
@@ -560,7 +651,7 @@ def dashboard_page():
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('supervisor_account', color='indigo').classes('text-xl')
-                            ui.label('Team Requests Awaiting Approval').classes('text-lg font-semibold')
+                            ui.label('TEAM PTO REQUESTS').classes('text-lg font-semibold')
                         with ui.row().classes('items-center gap-2'):
                             if request_conflicts:
                                 ui.badge(f'{len(request_conflicts)} conflicts', color='amber').props('outline').tooltip('Some requests have scheduling conflicts')
@@ -731,88 +822,6 @@ def dashboard_page():
                                 ).props('dense outlined use-input input-debounce="300" clearable').classes('flex-1').style('min-width: 250px')
                                 ui.label('Select to view PTO history').classes('text-xs opacity-50')
 
-            # ============ QUICK ACTIONS (employees and managers only) ============
-            if user_role not in ['admin', 'superadmin']:
-                with ui.card().classes('w-full mb-4 p-4'):
-                    # Row 1: My Time Off Actions
-                    with ui.column().classes('w-full gap-3'):
-                        def show_time_off_help():
-                            with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
-                                with ui.row().classes('w-full p-4 bg-primary text-white items-center'):
-                                    ui.icon('schedule', size='md').classes('mr-2')
-                                    ui.label('My Time Off').classes('text-lg font-bold')
-                                with ui.column().classes('p-4 gap-3'):
-                                    ui.label('Quick actions for managing your time off:').classes('font-semibold')
-                                    with ui.column().classes('pl-4 gap-2'):
-                                        ui.markdown('**Request/Submit Time Off** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
-                                        ui.markdown('**My Requests/History** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
-                                        ui.markdown('**Leave Rollover** - View year-end rollover status:').classes('text-sm')
-                                        ui.markdown('&nbsp;&nbsp;• **Sick**: Auto-rolls over (up to 80 hrs) - no action needed').classes('text-xs opacity-80')
-                                        ui.markdown('&nbsp;&nbsp;• **Vacation**: Use-it-or-lose-it (exception carryover with manager approval)').classes('text-xs opacity-80')
-                                        ui.markdown('&nbsp;&nbsp;• **Personal**: Use-it-or-lose-it (no carryover)').classes('text-xs opacity-80')
-                                        ui.markdown('&nbsp;&nbsp;• **Chicago Paid Leave**: Auto-rolls over (up to 16 hrs)').classes('text-xs opacity-80')
-                                    with ui.row().classes('w-full justify-end mt-2'):
-                                        ui.button('Got it', on_click=help_dialog.close).props('color=primary')
-                            help_dialog.open()
-
-                        with ui.row().classes('items-center gap-2'):
-                            ui.label('My Time Off').classes('text-xs font-semibold uppercase opacity-60')
-                            ui.button(icon='help_outline', on_click=show_time_off_help).props('flat dense round size=xs').style('color: #3b82f6')
-                        with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
-                            # Managers auto-approve, so show "Submit" instead of "Request"
-                            time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
-                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new time off request')
-                            # For managers: "My Time Off History" shows their submitted time with color-coded view
-                            # For employees: "My Requests" shows pending/approved requests
-                            history_label = 'My Time Off History' if user_role == 'manager' else 'My Requests'
-                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
-                            # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
-                            if user_role != 'manager':
-                                ui.button('Leave Rollover', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View leave rollover status')
-
-                    # Row 2: Resources (employees only - managers use Manager Tools)
-                    if user_role != 'manager':
-                        ui.separator().classes('my-2')
-                        with ui.column().classes('w-full gap-3'):
-                            def show_resources_help():
-                                with ui.dialog() as help_dialog, ui.card().classes('p-0 max-w-md'):
-                                    with ui.row().classes('w-full p-4 bg-secondary text-white items-center'):
-                                        ui.icon('folder_open', size='md').classes('mr-2')
-                                        ui.label('Resources').classes('text-lg font-bold')
-                                    with ui.column().classes('p-4 gap-3'):
-                                        ui.label('Helpful tools and information:').classes('font-semibold')
-                                        with ui.column().classes('pl-4 gap-2'):
-                                            ui.markdown('**My Profile** - View your profile information including hire date, department, and manager').classes('text-sm')
-                                            ui.markdown('**Calendar** - View the team calendar showing holidays, your time off, and team schedules').classes('text-sm')
-                                            ui.markdown('**Reports** - Generate reports on your PTO usage and balances').classes('text-sm')
-                                            ui.markdown('**Handbook** - Access company policies, PTO guidelines, and leave information').classes('text-sm')
-                                        with ui.row().classes('w-full justify-end mt-2'):
-                                            ui.button('Got it', on_click=help_dialog.close).props('color=secondary')
-                                help_dialog.open()
-
-                            with ui.row().classes('items-center gap-2'):
-                                ui.label('Resources').classes('text-xs font-semibold uppercase opacity-60')
-                                ui.button(icon='help_outline', on_click=show_resources_help).props('flat dense round size=xs').style('color: #6b7280')
-                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
-                                ui.button('My Profile', icon='person', on_click=lambda: show_user_profile_dialog(current_user, db)).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View your profile and account information')
-                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('View team calendar with holidays and time off')
-                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Generate reports on your PTO usage')
-                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=secondary').classes('flex-1 min-w-fit').tooltip('Access company policies and PTO guidelines')
-
-                    # Row 3: Manager Tools (managers only)
-                    if user_role == 'manager':
-                        ui.separator().classes('my-2')
-                        with ui.column().classes('w-full gap-3'):
-                            ui.label('Manager Tools').classes('text-xs font-semibold uppercase opacity-60')
-                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
-                                ui.button('Calendar', icon='calendar_month', on_click=lambda: ui.navigate.to('/calendar')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Manage Team', icon='badge', on_click=lambda: ui.navigate.to('/manager/team')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Carryover', icon='approval', on_click=lambda: ui.navigate.to('/manager/carryover')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                            with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
-                                ui.button('Reports', icon='assessment', on_click=lambda: ui.navigate.to('/reports')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Handbook', icon='menu_book', on_click=lambda: ui.navigate.to('/handbook')).props('outline color=indigo').classes('flex-1 min-w-fit')
-                                ui.button('Settings', icon='settings', on_click=lambda: ui.navigate.to('/manager/settings')).props('outline color=indigo').classes('flex-1 min-w-fit')
-
             # ============ PENDING REQUESTS (if any) - employees only ============
             if pending_requests and user_role not in ['manager', 'admin', 'superadmin']:
                 # Type colors for border
@@ -867,6 +876,234 @@ def dashboard_page():
 
                                     ui.button('Cancel', icon='close', on_click=create_cancel_handler(req.id)).props('flat dense color=red size=sm')
 
+            # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
+            if user_role not in ['admin', 'superadmin']:
+              with ui.card().classes('w-full mb-4'):
+                # View state for My/Team toggle (managers only)
+                view_state = {'mode': 'my'}  # 'my' or 'team'
+                view_buttons = {}
+
+                with ui.row().classes('w-full justify-between items-center mb-3'):
+                    ui.label('PTO REQUESTS APPROVED').classes('text-lg font-semibold')
+                    with ui.row().classes('gap-2 items-center'):
+                        # My/Team toggle for managers
+                        if user_role == 'manager' and team_approved_requests is not None:
+                            def update_view(mode: str):
+                                view_state['mode'] = mode
+                                # Update button styles
+                                for btn_mode, btn in view_buttons.items():
+                                    if btn_mode == mode:
+                                        btn.style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                                    else:
+                                        btn.style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+                                # Re-render the list
+                                render_filtered_requests()
+
+                            view_buttons['my'] = ui.button('My', icon='person', on_click=lambda: update_view('my')).props('dense outline size=sm').style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                            view_buttons['team'] = ui.button('Team', icon='group', on_click=lambda: update_view('team')).props('dense outline size=sm').style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+
+                        count_label = ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
+
+                if recent_requests or team_approved_requests:
+                    # Hex colors for inline styling (icon + text)
+                    type_hex_colors = {
+                        'all': '#C9A227',  # TJM Gold
+                        'vacation': '#3b82f6',  # Blue
+                        'sick': '#22c55e',  # Green
+                        'personal': '#a855f7',  # Purple
+                        'work_from_home': '#ef4444',  # Red
+                        'chicago_leave': '#f59e0b',  # Amber
+                        'other': '#6b7280'  # Grey
+                    }
+                    # Tailwind color names for border classes
+                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red', 'chicago_leave': 'amber', 'leave': 'amber'}
+                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work', 'chicago_leave': 'event_available', 'leave': 'event_available'}
+
+                    # Filter state
+                    filter_state = {'type': 'all'}
+                    filter_buttons = {}
+                    button_colors = {}  # Store original colors for each button
+
+                    def update_filter(new_type: str):
+                        filter_state['type'] = new_type
+                        # Update button styles - selected gets gold border, others get outline with their color
+                        for btn_type, btn in filter_buttons.items():
+                            btn_color = button_colors.get(btn_type, '#6b7280')
+                            if btn_type == new_type:
+                                # Selected: gold border, colored text
+                                btn.style(f'color: {btn_color} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                            else:
+                                # Unselected: subtle border, colored text
+                                btn.style(f'color: {btn_color} !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+                        # Refresh the list
+                        render_filtered_requests()
+
+                    # Check if Chicago employee for Leave filter
+                    is_chicago = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
+
+                    # Filter toggle buttons with icons and colors
+                    with ui.row().classes('w-full gap-2 mb-3 flex-wrap'):
+                        # All button - starts selected with gold border
+                        button_colors['all'] = type_hex_colors['all']
+                        filter_buttons['all'] = ui.button('All', icon='list', on_click=lambda: update_filter('all')).props('dense outline size=sm').style(f'color: {type_hex_colors["all"]} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+
+                        # Vacation
+                        button_colors['vacation'] = type_hex_colors['vacation']
+                        filter_buttons['vacation'] = ui.button('Vacation', icon='beach_access', on_click=lambda: update_filter('vacation')).props('dense outline size=sm').style(f'color: {type_hex_colors["vacation"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Sick
+                        button_colors['sick'] = type_hex_colors['sick']
+                        filter_buttons['sick'] = ui.button('Sick', icon='medical_services', on_click=lambda: update_filter('sick')).props('dense outline size=sm').style(f'color: {type_hex_colors["sick"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Personal
+                        button_colors['personal'] = type_hex_colors['personal']
+                        filter_buttons['personal'] = ui.button('Personal', icon='person', on_click=lambda: update_filter('personal')).props('dense outline size=sm').style(f'color: {type_hex_colors["personal"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Leave filter for Chicago employees - always show if Chicago
+                        if is_chicago:
+                            button_colors['chicago_leave'] = type_hex_colors['chicago_leave']
+                            filter_buttons['chicago_leave'] = ui.button('Leave', icon='event_available', on_click=lambda: update_filter('chicago_leave')).props('dense outline size=sm').style(f'color: {type_hex_colors["chicago_leave"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # WFH filter - always show
+                        button_colors['work_from_home'] = type_hex_colors['work_from_home']
+                        filter_buttons['work_from_home'] = ui.button('WFH', icon='home_work', on_click=lambda: update_filter('work_from_home')).props('dense outline size=sm').style(f'color: {type_hex_colors["work_from_home"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                        # Other types (bereavement, fmla, etc.)
+                        other_types = [r for r in recent_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
+                        if other_types:
+                            button_colors['other'] = type_hex_colors['other']
+                            filter_buttons['other'] = ui.button('Other', icon='more_horiz', on_click=lambda: update_filter('other')).props('dense outline size=sm').style(f'color: {type_hex_colors["other"]} !important; border-color: rgba(255,255,255,0.3) !important;')
+
+                    # Container for filtered results
+                    results_container = ui.column().classes('w-full')
+
+                    def render_filtered_requests():
+                        results_container.clear()
+                        with results_container:
+                            # Select base list based on view mode (my vs team)
+                            is_team_view = view_state['mode'] == 'team'
+                            base_requests = team_approved_requests if is_team_view else recent_requests
+
+                            # Filter requests based on selected type
+                            if filter_state['type'] == 'all':
+                                filtered = base_requests
+                            elif filter_state['type'] == 'other':
+                                filtered = [r for r in base_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
+                            elif filter_state['type'] == 'chicago_leave':
+                                # Match both 'chicago_leave' and 'leave' types
+                                filtered = [r for r in base_requests if r.pto_type.lower() in ['chicago_leave', 'leave']]
+                            else:
+                                filtered = [r for r in base_requests if r.pto_type.lower() == filter_state['type']]
+
+                            # Update count label
+                            count_label.set_text(f'{len(filtered)} requests')
+
+                            if filtered:
+                                with ui.scroll_area().classes('w-full').style('max-height: 300px'):
+                                    for req in filtered:
+                                        pto_type_lower = req.pto_type.lower()
+                                        border_color = type_colors.get(pto_type_lower, 'gray')
+
+                                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
+                                            with ui.row().classes('w-full justify-between items-center'):
+                                                with ui.row().classes('gap-4 items-center'):
+                                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
+                                                    with ui.column().classes('gap-0'):
+                                                        # Determine type label - add (CarryOver) for vacation using previous year
+                                                        has_carryover = hasattr(req, 'carryover_from_year') and req.carryover_from_year
+                                                        display_name = get_pto_display_name(req.pto_type)
+                                                        type_label = f"{display_name} (CarryOver)" if has_carryover and pto_type_lower == 'vacation' else display_name
+                                                        # Show employee name in team view
+                                                        if is_team_view and hasattr(req, 'employee_name'):
+                                                            ui.label(req.employee_name).classes('font-medium')
+                                                            ui.label(type_label).classes('text-xs opacity-70 text-amber-500' if has_carryover else 'text-xs opacity-70')
+                                                        else:
+                                                            ui.label(type_label).classes('font-medium text-amber-500' if has_carryover else 'font-medium')
+                                                        if req.start_date == req.end_date:
+                                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
+                                                        else:
+                                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-xs opacity-60')
+                                                with ui.row().classes('gap-3 items-center'):
+                                                    days_display = float(req.total_days)
+                                                    ui.label(format_days(days_display * 8)).classes('text-sm')
+                                                    # Show carryover indicator if vacation used previous year's balance
+                                                    if hasattr(req, 'carryover_from_year') and req.carryover_from_year:
+                                                        ui.badge(f'{req.carryover_from_year}', color='amber').props('outline dense').tooltip(f'Uses {req.carryover_from_year} vacation balance')
+                                                    ui.icon('chevron_right').classes('text-gray-400')
+                            else:
+                                with ui.row().classes('w-full justify-center py-6'):
+                                    view_text = 'team' if is_team_view else ''
+                                    ui.label(f'No {view_text} {filter_state["type"]} time off').classes('opacity-60')
+
+                    # Initial render
+                    render_filtered_requests()
+                else:
+                    with ui.row().classes('w-full justify-center py-6'):
+                        ui.label('No approved time off yet').classes('opacity-60')
+
+            # ============ INCOMING WFH SWAP REQUESTS (if any) ============
+            if pending_wfh_swaps:
+                with ui.card().classes('w-full mb-4 border-l-4 border-orange-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-3'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('swap_horiz', color='orange').classes('text-xl')
+                            ui.label('WFH SWAP REQUESTS').classes('text-lg font-semibold')
+                        with ui.row().classes('items-center gap-2'):
+                            ui.label(f'{len(pending_wfh_swaps)} awaiting response').classes('text-sm text-orange-500')
+                            ui.button('View All', icon='open_in_new', on_click=lambda: ui.navigate.to('/wfh-swap')).props('flat dense size=sm')
+
+                    for swap_req in pending_wfh_swaps:
+                        requester = user_service.get_user_by_id(swap_req.requester_id)
+                        requester_name = f"{requester.first_name} {requester.last_name}" if requester else "Unknown"
+
+                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-orange-400').style('background-color: #374151;'):
+                            with ui.row().classes('w-full justify-between items-start gap-4'):
+                                # Left: Request info
+                                with ui.column().classes('gap-1'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('person', size='sm').style('color: #f97316;')
+                                        ui.label(requester_name).classes('font-semibold')
+                                        ui.badge('Swap Request', color='orange').props('outline')
+                                    ui.label(f'Wants to swap for {swap_req.swap_date.strftime("%A, %B %d")}').classes('text-sm opacity-80')
+                                    if swap_req.request_message:
+                                        with ui.row().classes('items-start gap-1 mt-1'):
+                                            ui.icon('format_quote', size='xs').classes('opacity-50')
+                                            ui.label(f'"{swap_req.request_message}"').classes('text-sm italic opacity-70')
+
+                                # Right: Response input and buttons in column
+                                with ui.column().classes('gap-2'):
+                                    response_input = ui.input(placeholder='Response...').props('dense outlined').style('min-width: 280px;')
+
+                                    def create_accept_handler(req, resp_input):
+                                        def accept_swap():
+                                            if not resp_input.value or not resp_input.value.strip():
+                                                ui.notify('Please enter a response message', type='warning')
+                                                return
+                                            try:
+                                                swap_service.accept_swap(req.id, user_id, resp_input.value.strip())
+                                                ui.notify('Swap accepted!', type='positive')
+                                                ui.run_javascript('window.location.reload()')  # Force refresh
+                                            except Exception as e:
+                                                ui.notify(f'Error: {str(e)}', type='negative')
+                                        return accept_swap
+
+                                    def create_decline_handler(req, resp_input):
+                                        def decline_swap():
+                                            if not resp_input.value or not resp_input.value.strip():
+                                                ui.notify('Please enter a response message', type='warning')
+                                                return
+                                            try:
+                                                swap_service.decline_swap(req.id, user_id, resp_input.value.strip())
+                                                ui.notify('Swap declined', type='info')
+                                                ui.run_javascript('window.location.reload()')  # Force refresh
+                                            except Exception as e:
+                                                ui.notify(f'Error: {str(e)}', type='negative')
+                                        return decline_swap
+
+                                    with ui.row().classes('w-full justify-end gap-2'):
+                                        ui.button('Accept', icon='check', on_click=create_accept_handler(swap_req, response_input)).props('color=positive dense size=sm')
+                                        ui.button('Decline', icon='close', on_click=create_decline_handler(swap_req, response_input)).props('color=negative dense size=sm')
+
             # ============ ADMIN DASHBOARD (admin/superadmin only) ============
             if user_role in ['admin', 'superadmin']:
                 # Get pending requests for admins (all departments)
@@ -887,7 +1124,6 @@ def dashboard_page():
                     active_users = [u for u in all_users if u.is_active]
 
                     # Get PTO this week count using direct query
-                    from datetime import timedelta
                     from src.models.pto_request import PTORequest
                     today = date.today()
                     week_start = today - timedelta(days=today.weekday())
@@ -1155,170 +1391,49 @@ def dashboard_page():
                             ui.button('System Admin', icon='settings_applications',
                                       on_click=lambda: ui.navigate.to('/admin/system')).props('outline color=amber').classes('flex-1 admin-btn')
 
-            # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
-            if user_role not in ['admin', 'superadmin']:
-              with ui.card().classes('w-full mb-4'):
-                # View state for My/Team toggle (managers only)
-                view_state = {'mode': 'my'}  # 'my' or 'team'
-                view_buttons = {}
+            # ============ ACCEPTED WFH SWAPS (show user's accepted swaps) ============
+            # Get accepted swaps where user is either requester or target
+            from sqlalchemy import or_
+            from src.models.wfh_day_swap import WFHDaySwapRequest
+            accepted_swaps_stmt = select(WFHDaySwapRequest).where(
+                or_(
+                    WFHDaySwapRequest.requester_id == user_id,
+                    WFHDaySwapRequest.target_user_id == user_id
+                ),
+                WFHDaySwapRequest.status == 'accepted'
+            ).order_by(WFHDaySwapRequest.swap_date.asc())
+            accepted_swaps = list(db.execute(accepted_swaps_stmt).scalars().all())
 
-                with ui.row().classes('w-full justify-between items-center mb-3'):
-                    ui.label('PTO APPROVED').classes('text-lg font-semibold')
-                    with ui.row().classes('gap-2 items-center'):
-                        # My/Team toggle for managers
-                        if user_role == 'manager' and team_approved_requests is not None:
-                            def update_view(mode: str):
-                                view_state['mode'] = mode
-                                # Update button styles
-                                for btn_mode, btn in view_buttons.items():
-                                    if btn_mode == mode:
-                                        btn.style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
-                                    else:
-                                        btn.style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
-                                # Re-render the list
-                                render_filtered_requests()
+            if accepted_swaps:
+                with ui.card().classes('w-full mb-4 border-l-4 border-green-500'):
+                    with ui.row().classes('w-full justify-between items-center mb-3'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('check_circle', color='green').classes('text-xl')
+                            ui.label('WFH SWAP APPROVED').classes('text-lg font-semibold')
+                        ui.button('View All', icon='open_in_new', on_click=lambda: ui.navigate.to('/wfh-swap')).props('flat dense size=sm')
 
-                            view_buttons['my'] = ui.button('My', icon='person', on_click=lambda: update_view('my')).props('dense outline size=sm').style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
-                            view_buttons['team'] = ui.button('Team', icon='group', on_click=lambda: update_view('team')).props('dense outline size=sm').style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
+                    for swap in accepted_swaps:
+                        is_requester = swap.requester_id == user_id
+                        if is_requester:
+                            other = user_service.get_user_by_id(swap.target_user_id)
+                            direction = "with"
+                        else:
+                            other = user_service.get_user_by_id(swap.requester_id)
+                            direction = "from"
+                        other_name = f"{other.first_name} {other.last_name}" if other else "Unknown"
 
-                        count_label = ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
-
-                if recent_requests or team_approved_requests:
-                    # Hex colors for inline styling (icon + text)
-                    type_hex_colors = {
-                        'all': '#C9A227',  # TJM Gold
-                        'vacation': '#3b82f6',  # Blue
-                        'sick': '#22c55e',  # Green
-                        'personal': '#a855f7',  # Purple
-                        'work_from_home': '#ef4444',  # Red
-                        'chicago_leave': '#f59e0b',  # Amber
-                        'other': '#6b7280'  # Grey
-                    }
-                    # Tailwind color names for border classes
-                    type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red', 'chicago_leave': 'amber', 'leave': 'amber'}
-                    type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work', 'chicago_leave': 'event_available', 'leave': 'event_available'}
-
-                    # Filter state
-                    filter_state = {'type': 'all'}
-                    filter_buttons = {}
-                    button_colors = {}  # Store original colors for each button
-
-                    def update_filter(new_type: str):
-                        filter_state['type'] = new_type
-                        # Update button styles - selected gets gold border, others get outline with their color
-                        for btn_type, btn in filter_buttons.items():
-                            btn_color = button_colors.get(btn_type, '#6b7280')
-                            if btn_type == new_type:
-                                # Selected: gold border, colored text
-                                btn.style(f'color: {btn_color} !important; border-color: #C9A227 !important; border-width: 2px !important;')
-                            else:
-                                # Unselected: subtle border, colored text
-                                btn.style(f'color: {btn_color} !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
-                        # Refresh the list
-                        render_filtered_requests()
-
-                    # Check if Chicago employee for Leave filter
-                    is_chicago = current_user and current_user.location_city and current_user.location_city.lower() == 'chicago'
-
-                    # Filter toggle buttons with icons and colors
-                    with ui.row().classes('w-full gap-2 mb-3 flex-wrap'):
-                        # All button - starts selected with gold border
-                        button_colors['all'] = type_hex_colors['all']
-                        filter_buttons['all'] = ui.button('All', icon='list', on_click=lambda: update_filter('all')).props('dense outline size=sm').style(f'color: {type_hex_colors["all"]} !important; border-color: #C9A227 !important; border-width: 2px !important;')
-
-                        # Vacation
-                        button_colors['vacation'] = type_hex_colors['vacation']
-                        filter_buttons['vacation'] = ui.button('Vacation', icon='beach_access', on_click=lambda: update_filter('vacation')).props('dense outline size=sm').style(f'color: {type_hex_colors["vacation"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                        # Sick
-                        button_colors['sick'] = type_hex_colors['sick']
-                        filter_buttons['sick'] = ui.button('Sick', icon='medical_services', on_click=lambda: update_filter('sick')).props('dense outline size=sm').style(f'color: {type_hex_colors["sick"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                        # Personal
-                        button_colors['personal'] = type_hex_colors['personal']
-                        filter_buttons['personal'] = ui.button('Personal', icon='person', on_click=lambda: update_filter('personal')).props('dense outline size=sm').style(f'color: {type_hex_colors["personal"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                        # Leave filter for Chicago employees - always show if Chicago
-                        if is_chicago:
-                            button_colors['chicago_leave'] = type_hex_colors['chicago_leave']
-                            filter_buttons['chicago_leave'] = ui.button('Leave', icon='event_available', on_click=lambda: update_filter('chicago_leave')).props('dense outline size=sm').style(f'color: {type_hex_colors["chicago_leave"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                        # WFH filter - always show
-                        button_colors['work_from_home'] = type_hex_colors['work_from_home']
-                        filter_buttons['work_from_home'] = ui.button('WFH', icon='home_work', on_click=lambda: update_filter('work_from_home')).props('dense outline size=sm').style(f'color: {type_hex_colors["work_from_home"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                        # Other types (bereavement, fmla, etc.)
-                        other_types = [r for r in recent_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
-                        if other_types:
-                            button_colors['other'] = type_hex_colors['other']
-                            filter_buttons['other'] = ui.button('Other', icon='more_horiz', on_click=lambda: update_filter('other')).props('dense outline size=sm').style(f'color: {type_hex_colors["other"]} !important; border-color: rgba(255,255,255,0.3) !important;')
-
-                    # Container for filtered results
-                    results_container = ui.column().classes('w-full')
-
-                    def render_filtered_requests():
-                        results_container.clear()
-                        with results_container:
-                            # Select base list based on view mode (my vs team)
-                            is_team_view = view_state['mode'] == 'team'
-                            base_requests = team_approved_requests if is_team_view else recent_requests
-
-                            # Filter requests based on selected type
-                            if filter_state['type'] == 'all':
-                                filtered = base_requests
-                            elif filter_state['type'] == 'other':
-                                filtered = [r for r in base_requests if r.pto_type.lower() not in ['vacation', 'sick', 'personal', 'work_from_home', 'chicago_leave', 'leave']]
-                            elif filter_state['type'] == 'chicago_leave':
-                                # Match both 'chicago_leave' and 'leave' types
-                                filtered = [r for r in base_requests if r.pto_type.lower() in ['chicago_leave', 'leave']]
-                            else:
-                                filtered = [r for r in base_requests if r.pto_type.lower() == filter_state['type']]
-
-                            # Update count label
-                            count_label.set_text(f'{len(filtered)} requests')
-
-                            if filtered:
-                                with ui.scroll_area().classes('w-full').style('max-height: 300px'):
-                                    for req in filtered:
-                                        pto_type_lower = req.pto_type.lower()
-                                        border_color = type_colors.get(pto_type_lower, 'gray')
-
-                                        with ui.card().classes(f'w-full p-3 mb-2 border-l-4 border-{border_color}-500 cursor-pointer hover:shadow-md').on('click', lambda e, r=req: show_pto_detail_dialog(r)):
-                                            with ui.row().classes('w-full justify-between items-center'):
-                                                with ui.row().classes('gap-4 items-center'):
-                                                    ui.icon(type_icons.get(pto_type_lower, 'event')).classes(f'text-{border_color}-500')
-                                                    with ui.column().classes('gap-0'):
-                                                        # Determine type label - add (CarryOver) for vacation using previous year
-                                                        has_carryover = hasattr(req, 'carryover_from_year') and req.carryover_from_year
-                                                        display_name = get_pto_display_name(req.pto_type)
-                                                        type_label = f"{display_name} (CarryOver)" if has_carryover and pto_type_lower == 'vacation' else display_name
-                                                        # Show employee name in team view
-                                                        if is_team_view and hasattr(req, 'employee_name'):
-                                                            ui.label(req.employee_name).classes('font-medium')
-                                                            ui.label(type_label).classes('text-xs opacity-70 text-amber-500' if has_carryover else 'text-xs opacity-70')
-                                                        else:
-                                                            ui.label(type_label).classes('font-medium text-amber-500' if has_carryover else 'font-medium')
-                                                        if req.start_date == req.end_date:
-                                                            ui.label(req.start_date.strftime('%A, %B %d, %Y')).classes('text-xs opacity-60')
-                                                        else:
-                                                            ui.label(f"{req.start_date.strftime('%A, %B %d')} - {req.end_date.strftime('%A, %B %d, %Y')}").classes('text-xs opacity-60')
-                                                with ui.row().classes('gap-3 items-center'):
-                                                    days_display = float(req.total_days)
-                                                    ui.label(format_days(days_display * 8)).classes('text-sm')
-                                                    # Show carryover indicator if vacation used previous year's balance
-                                                    if hasattr(req, 'carryover_from_year') and req.carryover_from_year:
-                                                        ui.badge(f'{req.carryover_from_year}', color='amber').props('outline dense').tooltip(f'Uses {req.carryover_from_year} vacation balance')
-                                                    ui.icon('chevron_right').classes('text-gray-400')
-                            else:
-                                with ui.row().classes('w-full justify-center py-6'):
-                                    view_text = 'team' if is_team_view else ''
-                                    ui.label(f'No {view_text} {filter_state["type"]} time off').classes('opacity-60')
-
-                    # Initial render
-                    render_filtered_requests()
-                else:
-                    with ui.row().classes('w-full justify-center py-6'):
-                        ui.label('No approved time off yet').classes('opacity-60')
+                        with ui.card().classes('w-full p-3 mb-2 border-l-4 border-green-400').style('background-color: #374151;'):
+                            with ui.row().classes('w-full justify-between items-center'):
+                                with ui.column().classes('gap-1'):
+                                    with ui.row().classes('items-center gap-2'):
+                                        ui.icon('swap_horiz', size='sm').style('color: #22c55e;')
+                                        ui.label(f'Swap {direction} {other_name}').classes('font-semibold')
+                                        ui.badge('Accepted', color='green').props('outline')
+                                    ui.label(f'{swap.swap_date.strftime("%A, %B %d")}').classes('text-sm opacity-80')
+                                # Show the original days info
+                                with ui.column().classes('text-right'):
+                                    ui.label(f'Your WFH: {swap.requester_original_day.title() if is_requester else swap.target_original_day.title()}').classes('text-xs opacity-60')
+                                    ui.label(f'Swapped to: {swap.target_original_day.title() if is_requester else swap.requester_original_day.title()}').classes('text-xs text-green-400')
 
             # ============ LEAVE POLICY (Collapsible) - not for admin/superadmin ============
             if user_role not in ['admin', 'superadmin']:

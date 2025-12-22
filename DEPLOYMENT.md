@@ -1,4 +1,4 @@
-# TJM Time Calendar - Deployment Guide
+# PTO Central - Deployment Guide
 
 ## Server Requirements
 
@@ -42,7 +42,7 @@ Create `.env` in the project root with production settings:
 
 ```env
 # Database
-DATABASE_URL=sqlite:///tjm_calendar.db
+DATABASE_URL=sqlite:///pto_central.db
 
 # Security - Generate a strong random key!
 SECRET_KEY=your-very-long-random-secret-key-here
@@ -52,12 +52,12 @@ ENVIRONMENT=production
 DEBUG=False
 
 # Server
-TJM_HOST=0.0.0.0
-TJM_PORT=8080
+PTO_HOST=0.0.0.0
+PTO_PORT=8080
 
 # SSL (Optional - for HTTPS)
-TJM_SSL_CERT=certs/server.crt
-TJM_SSL_KEY=certs/server.key
+PTO_SSL_CERT=certs/server.crt
+PTO_SSL_KEY=certs/server.key
 
 # Email (Optional)
 EMAIL_ENABLED=true
@@ -66,7 +66,7 @@ SMTP_PORT=587
 SMTP_USER=your-email@domain.com
 SMTP_PASSWORD=your-app-password
 EMAIL_FROM=noreply@yourcompany.com
-EMAIL_FROM_NAME=TJM Calendar
+EMAIL_FROM_NAME=PTO Central
 
 # Notification Scheduler
 ENABLE_DIGEST_SCHEDULER=true
@@ -102,8 +102,8 @@ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.cr
 1. Place your `.crt` and `.key` files in the `certs/` directory
 2. Update `.env`:
    ```env
-   TJM_SSL_CERT=certs/your-certificate.crt
-   TJM_SSL_KEY=certs/your-certificate.key
+   PTO_SSL_CERT=certs/your-certificate.crt
+   PTO_SSL_KEY=certs/your-certificate.key
    ```
 
 ### 4. Windows Service Installation
@@ -116,30 +116,30 @@ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.cr
 
 ```powershell
 # Run as Administrator
-C:\Tools\nssm\win64\nssm.exe install TJMCalendar
+C:\Tools\nssm\win64\nssm.exe install PTOCentral
 
 # In the GUI that opens:
 # Path: C:\path\to\TimeCalendar\venv\Scripts\python.exe
 # Startup directory: C:\path\to\TimeCalendar
 # Arguments: nicegui_app\main.py
-# Service name: TJMCalendar
+# Service name: PTOCentral
 ```
 
 4. Configure service:
 ```powershell
-nssm set TJMCalendar DisplayName "TJM Time Calendar"
-nssm set TJMCalendar Description "Employee PTO Management System"
-nssm set TJMCalendar Start SERVICE_AUTO_START
+nssm set PTOCentral DisplayName "PTO Central"
+nssm set PTOCentral Description "Employee PTO Management System"
+nssm set PTOCentral Start SERVICE_AUTO_START
 
 # Start the service
-nssm start TJMCalendar
+nssm start PTOCentral
 ```
 
 #### Option B: Task Scheduler
 
 1. Open Task Scheduler (`taskschd.msc`)
 2. Create Basic Task:
-   - Name: `TJM Calendar`
+   - Name: `PTO Central`
    - Trigger: At startup
    - Action: Start a program
    - Program: `C:\path\to\TimeCalendar\venv\Scripts\python.exe`
@@ -153,10 +153,10 @@ nssm start TJMCalendar
 
 ```powershell
 # Run as Administrator
-netsh advfirewall firewall add rule name="TJM Calendar HTTP" dir=in action=allow protocol=tcp localport=8080
+netsh advfirewall firewall add rule name="PTO Central HTTP" dir=in action=allow protocol=tcp localport=8080
 
 # For HTTPS
-netsh advfirewall firewall add rule name="TJM Calendar HTTPS" dir=in action=allow protocol=tcp localport=443
+netsh advfirewall firewall add rule name="PTO Central HTTPS" dir=in action=allow protocol=tcp localport=443
 ```
 
 Or use Windows Defender Firewall GUI:
@@ -171,21 +171,21 @@ Or use Windows Defender Firewall GUI:
 
 ```powershell
 # Create backup directory
-mkdir C:\Backups\TJMCalendar
+mkdir C:\Backups\PTOCentral
 
 # Copy database with timestamp
 $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-Copy-Item "tjm_calendar.db" "C:\Backups\TJMCalendar\tjm_calendar_$timestamp.db"
+Copy-Item "pto_central.db" "C:\Backups\PTOCentral\pto_central_$timestamp.db"
 ```
 
 #### Automated Daily Backup
 
 Create `scripts\backup.ps1`:
 ```powershell
-$backupDir = "C:\Backups\TJMCalendar"
-$sourceDb = "C:\path\to\TimeCalendar\tjm_calendar.db"
+$backupDir = "C:\Backups\PTOCentral"
+$sourceDb = "C:\path\to\TimeCalendar\pto_central.db"
 $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-$backupFile = "$backupDir\tjm_calendar_$timestamp.db"
+$backupFile = "$backupDir\pto_central_$timestamp.db"
 
 # Create backup
 Copy-Item $sourceDb $backupFile
@@ -223,7 +223,7 @@ Returns JSON with:
 Application logs to stdout. When running as a service with NSSM:
 ```powershell
 # View live logs
-nssm status TJMCalendar
+nssm status PTOCentral
 
 # Check Windows Event Viewer for service issues
 eventvwr.msc
@@ -240,7 +240,7 @@ eventvwr.msc
 
 2. **Verify database file exists**
    ```powershell
-   dir tjm_calendar.db
+   dir pto_central.db
    ```
 
 3. **Check port availability**
@@ -286,7 +286,7 @@ eventvwr.msc
 
 1. **Check integrity**
    ```powershell
-   sqlite3 tjm_calendar.db "PRAGMA integrity_check;"
+   sqlite3 pto_central.db "PRAGMA integrity_check;"
    ```
 
 2. **Run migrations**
@@ -298,11 +298,11 @@ eventvwr.msc
 
 ```powershell
 # Stop service
-nssm stop TJMCalendar
+nssm stop PTOCentral
 
 # Backup database
 $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-Copy-Item tjm_calendar.db "tjm_calendar_backup_$timestamp.db"
+Copy-Item pto_central.db "pto_central_backup_$timestamp.db"
 
 # Pull updates
 git pull origin main
@@ -314,7 +314,7 @@ venv\Scripts\pip.exe install -r requirements.txt
 venv\Scripts\python.exe -m alembic upgrade head
 
 # Restart service
-nssm start TJMCalendar
+nssm start PTOCentral
 ```
 
 ## Security Checklist

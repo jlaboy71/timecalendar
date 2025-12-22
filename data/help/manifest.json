@@ -1,6 +1,17 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "chapters": {
+    "wfh-swap": {
+      "title": "WFH Day Swap",
+      "icon": "swap_horiz",
+      "order": 0,
+      "required_role": null,
+      "articles": [
+        {"id": "wfh-swap-overview", "title": "WFH Swap Overview"},
+        {"id": "requesting-swap", "title": "Requesting a Swap"},
+        {"id": "responding-to-swaps", "title": "Responding to Swap Requests"}
+      ]
+    },
     "getting-started": {
       "title": "Getting Started",
       "icon": "play_circle",

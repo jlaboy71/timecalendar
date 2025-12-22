@@ -17,13 +17,22 @@ Sources:
 
 import os
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 import math
 
 # Image processing
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+
+class VideoEffect(Enum):
+    """Video effect types for training videos"""
+    NONE = "none"           # Basic video, no effects
+    ZOOM = "zoom"           # Ken Burns zoom effect
+    HIGHLIGHT = "highlight" # Gold highlight box on action areas
+    HYBRID = "hybrid"       # Both zoom and highlight
 
 # Video production
 try:
@@ -783,7 +792,9 @@ class VideoProducer:
         audio_dir: Path,
         output_path: Optional[Path] = None,
         include_intro: bool = True,
-        include_outro: bool = True
+        include_outro: bool = True,
+        video_effect: VideoEffect = VideoEffect.NONE,
+        progress_callback: Optional[Callable[[float, str], None]] = None
     ) -> Path:
         """
         Create training video by overlaying audio on the raw Playwright recording.
@@ -799,6 +810,8 @@ class VideoProducer:
             output_path: Where to save the final video
             include_intro: Add title card at beginning
             include_outro: Add outro card at end
+            video_effect: Video effect to apply (zoom, highlight, hybrid, none)
+            progress_callback: Callback function(progress: 0-1, status: str) for encoding progress
         """
         import json
 
@@ -821,6 +834,17 @@ class VideoProducer:
         # Load the raw Playwright recording
         video_clip = VideoFileClip(str(video_file))
         print(f"Video loaded: {video_clip.duration:.1f}s")
+        print(f"Video effect: {video_effect.value}")
+
+        if progress_callback:
+            progress_callback(0.05, "Loading video...")
+
+        # Apply video effects based on selection
+        if video_effect in (VideoEffect.ZOOM, VideoEffect.HYBRID):
+            print("Applying Ken Burns zoom effect...")
+            if progress_callback:
+                progress_callback(0.10, "Applying zoom effect...")
+            video_clip = self._apply_ken_burns_effect(video_clip, timeline)
 
         # Build list of audio clips with SEQUENTIAL timing (no overlap)
         # Each audio starts after the previous one ends
@@ -866,6 +890,16 @@ class VideoProducer:
             # Concatenate original video with frozen frame
             video_clip = concatenate_videoclips([video_clip, last_frame])
 
+        # Apply highlight effect if requested (adds gold boxes on action areas)
+        if video_effect in (VideoEffect.HIGHLIGHT, VideoEffect.HYBRID):
+            print("Applying highlight box effect...")
+            if progress_callback:
+                progress_callback(0.20, "Applying highlight effect...")
+            video_clip = self._apply_highlight_effect(video_clip, timeline)
+
+        if progress_callback:
+            progress_callback(0.25, "Combining audio...")
+
         # Combine all audio clips into a composite
         if audio_clips:
             composite_audio = CompositeAudioClip(audio_clips)
@@ -880,9 +914,12 @@ class VideoProducer:
         # Add intro title card
         if include_intro:
             print("Creating intro card...")
+            if progress_callback:
+                progress_callback(0.30, "Creating intro card...")
             intro_clip = self._create_title_card_simple(
                 title=timeline['scenario_name'],
-                duration=3.0
+                description=timeline.get('scenario_description', ''),  # Include description if available
+                duration=5.0  # 5 seconds for title card
             )
             final_clips.append(intro_clip)
 
@@ -892,11 +929,13 @@ class VideoProducer:
         # Add outro card
         if include_outro:
             print("Creating outro card...")
-            outro_clip = self._create_outro_card_simple(duration=2.0)
+            outro_clip = self._create_outro_card_simple(duration=5.0)  # 5 seconds for outro
             final_clips.append(outro_clip)
 
         # Concatenate all clips
         print("\nCompiling final video...")
+        if progress_callback:
+            progress_callback(0.35, "Compiling video...")
         final_video = concatenate_videoclips(final_clips, method="compose")
 
         # Determine output path
@@ -905,6 +944,20 @@ class VideoProducer:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"Exporting to: {output_path}")
+        if progress_callback:
+            progress_callback(0.40, "Encoding video (this takes a minute)...")
+
+        # Create progress logger for moviepy
+        def moviepy_progress_logger(info):
+            """Parse moviepy progress and call our callback"""
+            if progress_callback and 't' in info:
+                # info contains 't' (current time) and we know total duration
+                current = info['t']
+                total = final_video.duration
+                # Map 0.40 to 0.95 for encoding phase
+                encoding_progress = 0.40 + (current / total) * 0.55
+                progress_callback(min(encoding_progress, 0.95), f"Encoding: {current:.0f}s / {total:.0f}s")
+
         final_video.write_videofile(
             str(output_path),
             fps=24,
@@ -912,8 +965,12 @@ class VideoProducer:
             audio_codec='aac',
             threads=4,
             preset='medium',
-            bitrate='5000k'
+            bitrate='5000k',
+            logger='bar' if not progress_callback else None
         )
+
+        if progress_callback:
+            progress_callback(1.0, "Complete!")
 
         # Cleanup
         final_video.close()
@@ -923,51 +980,293 @@ class VideoProducer:
 
         print(f"\nVideo production complete!")
         print(f"Output: {output_path}")
-        print(f"Duration: {final_video.duration:.1f}s")
 
         return output_path
 
-    def _create_title_card_simple(self, title: str, duration: float = 3.0) -> ImageClip:
-        """Create a simple title card"""
-        width, height = 1280, 720
+    def _apply_ken_burns_effect(self, clip, timeline: dict):
+        """
+        Apply Ken Burns (slow zoom) effect to video.
+        Zooms towards the element being interacted with at each step.
+        Uses element_bbox from timeline for targeted zoom.
+        """
+        duration = clip.duration
+        steps = timeline.get('steps', [])
+        video_width, video_height = clip.size  # (width, height)
+
+        # Build zoom targets from timeline with element coordinates
+        zoom_targets = []
+        for step in steps:
+            start = step.get('timestamp_start', 0)
+            end = step.get('timestamp_end', start + 2.0)
+            bbox = step.get('element_bbox')
+
+            if bbox and bbox.get('x') is not None:
+                # Calculate center of element as zoom target (normalized 0-1)
+                target_x = (bbox['x'] + bbox['width'] / 2) / video_width
+                target_y = (bbox['y'] + bbox['height'] / 2) / video_height
+                # Clamp to valid range to avoid edge issues
+                target_x = max(0.25, min(0.75, target_x))
+                target_y = max(0.25, min(0.75, target_y))
+                zoom_targets.append((start, end, target_x, target_y, bbox))
+            else:
+                zoom_targets.append((start, end, 0.5, 0.5, None))
+
+        # Cache for interpolation
+        last_target = (0.5, 0.5)
+
+        def zoom_effect(get_frame, t):
+            """Apply smooth targeted zoom effect"""
+            nonlocal last_target
+            frame = get_frame(t)
+            h, w = frame.shape[:2]
+
+            # Find current target based on time with smooth transition
+            target_x, target_y = last_target
+            for start, end, tx, ty, _ in zoom_targets:
+                if start <= t <= end + 0.5:
+                    # Smooth interpolation towards target
+                    blend = min(1.0, (t - start) / 0.5) if t >= start else 0
+                    target_x = last_target[0] + (tx - last_target[0]) * blend
+                    target_y = last_target[1] + (ty - last_target[1]) * blend
+                    if blend >= 1.0:
+                        last_target = (tx, ty)
+                    break
+
+            # Gentle zoom factor (1.0 to 1.08 - subtle)
+            progress = t / duration
+            zoom_factor = 1.0 + (0.08 * progress)
+
+            # Calculate crop dimensions
+            new_w = int(w / zoom_factor)
+            new_h = int(h / zoom_factor)
+
+            # Calculate crop position centered on target
+            center_x = int(target_x * w)
+            center_y = int(target_y * h)
+
+            x1 = center_x - new_w // 2
+            y1 = center_y - new_h // 2
+
+            # Clamp to bounds
+            x1 = max(0, min(w - new_w, x1))
+            y1 = max(0, min(h - new_h, y1))
+
+            # Crop and resize
+            cropped = frame[y1:y1+new_h, x1:x1+new_w]
+
+            from PIL import Image
+            import numpy as np
+            pil_img = Image.fromarray(cropped)
+            pil_img = pil_img.resize((w, h), Image.Resampling.LANCZOS)
+            return np.array(pil_img)
+
+        return clip.transform(zoom_effect)
+
+    def _apply_highlight_effect(self, clip, timeline: dict):
+        """
+        Apply gold highlight box effect around the element being interacted with.
+        Uses element_bbox from timeline for targeted highlighting.
+        """
+        steps = timeline.get('steps', [])
+        if not steps:
+            return clip
+
+        # Build list of (start_time, end_time, bbox) for action windows
+        action_windows = []
+        for step in steps:
+            start = step.get('timestamp_start', 0)
+            end = step.get('timestamp_end', start + 2.0)
+            bbox = step.get('element_bbox')
+            action_windows.append((start, end, bbox))
+
+        def highlight_frame(get_frame, t):
+            """Apply highlight box around the active element"""
+            frame = get_frame(t)
+
+            # Check if we're in an action window
+            active_bbox = None
+            intensity = 0
+            for start, end, bbox in action_windows:
+                if start <= t <= end + 0.3:  # Extend slightly past end
+                    # Calculate intensity based on position in window
+                    window_duration = end - start if end > start else 1.0
+                    window_progress = (t - start) / window_duration
+                    # Fade in/out effect
+                    if window_progress < 0.15:
+                        intensity = window_progress / 0.15
+                    elif window_progress > 0.85:
+                        intensity = max(0, (1.0 - window_progress) / 0.15)
+                    else:
+                        intensity = 1.0
+                    active_bbox = bbox
+                    break
+
+            if not active_bbox or intensity <= 0:
+                return frame
+
+            # Apply gold highlight box around the element
+            from PIL import Image, ImageDraw
+            import numpy as np
+
+            pil_img = Image.fromarray(frame)
+            overlay = Image.new('RGBA', pil_img.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+
+            # Get element coordinates with padding
+            padding = 8
+            x1 = int(active_bbox['x']) - padding
+            y1 = int(active_bbox['y']) - padding
+            x2 = int(active_bbox['x'] + active_bbox['width']) + padding
+            y2 = int(active_bbox['y'] + active_bbox['height']) + padding
+
+            # Clamp to image bounds
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(pil_img.width, x2)
+            y2 = min(pil_img.height, y2)
+
+            # Gold highlight color with intensity-based alpha
+            border_width = 4
+            glow_alpha = int(220 * intensity)
+            gold_color = (201, 162, 39, glow_alpha)
+
+            # Draw rounded rectangle border around the element
+            # Outer glow (thicker, more transparent)
+            for i in range(3):
+                offset = i * 2
+                outer_alpha = int(glow_alpha * (0.3 - i * 0.1))
+                draw.rectangle(
+                    [x1 - offset, y1 - offset, x2 + offset, y2 + offset],
+                    outline=(201, 162, 39, outer_alpha),
+                    width=2
+                )
+
+            # Main border (gold box)
+            draw.rectangle(
+                [x1, y1, x2, y2],
+                outline=gold_color,
+                width=border_width
+            )
+
+            # Corner accents (small squares at corners)
+            corner_size = 12
+            corner_color = (201, 162, 39, glow_alpha)
+            # Top-left
+            draw.rectangle([x1, y1, x1 + corner_size, y1 + border_width], fill=corner_color)
+            draw.rectangle([x1, y1, x1 + border_width, y1 + corner_size], fill=corner_color)
+            # Top-right
+            draw.rectangle([x2 - corner_size, y1, x2, y1 + border_width], fill=corner_color)
+            draw.rectangle([x2 - border_width, y1, x2, y1 + corner_size], fill=corner_color)
+            # Bottom-left
+            draw.rectangle([x1, y2 - border_width, x1 + corner_size, y2], fill=corner_color)
+            draw.rectangle([x1, y2 - corner_size, x1 + border_width, y2], fill=corner_color)
+            # Bottom-right
+            draw.rectangle([x2 - corner_size, y2 - border_width, x2, y2], fill=corner_color)
+            draw.rectangle([x2 - border_width, y2 - corner_size, x2, y2], fill=corner_color)
+
+            # Composite
+            pil_img = pil_img.convert('RGBA')
+            result = Image.alpha_composite(pil_img, overlay)
+            return np.array(result.convert('RGB'))
+
+        return clip.transform(highlight_frame)
+
+    def _create_title_card_simple(self, title: str, description: str = "", duration: float = 5.0) -> ImageClip:
+        """Create a professional title card with PTO Central logo"""
+        width, height = 1280, 720  # Match 720p output
 
         img = Image.new('RGB', (width, height), (31, 41, 55))
         draw = ImageDraw.Draw(img)
 
-        # TJM gold accent line
-        draw.rectangle([0, height//2 - 60, width, height//2 - 56], fill=PTO_GOLD_RGB)
+        # Load and place PTO Central logo at top center
+        try:
+            from pathlib import Path
+            logo_path = Path(__file__).parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
+            if logo_path.exists():
+                logo_img = Image.open(logo_path)
+                # Resize logo to fit nicely (target height ~120px)
+                logo_aspect = logo_img.width / logo_img.height
+                logo_height = 120
+                logo_width = int(logo_height * logo_aspect)
+                logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+                # Convert RGBA to RGB if needed
+                if logo_img.mode == 'RGBA':
+                    logo_bg = Image.new('RGB', logo_img.size, (31, 41, 55))
+                    logo_bg.paste(logo_img, mask=logo_img.split()[3])
+                    logo_img = logo_bg
+                # Center logo at top
+                logo_x = (width - logo_width) // 2
+                logo_y = 60  # 60px from top
+                img.paste(logo_img, (logo_x, logo_y))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+
+        # Gold accent line below logo
+        draw.rectangle([0, height//2 - 100, width, height//2 - 96], fill=PTO_GOLD_RGB)
 
         try:
             title_font = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 48)
+            desc_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 20)
             subtitle_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 24)
         except Exception:
             title_font = ImageFont.load_default()
+            desc_font = ImageFont.load_default()
             subtitle_font = ImageFont.load_default()
 
-        # Draw title centered
+        # Draw title centered (below the gold line)
         title_bbox = draw.textbbox((0, 0), title, font=title_font)
         title_width = title_bbox[2] - title_bbox[0]
         title_x = (width - title_width) // 2
-        draw.text((title_x, height//2 - 30), title, fill=(255, 255, 255), font=title_font)
+        draw.text((title_x, height//2 - 60), title, fill=(255, 255, 255), font=title_font)
+
+        # Draw description (if provided)
+        if description:
+            desc_bbox = draw.textbbox((0, 0), description, font=desc_font)
+            desc_width = desc_bbox[2] - desc_bbox[0]
+            desc_x = (width - desc_width) // 2
+            draw.text((desc_x, height//2 + 10), description, fill=(156, 163, 175), font=desc_font)  # Gray text
 
         # Draw subtitle
         subtitle = "PTO Central Training"
         sub_bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
         sub_width = sub_bbox[2] - sub_bbox[0]
         sub_x = (width - sub_width) // 2
-        draw.text((sub_x, height//2 + 30), subtitle, fill=PTO_GOLD_RGB, font=subtitle_font)
+        draw.text((sub_x, height//2 + 60), subtitle, fill=PTO_GOLD_RGB, font=subtitle_font)
 
         temp_path = self.output_dir / "_intro_card.png"
         img.save(temp_path)
 
         return ImageClip(str(temp_path)).with_duration(duration)
 
-    def _create_outro_card_simple(self, duration: float = 2.0) -> ImageClip:
-        """Create a simple outro card"""
-        width, height = 1280, 720
+    def _create_outro_card_simple(self, duration: float = 5.0) -> ImageClip:
+        """Create a professional outro card with PTO Central logo"""
+        width, height = 1280, 720  # Match 720p output
 
         img = Image.new('RGB', (width, height), (31, 41, 55))
         draw = ImageDraw.Draw(img)
+
+        # Load and place PTO Central logo at top center
+        try:
+            from pathlib import Path
+            logo_path = Path(__file__).parent.parent / 'nicegui_app' / 'static' / 'PTOCentralLogo.png'
+            if logo_path.exists():
+                logo_img = Image.open(logo_path)
+                # Resize logo to fit nicely (target height ~100px for outro)
+                logo_aspect = logo_img.width / logo_img.height
+                logo_height = 100
+                logo_width = int(logo_height * logo_aspect)
+                logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+                # Convert RGBA to RGB if needed
+                if logo_img.mode == 'RGBA':
+                    logo_bg = Image.new('RGB', logo_img.size, (31, 41, 55))
+                    logo_bg.paste(logo_img, mask=logo_img.split()[3])
+                    logo_img = logo_bg
+                # Center logo at top
+                logo_x = (width - logo_width) // 2
+                logo_y = 80
+                img.paste(logo_img, (logo_x, logo_y))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
 
         try:
             font = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 36)
@@ -979,17 +1278,497 @@ class VideoProducer:
         text = "Training Complete"
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
-        draw.text(((width - text_width)//2, height//2 - 20), text, fill=PTO_GOLD_RGB, font=font)
+        draw.text(((width - text_width)//2, height//2 + 20), text, fill=PTO_GOLD_RGB, font=font)
 
         subtitle = "PTO Central"
         sub_bbox = draw.textbbox((0, 0), subtitle, font=small_font)
         sub_width = sub_bbox[2] - sub_bbox[0]
-        draw.text(((width - sub_width)//2, height//2 + 25), subtitle, fill=(150, 150, 150), font=small_font)
+        draw.text(((width - sub_width)//2, height//2 + 70), subtitle, fill=(150, 150, 150), font=small_font)
 
         temp_path = self.output_dir / "_outro_card.png"
         img.save(temp_path)
 
         return ImageClip(str(temp_path)).with_duration(duration)
+
+    def create_slideshow_from_timeline(
+        self,
+        timeline_path: Path,
+        audio_dir: Path,
+        output_path: Optional[Path] = None,
+        include_intro: bool = True,
+        include_outro: bool = True,
+        transition_duration: float = 0.5,
+        progress_callback: Optional[Callable[[float, str], None]] = None
+    ) -> Path:
+        """
+        Create training video using static screenshots with crossfade transitions.
+
+        This produces smooth, professional results without flickering because:
+        - Uses static screenshots instead of video recording
+        - Each slide remains perfectly still during narration
+        - Professional crossfade transitions between slides
+        - Smaller file sizes than video recording
+
+        Args:
+            timeline_path: Path to the timeline JSON file
+            audio_dir: Directory containing audio files
+            output_path: Where to save the final video
+            include_intro: Add title card at beginning
+            include_outro: Add outro card at end
+            transition_duration: Duration of crossfade between slides (seconds)
+            progress_callback: Callback function(progress: 0-1, status: str)
+        """
+        import json
+
+        print(f"\n{'='*60}")
+        print("SLIDESHOW PRODUCTION: Screenshot-Based Training Video")
+        print(f"{'='*60}\n")
+
+        # Load timeline
+        timeline = json.loads(timeline_path.read_text())
+        scenario_name = timeline['scenario_id']
+
+        print(f"Scenario: {scenario_name}")
+        print(f"Steps: {len(timeline['steps'])}")
+        print(f"Transition: {transition_duration}s crossfade")
+
+        if progress_callback:
+            progress_callback(0.05, "Loading timeline...")
+
+        # 720p output for faster encoding
+        target_width, target_height = 1280, 720
+
+        # Build list of slide clips with audio
+        slide_clips = []
+
+        for i, step in enumerate(timeline['steps']):
+            step_num = step['step_number']
+            # Handle both 'screenshot' and 'screenshot_path' keys for compatibility
+            screenshot_key = step.get('screenshot') or step.get('screenshot_path')
+            if not screenshot_key:
+                print(f"  Step {step_num}: No screenshot path in timeline")
+                continue
+            screenshot_path = Path(screenshot_key)
+
+            if not screenshot_path.exists():
+                print(f"  Step {step_num}: Screenshot not found: {screenshot_path}")
+                continue
+
+            # Find matching audio file
+            audio_file = audio_dir / f"step-{step_num:02d}-{step['step_id']}.mp3"
+            if not audio_file.exists():
+                audio_file = audio_dir / f"step-{step_num:02d}.mp3"
+
+            # Determine slide duration from audio or fallback
+            if audio_file.exists():
+                audio_clip = AudioFileClip(str(audio_file))
+                # Duration = audio + small padding for comfortable viewing
+                slide_duration = audio_clip.duration + 0.5
+                print(f"  Step {step_num}: {step['title']} ({slide_duration:.1f}s)")
+            else:
+                # No audio - use timeline duration or default
+                slide_duration = step.get('duration', 3.0)
+                audio_clip = None
+                print(f"  Step {step_num}: {step['title']} ({slide_duration:.1f}s) - NO AUDIO")
+
+            # Load and resize screenshot to target resolution
+            screenshot_img = Image.open(screenshot_path)
+
+            # Scale to fit 1920x1080 (letterbox if aspect ratio differs)
+            img_aspect = screenshot_img.width / screenshot_img.height
+            target_aspect = target_width / target_height
+
+            if img_aspect > target_aspect:
+                # Image is wider - fit to width, add vertical bars
+                new_width = target_width
+                new_height = int(target_width / img_aspect)
+            else:
+                # Image is taller - fit to height, add horizontal bars
+                new_height = target_height
+                new_width = int(target_height * img_aspect)
+
+            screenshot_img = screenshot_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+            # Create canvas and paste centered
+            canvas = Image.new('RGB', (target_width, target_height), (31, 41, 55))
+            paste_x = (target_width - new_width) // 2
+            paste_y = (target_height - new_height) // 2
+            canvas.paste(screenshot_img, (paste_x, paste_y))
+
+            # Save processed slide
+            slide_path = self.output_dir / f"_slide_{step_num:02d}.png"
+            canvas.save(slide_path)
+
+            # Create image clip
+            slide_clip = ImageClip(str(slide_path)).with_duration(slide_duration)
+
+            # Add audio if available
+            if audio_clip:
+                # Start audio slightly after slide appears for natural feel
+                audio_with_delay = audio_clip.with_start(0.25)
+                slide_clip = slide_clip.with_audio(audio_with_delay)
+
+            slide_clips.append(slide_clip)
+
+            if progress_callback:
+                progress_callback(0.05 + (0.30 * (i + 1) / len(timeline['steps'])), f"Processing slide {step_num}...")
+
+        if not slide_clips:
+            raise ValueError("No slides could be created from timeline")
+
+        print(f"\nCreated {len(slide_clips)} slides")
+
+        # Apply crossfade transitions between slides
+        if transition_duration > 0 and len(slide_clips) > 1:
+            print(f"Applying {transition_duration}s crossfade transitions...")
+            if progress_callback:
+                progress_callback(0.40, "Adding transitions...")
+
+            # Use CompositeVideoClip for overlapping transitions with crossfade
+            from moviepy import CompositeVideoClip
+            from moviepy.video.fx import CrossFadeIn, CrossFadeOut
+
+            # Calculate proper start times with overlap
+            current_time = 0
+            clips_positioned = []
+
+            for i, clip in enumerate(slide_clips):
+                if i == 0:
+                    # First clip starts at 0, with fade out at end
+                    clip_with_fx = clip.with_effects([CrossFadeOut(transition_duration)])
+                    clips_positioned.append(clip_with_fx.with_start(0))
+                    current_time = clip.duration - transition_duration
+                elif i == len(slide_clips) - 1:
+                    # Last clip - fade in only
+                    clip_with_fx = clip.with_effects([CrossFadeIn(transition_duration)])
+                    clips_positioned.append(clip_with_fx.with_start(current_time))
+                    current_time += clip.duration - transition_duration
+                else:
+                    # Middle clips - fade in and fade out
+                    clip_with_fx = clip.with_effects([
+                        CrossFadeIn(transition_duration),
+                        CrossFadeOut(transition_duration)
+                    ])
+                    clips_positioned.append(clip_with_fx.with_start(current_time))
+                    current_time += clip.duration - transition_duration
+
+            main_video = CompositeVideoClip(clips_positioned)
+        else:
+            # No transitions - simple concatenation
+            main_video = concatenate_videoclips(slide_clips, method="compose")
+
+        # Prepare final clips list
+        final_clips = []
+
+        # Add intro title card
+        if include_intro:
+            print("Creating intro card...")
+            if progress_callback:
+                progress_callback(0.50, "Creating intro card...")
+            intro_clip = self._create_title_card_simple(
+                title=timeline['scenario_name'],
+                description=timeline.get('scenario_description', ''),
+                duration=5.0
+            )
+            final_clips.append(intro_clip)
+
+        # Add main slideshow
+        final_clips.append(main_video)
+
+        # Add outro card
+        if include_outro:
+            print("Creating outro card...")
+            if progress_callback:
+                progress_callback(0.55, "Creating outro card...")
+            outro_clip = self._create_outro_card_simple(duration=5.0)
+            final_clips.append(outro_clip)
+
+        # Concatenate all clips
+        print("\nCompiling final video...")
+        if progress_callback:
+            progress_callback(0.60, "Compiling video...")
+        final_video = concatenate_videoclips(final_clips, method="compose")
+
+        # Determine output path
+        if output_path is None:
+            output_path = self.output_dir / f"{scenario_name}_training.mp4"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print(f"Exporting to: {output_path}")
+        print(f"Total duration: {final_video.duration:.1f}s")
+
+        # Custom progress logger for MoviePy
+        class ProgressLogger:
+            def __init__(self, callback, total_frames):
+                self.callback = callback
+                self.total_frames = total_frames
+                self.last_percent = 0
+
+            def bars_callback(self, bar, attr, value, old_value=None):
+                if attr == 'index' and self.total_frames > 0:
+                    percent = int((value / self.total_frames) * 100)
+                    if percent != self.last_percent:
+                        self.last_percent = percent
+                        if self.callback:
+                            self.callback(percent / 100, f"Encoding: {percent}%")
+                        print(f"\rEncoding: {percent}%", end='', flush=True)
+
+        # Calculate total frames
+        total_frames = int(final_video.duration * 24)  # 24 fps
+
+        if progress_callback:
+            progress_callback(0.0, "Starting encoding...")
+
+        final_video.write_videofile(
+            str(output_path),
+            fps=24,  # 24fps for training videos
+            codec='libx264',
+            audio_codec='aac',
+            threads=4,
+            preset='ultrafast',  # Fast encoding
+            bitrate='3000k',  # Good quality for 720p
+            logger='bar'  # Show progress bar in terminal
+        )
+        print()  # New line after encoding
+
+        if progress_callback:
+            progress_callback(1.0, "Complete!")
+
+        # Cleanup
+        final_video.close()
+        main_video.close()
+        for clip in slide_clips:
+            clip.close()
+
+        # Clean up temp slide files
+        for slide_file in self.output_dir.glob("_slide_*.png"):
+            try:
+                slide_file.unlink()
+            except Exception:
+                pass
+
+        print(f"\nSlideshow production complete!")
+        print(f"Output: {output_path}")
+        print(f"File size: {output_path.stat().st_size / (1024*1024):.1f} MB")
+
+        return output_path
+
+    def create_video_from_raw_recording(
+        self,
+        raw_video_path: Path,
+        timeline_path: Path,
+        audio_dir: Path,
+        output_path: Optional[Path] = None,
+        include_intro: bool = True,
+        include_outro: bool = True,
+        progress_callback: Optional[Callable[[float, str], None]] = None
+    ) -> Path:
+        """
+        Create training video from raw Playwright recording with audio narration.
+
+        This produces authentic recordings showing real mouse movements, clicks,
+        and typing - like watching someone actually use the application.
+
+        Args:
+            raw_video_path: Path to the raw Playwright .webm recording
+            timeline_path: Path to the timeline JSON file (for audio timing)
+            audio_dir: Directory containing audio files
+            output_path: Where to save the final video
+            include_intro: Add title card at beginning
+            include_outro: Add outro card at end
+            progress_callback: Callback function(progress: 0-1, status: str)
+        """
+        import json
+
+        print(f"\n{'='*60}")
+        print("RAW RECORDING PRODUCTION: Authentic Interactive Video")
+        print(f"{'='*60}\n")
+
+        # Verify raw video exists
+        if not raw_video_path.exists():
+            raise FileNotFoundError(f"Raw video not found: {raw_video_path}")
+
+        print(f"Raw video: {raw_video_path}")
+        print(f"File size: {raw_video_path.stat().st_size / (1024*1024):.1f} MB")
+
+        # Load timeline for audio synchronization
+        timeline = json.loads(timeline_path.read_text())
+        scenario_name = timeline['scenario_id']
+
+        print(f"Scenario: {scenario_name}")
+        print(f"Steps: {len(timeline['steps'])}")
+
+        if progress_callback:
+            progress_callback(0.05, "Loading raw recording...")
+
+        # Load the raw video
+        raw_video = VideoFileClip(str(raw_video_path))
+        print(f"Raw video duration: {raw_video.duration:.1f}s")
+        print(f"Raw video size: {raw_video.size}")
+
+        if progress_callback:
+            progress_callback(0.15, "Processing audio...")
+
+        # Build audio tracks - SEQUENTIAL placement to avoid overlap
+        # Each audio clip starts after the previous one ends
+        audio_clips = []
+        current_audio_time = 0.0  # Track where next audio should start
+        audio_gap = 0.5  # Small gap between audio clips
+
+        for step in timeline['steps']:
+            step_num = step['step_number']
+
+            # Find matching audio file
+            audio_file = audio_dir / f"step-{step_num:02d}-{step['step_id']}.mp3"
+            if not audio_file.exists():
+                audio_file = audio_dir / f"step-{step_num:02d}.mp3"
+
+            if audio_file.exists():
+                audio_clip = AudioFileClip(str(audio_file))
+                # Position audio SEQUENTIALLY (no overlap)
+                audio_clip = audio_clip.with_start(current_audio_time)
+                audio_clips.append(audio_clip)
+                print(f"  Step {step_num}: Audio at {current_audio_time:.1f}s ({audio_clip.duration:.1f}s)")
+                # Move to next position after this clip ends
+                current_audio_time += audio_clip.duration + audio_gap
+            else:
+                print(f"  Step {step_num}: No audio file found")
+
+        if progress_callback:
+            progress_callback(0.30, "Combining audio tracks...")
+
+        # Combine all audio clips
+        if audio_clips:
+            combined_audio = CompositeAudioClip(audio_clips)
+            # Add audio to video
+            video_with_audio = raw_video.with_audio(combined_audio)
+            print(f"\nCombined {len(audio_clips)} audio tracks")
+        else:
+            video_with_audio = raw_video
+            print("\nNo audio files found - using video only")
+
+        # Output at 720p for fast encoding
+        target_width, target_height = 1280, 720
+
+        # Calculate scaling to fit target resolution
+        scale_x = target_width / raw_video.size[0]
+        scale_y = target_height / raw_video.size[1]
+        scale = min(scale_x, scale_y)  # Use smaller scale to fit
+
+        new_width = int(raw_video.size[0] * scale)
+        new_height = int(raw_video.size[1] * scale)
+
+        if new_width != target_width or new_height != target_height:
+            # Need to resize and pad - use .resized() method
+            video_resized = video_with_audio.resized((new_width, new_height))
+
+            # Create black background and composite
+            from moviepy import ColorClip
+            background = ColorClip(size=(target_width, target_height), color=(31, 41, 55))
+            background = background.with_duration(video_resized.duration)
+
+            # Center the video on the background
+            x_offset = (target_width - new_width) // 2
+            y_offset = (target_height - new_height) // 2
+
+            video_with_audio = CompositeVideoClip([
+                background,
+                video_resized.with_position((x_offset, y_offset))
+            ])
+
+            if audio_clips:
+                video_with_audio = video_with_audio.with_audio(combined_audio)
+
+        if progress_callback:
+            progress_callback(0.40, "Adding intro/outro...")
+
+        # Prepare final clips list
+        final_clips = []
+
+        # Add intro title card
+        if include_intro:
+            print("Creating intro card...")
+            intro_clip = self._create_title_card_simple(
+                title=timeline['scenario_name'],
+                description=timeline.get('scenario_description', ''),
+                duration=5.0
+            )
+            final_clips.append(intro_clip)
+
+        # Add main video
+        final_clips.append(video_with_audio)
+
+        # Add outro card
+        if include_outro:
+            print("Creating outro card...")
+            outro_clip = self._create_outro_card_simple(duration=5.0)
+            final_clips.append(outro_clip)
+
+        if progress_callback:
+            progress_callback(0.50, "Compiling final video...")
+
+        # Concatenate all clips
+        print("\nCompiling final video...")
+        final_video = concatenate_videoclips(final_clips, method="compose")
+
+        # Determine output path
+        if output_path is None:
+            output_path = self.output_dir / f"{scenario_name}_training.mp4"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print(f"Exporting to: {output_path}")
+        print(f"Total duration: {final_video.duration:.1f}s")
+
+        if progress_callback:
+            progress_callback(0.60, "Encoding video (this may take a few minutes)...")
+
+        # Use ultrafast preset for quick encoding at 720p
+        print(f"\nEncoding video... (720p, ultrafast preset)")
+
+        final_video.write_videofile(
+            str(output_path),
+            fps=24,  # 24fps is fine for training videos
+            codec='libx264',
+            audio_codec='aac',
+            threads=4,
+            preset='ultrafast',  # Fastest encoding
+            bitrate='3000k',  # Good quality for 720p
+            logger='bar'  # Always show progress bar in console
+        )
+
+        if progress_callback:
+            progress_callback(1.0, "Complete!")
+
+        # Cleanup
+        final_video.close()
+        raw_video.close()
+        for clip in audio_clips:
+            clip.close()
+
+        # Get final video details
+        file_size_mb = output_path.stat().st_size / (1024 * 1024)
+
+        print(f"\n{'='*60}")
+        print("VIDEO PRODUCTION COMPLETE")
+        print(f"{'='*60}")
+        print(f"Output: {output_path}")
+        print(f"")
+        print(f"VIDEO SPECIFICATIONS:")
+        print(f"  Resolution:  {target_width} x {target_height} (HD 720p)")
+        print(f"  Frame Rate:  24 fps")
+        print(f"  Bitrate:     3000 kbps")
+        print(f"  Codec:       H.264 (libx264)")
+        print(f"  Audio:       AAC")
+        print(f"  Duration:    {final_video.duration:.1f} seconds")
+        print(f"  File Size:   {file_size_mb:.1f} MB")
+        print(f"")
+        print(f"SOURCE RECORDING:")
+        print(f"  Raw Video:   {raw_video_path.name}")
+        print(f"  Input Size:  {raw_video.size[0]} x {raw_video.size[1]}")
+        print(f"  Audio Tracks: {len(audio_clips)}")
+        print(f"{'='*60}\n")
+
+        return output_path
 
 
 # ═══════════════════════════════════════════════════════════════════════════

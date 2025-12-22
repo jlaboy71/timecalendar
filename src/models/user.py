@@ -1,9 +1,9 @@
 """
 User model for the PTO and Market Calendar System.
 """
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, JSON, func
+from sqlalchemy import String, Integer, Boolean, Date, DateTime, Time, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -48,6 +48,22 @@ class User(Base):
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
     anniversary_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     remote_schedule: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
+    work_start_time: Mapped[Optional[time]] = mapped_column(
+        Time,
+        nullable=True,
+        comment="Employee's work day start time (e.g., 9:00 AM)"
+    )
+    work_end_time: Mapped[Optional[time]] = mapped_column(
+        Time,
+        nullable=True,
+        comment="Employee's work day end time (e.g., 5:00 PM)"
+    )
+    wfh_swap_eligible: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="If true, user can participate in WFH day swaps"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
     # Location information (for state-specific leave policies)

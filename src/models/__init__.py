@@ -20,6 +20,7 @@ from .pending_notification import PendingNotification
 from .handbook_upload import HandbookUpload
 from .policy_change_log import PolicyChangeLog
 from .system_setting import SystemSetting
+from .wfh_day_swap import WFHDaySwapRequest
 
 # Make all models available when importing from this module
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     'HandbookUpload',
     'PolicyChangeLog',
     'SystemSetting',
+    'WFHDaySwapRequest',
 ]

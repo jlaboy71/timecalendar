@@ -204,6 +204,90 @@ class AuditService:
             details={'employee': employee_name, 'reason': reason}
         )
 
+    # WFH Day Swap audit methods
+    @staticmethod
+    def log_wfh_swap_request(
+        db: Session,
+        user_id: int,
+        username: str,
+        swap_id: int,
+        target_name: str,
+        swap_date: str
+    ):
+        """Log a WFH day swap request."""
+        return AuditService.log(
+            db=db,
+            action='wfh_swap_request',
+            user_id=user_id,
+            username=username,
+            entity_type='wfh_swap',
+            entity_id=swap_id,
+            details={'target_employee': target_name, 'swap_date': swap_date}
+        )
+
+    @staticmethod
+    def log_wfh_swap_accept(
+        db: Session,
+        user_id: int,
+        username: str,
+        swap_id: int,
+        requester_name: str,
+        swap_date: str = None
+    ):
+        """Log a WFH swap acceptance."""
+        details = {'requester_name': requester_name}
+        if swap_date:
+            details['swap_date'] = swap_date
+        return AuditService.log(
+            db=db,
+            action='wfh_swap_accept',
+            user_id=user_id,
+            username=username,
+            entity_type='wfh_swap',
+            entity_id=swap_id,
+            details=details
+        )
+
+    @staticmethod
+    def log_wfh_swap_decline(
+        db: Session,
+        user_id: int,
+        username: str,
+        swap_id: int,
+        requester_name: str,
+        swap_date: str = None
+    ):
+        """Log a WFH swap decline."""
+        details = {'requester_name': requester_name}
+        if swap_date:
+            details['swap_date'] = swap_date
+        return AuditService.log(
+            db=db,
+            action='wfh_swap_decline',
+            user_id=user_id,
+            username=username,
+            entity_type='wfh_swap',
+            entity_id=swap_id,
+            details=details
+        )
+
+    @staticmethod
+    def log_wfh_swap_cancel(
+        db: Session,
+        user_id: int,
+        username: str,
+        swap_id: int
+    ):
+        """Log a WFH swap cancellation by requester."""
+        return AuditService.log(
+            db=db,
+            action='wfh_swap_cancel',
+            user_id=user_id,
+            username=username,
+            entity_type='wfh_swap',
+            entity_id=swap_id
+        )
+
     @staticmethod
     def get_recent_logs(db: Session, limit: int = 100) -> list:
         """Get recent audit log entries."""
@@ -225,3 +309,21 @@ class AuditService:
             AuditLog.action == action
         ).order_by(AuditLog.created_at.desc()).limit(limit)
         return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def get_logs_by_entity_type(db: Session, entity_type: str, limit: int = 50) -> list:
+        """Get audit logs for a specific entity type."""
+        stmt = select(AuditLog).where(
+            AuditLog.entity_type == entity_type
+        ).order_by(AuditLog.created_at.desc()).limit(limit)
+        return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def delete_audit_log(db: Session, log_id: int) -> bool:
+        """Delete an audit log entry. Only superadmins should call this."""
+        log = db.get(AuditLog, log_id)
+        if log:
+            db.delete(log)
+            db.commit()
+            return True
+        return False

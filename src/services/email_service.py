@@ -588,5 +588,182 @@ class EmailService:
             return False
 
 
+    # WFH Day Swap email notifications
+    def send_wfh_swap_request(
+        self,
+        target_email: str,
+        target_name: str,
+        requester_name: str,
+        swap_date: date,
+        message: str
+    ) -> bool:
+        """Send email to target user when someone requests a WFH day swap."""
+        day_name = swap_date.strftime('%A')
+        formatted_date = _format_date_with_day(swap_date)
+        subject = f"PTO Central: WFH Day Swap Request from {requester_name}"
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {target_name},</p>
+        <p style="margin-bottom: 25px;">{requester_name} would like to <span style="color: #f59e0b; font-weight: 600;">swap WFH days</span> with you.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">From:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{requester_name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Swap Date:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">🏠 {formatted_date}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Day Requested:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{day_name} (your WFH day)</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background-color: #374151; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #6b7280;">
+            <p style="margin: 0 0 5px 0; color: #9ca3af; font-size: 12px;">Message from {requester_name}:</p>
+            <p style="margin: 0; color: #e5e7eb; font-style: italic;">"{message}"</p>
+        </div>
+        """
+
+        html = _get_email_template(
+            title="WFH Swap Request",
+            title_color="#f59e0b",
+            content=content,
+            footer_text="Please log in to PTO Central to accept or decline this request."
+        )
+        return self._send_email(target_email, subject, html)
+
+    def send_wfh_swap_accepted(
+        self,
+        requester_email: str,
+        requester_name: str,
+        target_name: str,
+        swap_date: date,
+        message: str
+    ) -> bool:
+        """Send email to requester when target accepts the WFH day swap."""
+        formatted_date = _format_date_with_day(swap_date)
+        subject = f"PTO Central: {target_name} Accepted Your WFH Swap Request"
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {requester_name},</p>
+        <p style="margin-bottom: 25px;">Great news! Your WFH day swap request has been <span style="color: #22c55e; font-weight: 600;">accepted</span>.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Accepted by:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #22c55e;">✓ {target_name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Swap Date:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">🏠 {formatted_date}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background-color: #374151; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #22c55e;">
+            <p style="margin: 0 0 5px 0; color: #9ca3af; font-size: 12px;">Message from {target_name}:</p>
+            <p style="margin: 0; color: #e5e7eb; font-style: italic;">"{message}"</p>
+        </div>
+        """
+
+        html = _get_email_template(
+            title="Swap Accepted",
+            title_color="#22c55e",
+            content=content,
+            footer_text="You can now work from home on this date."
+        )
+        return self._send_email(requester_email, subject, html)
+
+    def send_wfh_swap_declined(
+        self,
+        requester_email: str,
+        requester_name: str,
+        target_name: str,
+        swap_date: date,
+        message: str
+    ) -> bool:
+        """Send email to requester when target declines the WFH day swap."""
+        formatted_date = _format_date_with_day(swap_date)
+        subject = f"PTO Central: WFH Swap Request Declined"
+
+        content = f"""
+        <p style="font-size: 16px; margin-bottom: 20px;">Hi {requester_name},</p>
+        <p style="margin-bottom: 25px;">Unfortunately, your WFH day swap request has been <span style="color: #ef4444; font-weight: 600;">declined</span>.</p>
+
+        <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+            <table style="width: 100%; color: #e5e7eb;">
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Declined by:</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: #ef4444;">✗ {target_name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #9ca3af;">Requested Date:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">🏠 {formatted_date}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background-color: #374151; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #ef4444;">
+            <p style="margin: 0 0 5px 0; color: #9ca3af; font-size: 12px;">Message from {target_name}:</p>
+            <p style="margin: 0; color: #e5e7eb; font-style: italic;">"{message}"</p>
+        </div>
+        """
+
+        html = _get_email_template(
+            title="Swap Declined",
+            title_color="#ef4444",
+            content=content,
+            footer_text="You may want to try requesting a swap with a different teammate."
+        )
+        return self._send_email(requester_email, subject, html)
+
+    def send_eoy_report(
+        self,
+        subject: str,
+        html_content: str,
+        recipient_email: str = None
+    ) -> bool:
+        """
+        Send the EOY Assessment Report to the network administrator.
+
+        Args:
+            subject: Email subject
+            html_content: Pre-formatted HTML report content
+            recipient_email: Optional override for recipient (defaults to NETADMIN_EMAIL or from_email)
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        # Use provided email or fall back to NETADMIN_EMAIL env var or SMTP_USER
+        to_email = recipient_email or os.getenv('NETADMIN_EMAIL', self.smtp_user)
+
+        if not to_email:
+            logger.error("No recipient email configured for EOY report")
+            return False
+
+        # Wrap the report content in a full HTML document
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{subject}</title>
+        </head>
+        <body style="margin: 0; padding: 20px; background-color: #111827; color: white;">
+            {html_content}
+        </body>
+        </html>
+        """
+
+        return self._send_email(to_email, subject, full_html)
+
+
 # Global instance
 email_service = EmailService()

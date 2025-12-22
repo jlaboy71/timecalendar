@@ -314,7 +314,7 @@ def auto_notify_reports_page():
                         show_error_dialog('Error', 'Failed to load report')
                         return
 
-                    subject = f"TJM Time Calendar: {report['frequency'].title()} Auto-Notify Report - {report['display_date']}"
+                    subject = f"PTO Central: {report['frequency'].title()} Auto-Notify Report - {report['display_date']}"
 
                     success = email_service.send_report_email(
                         to_email=email_input.value,

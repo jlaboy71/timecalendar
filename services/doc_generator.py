@@ -82,9 +82,9 @@ class DocumentationGenerator:
 
             # Screenshot
             if step.screenshot_path and step.screenshot_path.exists():
-                # Calculate relative path from docs to screenshots
+                # Calculate relative path from docs to screenshots (use forward slashes for web)
                 rel_path = Path('..') / 'screenshots' / result.scenario_id / step.screenshot_path.name
-                md_lines.append(f"![{step.title}]({rel_path})")
+                md_lines.append(f"![{step.title}]({rel_path.as_posix()})")
                 md_lines.append("")
 
             # Narration text (as a tip/note)
@@ -118,6 +118,7 @@ class DocumentationGenerator:
         timeline = {
             'scenario_id': result.scenario_id,
             'scenario_name': result.scenario_name,
+            'scenario_description': result.scenario_description,  # For video title cards
             'total_duration': result.total_duration,
             'generated_at': datetime.now().isoformat(),
             'video_file': str(result.video_path) if result.video_path else None,
@@ -134,7 +135,8 @@ class DocumentationGenerator:
                 'timestamp_end': step.timestamp_end,
                 'duration': step.duration,
                 'screenshot': str(step.screenshot_path) if step.screenshot_path else None,
-                'audio_file': f"step-{step.step_number:02d}.mp3"  # Expected audio filename
+                'audio_file': f"step-{step.step_number:02d}.mp3",  # Expected audio filename
+                'element_bbox': step.element_bbox  # Bounding box of interacted element for video effects
             }
             timeline['steps'].append(step_data)
 

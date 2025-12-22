@@ -58,6 +58,29 @@ class ExampleService:
 2. Third-party (nicegui, sqlalchemy, etc.)
 3. Local imports (src.models, src.services, etc.)
 
+### Required Imports - Never Forget These
+**CRITICAL**: When adding database queries to any file, ALWAYS ensure these imports are at the TOP of the file:
+
+```python
+from sqlalchemy import select  # Required for select() queries
+from sqlalchemy.orm import Session  # Required for type hints
+```
+
+**DO NOT use inline imports for SQLAlchemy functions.** The `select()` function must be imported at the top of the file, not inside functions.
+
+**Before adding any `select()` query to a file:**
+1. Check if `from sqlalchemy import select` exists in the imports
+2. If not, ADD IT to the top of the file immediately
+3. Never assume it's already imported - verify first
+
+**Common SQLAlchemy imports needed in UI pages:**
+```python
+from sqlalchemy import select, and_, or_  # Query building
+from src.database import get_db  # Session factory
+```
+
+This prevents `NameError: name 'select' is not defined` crashes at runtime.
+
 ## Validation Order
 When validating input, follow this order:
 1. **Pydantic schemas** - Request format and type validation
@@ -275,16 +298,39 @@ def edit_handler():
 ```
 If you close the panel before creating the timer, the timer may not fire properly!
 
-### Check Existing Patterns First
-**BEFORE proposing any new visual elements (icons, colors, styles, formats):**
-1. Search the codebase for existing usage of similar elements
-2. Document what patterns already exist
-3. Explain any differences between existing patterns and what you're proposing
-4. Ask the user before introducing inconsistencies
+### Check Existing Patterns First - THE WHEEL IS ALREADY INVENTED
+**MANDATORY**: Before adding ANY UI element, ALWAYS search the codebase first. Do not assume - verify.
+
+**For ANY new UI element (buttons, dialogs, cards, labels, etc.):**
+1. **STOP** - Do not write code yet
+2. **SEARCH** - Use Grep to find existing examples of that element type
+3. **COPY** - Use the exact same pattern (props, classes, styles)
+4. **ADAPT** - Only change what's necessary for your specific use case
+
+**Common elements - ALWAYS search first:**
+| Element | Search Pattern |
+|---------|---------------|
+| Back button | `Grep: 'Back.*arrow_back'` |
+| Dialog | `Grep: 'ui.dialog'` |
+| Card styling | `Grep: 'ui.card().classes'` |
+| Status badges | `Grep: 'ui.badge'` |
+| Gold styling | `Grep: 'C9A227'` |
+| Notifications | `Grep: 'ui.notify'` |
+
+**Example - Back Button (CORRECT approach):**
+```bash
+# FIRST: Search for existing back buttons
+Grep: 'Back.*arrow_back'
+```
+Result shows pattern:
+```python
+ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style('border-color: #C9A227 !important; color: #C9A227 !important;')
+```
+Use THIS pattern. Don't invent your own.
 
 **Example - Adding icons:**
 - First run: `Grep` for `type_icons`, `icon`, or relevant patterns
 - Check [ui-patterns.md](ui-patterns.md) for documented standards
 - If existing pattern can't be reused (e.g., Material icons in emails), explain WHY and propose alternatives
 
-**Never assume** - always verify against the existing codebase first.
+**NEVER assume** - the codebase already has established patterns. Find them and use them.

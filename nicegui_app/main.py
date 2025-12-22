@@ -37,6 +37,7 @@ from nicegui_app.pages.admin_email_preview import email_preview_page
 from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
 from nicegui_app.pages.testing_console import testing_console_page
+from nicegui_app.pages.wfh_swap import wfh_swap_page
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.theme import apply_dark_mode
 from src.services.session_manager import require_auth
@@ -216,6 +217,13 @@ def carryover():
     if not require_auth():
         return
     carryover_page()
+
+@ui.page('/wfh-swap')
+def wfh_swap():
+    """WFH Day Swap page - peer-to-peer WFH day exchanges."""
+    if not require_auth():
+        return
+    wfh_swap_page()
 
 @ui.page('/manager/carryover')
 def manager_carryover():

@@ -175,7 +175,7 @@ def email_preview_page():
                 title="New Request Pending",
                 title_color="#f59e0b",
                 content=content,
-                footer_text="Please log in to TJM Time Calendar to approve or deny this request."
+                footer_text="Please log in to PTO Central to approve or deny this request."
             )
 
         elif email_type == 'cancelled':

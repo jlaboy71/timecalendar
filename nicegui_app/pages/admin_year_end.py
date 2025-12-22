@@ -3,8 +3,13 @@ from datetime import datetime, date
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog
 from src.services.year_end_service import YearEndService
+from src.services.eoy_report_service import EOYReportService
+from src.services.email_service import email_service
+
+# Brand color
+PTO_GOLD = '#C9A227'
 
 
 def admin_year_end_page():
@@ -309,6 +314,200 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
         # Initial load
         refresh_status()
+
+        # ========== EOY ASSESSMENT REPORT SECTION ==========
+        with ui.card().classes('w-full p-6 mt-6'):
+            with ui.row().classes('w-full justify-between items-center mb-4'):
+                with ui.row().classes('items-center gap-2'):
+                    ui.icon('assessment', size='md').style(f'color: {PTO_GOLD};')
+                    ui.label('EOY Assessment Report').classes('text-xl font-bold').style(f'color: {PTO_GOLD};')
+                ui.badge('CEO Dashboard', color='amber').props('outline')
+
+            ui.markdown('''
+            Generate a comprehensive **End-of-Year Assessment Report** with executive-level PTO analytics including:
+            - **Executive Summary** with PTO Health Score
+            - **Utilization Analysis** by leave type
+            - **Department Comparisons**
+            - **Employee Wellness Insights** (burnout risk flags)
+            - **Carryover Summary**
+            - **Year-over-Year Trends**
+            - **New Year Projections**
+            ''').classes('text-sm opacity-70 mb-4')
+
+            # Report container (will hold generated report)
+            report_container = ui.column().classes('w-full')
+
+            # Year selector for report
+            report_year = {'value': current_year}
+
+            def generate_eoy_report():
+                """Generate and display the EOY Assessment Report."""
+                report_container.clear()
+
+                db = next(get_db())
+                try:
+                    report_service = EOYReportService(db)
+                    report = report_service.generate_report(report_year['value'])
+
+                    with report_container:
+                        # Report Meta Header
+                        with ui.element('div').classes('w-full p-4 rounded-lg mb-4').style(f'background: linear-gradient(135deg, {PTO_GOLD}, #d4a84b);'):
+                            ui.label(f"PTO Central - {report['meta']['year']} EOY Assessment").classes('text-xl font-bold text-white')
+                            ui.label(report['meta']['report_type']).classes('text-sm text-white opacity-80')
+                            ui.label(f"Generated: {report['meta']['generated_at_formatted']}").classes('text-xs text-white opacity-60')
+
+                        # Executive Summary
+                        summary = report['executive_summary']
+                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #C9A227;'):
+                            ui.label('Executive Summary').classes('text-lg font-bold mb-3').style(f'color: {PTO_GOLD};')
+
+                            with ui.row().classes('gap-4 flex-wrap mb-4'):
+                                # Health Score
+                                with ui.element('div').classes('p-4 rounded-lg text-center').style('background-color: #374151; min-width: 120px;'):
+                                    score_color = '#22c55e' if summary['health_score'] != 'N/A' and summary['health_score'] >= 75 else '#f59e0b' if summary['health_score'] != 'N/A' and summary['health_score'] >= 60 else '#ef4444'
+                                    ui.label(str(summary['health_score'])).classes('text-3xl font-bold').style(f'color: {score_color};')
+                                    ui.label('Health Score').classes('text-xs opacity-50')
+                                    ui.label(summary['health_grade']).classes('text-sm').style(f'color: {score_color};')
+
+                                # Vacation Utilization
+                                with ui.element('div').classes('p-4 rounded-lg text-center').style('background-color: #374151; min-width: 120px;'):
+                                    ui.label(f"{summary.get('vacation_utilization', 0)}%").classes('text-3xl font-bold').style('color: #3b82f6;')
+                                    ui.label('Vacation Used').classes('text-xs opacity-50')
+
+                                # Sick Utilization
+                                with ui.element('div').classes('p-4 rounded-lg text-center').style('background-color: #374151; min-width: 120px;'):
+                                    ui.label(f"{summary.get('sick_utilization', 0)}%").classes('text-3xl font-bold').style('color: #22c55e;')
+                                    ui.label('Sick Used').classes('text-xs opacity-50')
+
+                                # Personal Utilization
+                                with ui.element('div').classes('p-4 rounded-lg text-center').style('background-color: #374151; min-width: 120px;'):
+                                    ui.label(f"{summary.get('personal_utilization', 0)}%").classes('text-3xl font-bold').style('color: #a855f7;')
+                                    ui.label('Personal Used').classes('text-xs opacity-50')
+
+                            # Observations
+                            ui.label('Key Observations').classes('font-semibold mb-2')
+                            for obs in summary['key_observations']:
+                                with ui.row().classes('items-start gap-2'):
+                                    ui.icon('lens', size='xs').style('color: #3b82f6; font-size: 8px; margin-top: 6px;')
+                                    ui.label(obs).classes('text-sm opacity-80')
+
+                            if summary['recommendations']:
+                                ui.label('Recommendations').classes('font-semibold mt-3 mb-2')
+                                for rec in summary['recommendations']:
+                                    with ui.row().classes('items-start gap-2'):
+                                        ui.icon('lightbulb', size='xs').style('color: #f59e0b; font-size: 14px;')
+                                        ui.label(rec).classes('text-sm opacity-80')
+
+                        # Utilization Analysis
+                        util = report['utilization_analysis']
+                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #3b82f6;'):
+                            ui.label('Utilization Analysis').classes('text-lg font-bold mb-3').style('color: #3b82f6;')
+
+                            # Create a simple table
+                            columns = [
+                                {'name': 'type', 'label': 'Leave Type', 'field': 'type', 'align': 'left'},
+                                {'name': 'allocated', 'label': 'Allocated (Days)', 'field': 'allocated', 'align': 'right'},
+                                {'name': 'used', 'label': 'Used (Days)', 'field': 'used', 'align': 'right'},
+                                {'name': 'unused', 'label': 'Unused (Days)', 'field': 'unused', 'align': 'right'},
+                                {'name': 'rate', 'label': 'Utilization', 'field': 'rate', 'align': 'right'},
+                            ]
+                            rows = [
+                                {'type': 'Vacation', 'allocated': util['vacation'].get('total_allocated_days', 0), 'used': util['vacation'].get('total_used_days', 0), 'unused': util['vacation'].get('total_unused_days', 0), 'rate': f"{util['vacation'].get('utilization_rate', 0)}%"},
+                                {'type': 'Sick', 'allocated': util['sick'].get('total_allocated_days', 0), 'used': util['sick'].get('total_used_days', 0), 'unused': util['sick'].get('total_unused_days', 0), 'rate': f"{util['sick'].get('utilization_rate', 0)}%"},
+                                {'type': 'Personal', 'allocated': util['personal'].get('total_allocated_days', 0), 'used': util['personal'].get('total_used_days', 0), 'unused': util['personal'].get('total_unused_days', 0), 'rate': f"{util['personal'].get('utilization_rate', 0)}%"},
+                            ]
+                            ui.table(columns=columns, rows=rows).classes('w-full').props('dark flat dense')
+
+                        # Department Comparison
+                        depts = report['department_comparison']
+                        if depts:
+                            with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #14b8a6;'):
+                                ui.label('Department Comparison').classes('text-lg font-bold mb-3').style('color: #14b8a6;')
+                                for dept in depts[:5]:  # Top 5
+                                    with ui.row().classes('w-full justify-between items-center py-2').style('border-bottom: 1px solid #374151;'):
+                                        with ui.column().classes('gap-0'):
+                                            ui.label(dept['department_name']).classes('font-semibold')
+                                            ui.label(f"{dept['employee_count']} employees").classes('text-xs opacity-50')
+                                        with ui.row().classes('gap-4'):
+                                            ui.label(f"Vacation: {dept['vacation_utilization']}%").classes('text-sm').style('color: #3b82f6;')
+                                            ui.label(f"Sick: {dept['sick_utilization']}%").classes('text-sm').style('color: #22c55e;')
+
+                        # Burnout Risk
+                        burnout = report['burnout_risk']
+                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #f59e0b;'):
+                            ui.label('Employee Wellness Insights').classes('text-lg font-bold mb-2').style('color: #f59e0b;')
+                            ui.label(burnout['summary_message']).classes('text-sm opacity-70 mb-3')
+
+                            if burnout['total_at_risk'] > 0:
+                                ui.label(f"Employees with {burnout['threshold_percentage']}%+ unused vacation:").classes('text-sm font-semibold mb-2').style('color: #f59e0b;')
+                                for emp in burnout['employees'][:10]:
+                                    with ui.row().classes('w-full items-start gap-2 py-1'):
+                                        ui.icon('person', size='xs').style('color: #f59e0b;')
+                                        with ui.column().classes('gap-0'):
+                                            ui.label(f"{emp['employee_name']} ({emp['department']})").classes('text-sm font-medium')
+                                            ui.label(emp['gentle_note']).classes('text-xs opacity-60')
+
+                                if burnout['total_at_risk'] > 10:
+                                    ui.label(f"...and {burnout['total_at_risk'] - 10} more").classes('text-xs opacity-50 mt-2')
+
+                        # Carryover Summary
+                        carryover = report['carryover_summary']
+                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #a855f7;'):
+                            ui.label('Carryover Summary').classes('text-lg font-bold mb-3').style('color: #a855f7;')
+                            with ui.row().classes('gap-4 flex-wrap'):
+                                with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151;'):
+                                    ui.label(str(carryover['approved_requests'])).classes('text-2xl font-bold').style('color: #22c55e;')
+                                    ui.label('Vacation Carryovers Approved').classes('text-xs opacity-50')
+                                with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151;'):
+                                    ui.label(f"{carryover['sick_auto_carryover_hours']} hrs").classes('text-2xl font-bold').style('color: #3b82f6;')
+                                    ui.label('Sick Leave Auto-Carried').classes('text-xs opacity-50')
+                                with ui.element('div').classes('p-3 rounded-lg').style('background-color: #374151;'):
+                                    ui.label(f"{carryover['chicago_auto_carryover_hours']} hrs").classes('text-2xl font-bold').style('color: #14b8a6;')
+                                    ui.label('Chicago Leave Carried').classes('text-xs opacity-50')
+
+                        # New Year Projections
+                        proj = report['new_year_projections']
+                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #22c55e;'):
+                            ui.label(f'{proj["projected_year"]} Projections').classes('text-lg font-bold mb-3').style('color: #22c55e;')
+                            with ui.row().classes('gap-6 flex-wrap'):
+                                with ui.column().classes('gap-1'):
+                                    ui.label(f"{proj['total_employees']} Employees").classes('font-semibold')
+                                    ui.label(f"{proj['total_vacation_days_allocated']} vacation days to allocate").classes('text-sm opacity-70')
+                                with ui.column().classes('gap-1'):
+                                    ui.label('Vacation Tier Distribution').classes('font-semibold')
+                                    tiers = proj['vacation_tier_distribution']
+                                    ui.label(f"10 days: {tiers['10_days_tier']} | 12 days: {tiers['12_days_tier']} | 15 days: {tiers['15_days_tier']} | 20 days: {tiers['20_days_tier']}").classes('text-sm opacity-70')
+                                if proj['employees_advancing_tiers'] > 0:
+                                    ui.label(f"{proj['employees_advancing_tiers']} employees advancing to higher vacation tier").classes('text-sm').style('color: #22c55e;')
+
+                        # Email option
+                        with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                            def email_report():
+                                try:
+                                    html_content = report_service.format_report_as_html(report)
+                                    # Get netadmin email from system settings or use default
+                                    email_service.send_eoy_report(
+                                        subject=f"PTO Central - {report_year['value']} EOY Assessment Report",
+                                        html_content=html_content
+                                    )
+                                    show_success_dialog('Report Emailed', 'The EOY Assessment Report has been sent to the network administrator.')
+                                except Exception as e:
+                                    show_error_dialog('Email Failed', f'Failed to send report: {str(e)}')
+
+                            ui.button('Email Report to NetAdmin', icon='email', on_click=email_report).props('outline').style(f'border-color: {PTO_GOLD}; color: {PTO_GOLD};')
+
+                except Exception as e:
+                    with report_container:
+                        ui.label(f'Error generating report: {str(e)}').classes('text-red-500')
+                finally:
+                    db.close()
+
+            # Report controls
+            with ui.row().classes('gap-4 items-center'):
+                with ui.select(options={current_year: str(current_year), current_year - 1: str(current_year - 1)}, value=current_year, label='Report Year').classes('w-32') as year_select:
+                    year_select.on('update:model-value', lambda e: report_year.update({'value': e.args}))
+
+                ui.button('Generate EOY Report', icon='assessment', on_click=generate_eoy_report).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
         # Action buttons
         with ui.row().classes('w-full gap-4 mt-4 justify-center'):

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PTO Central (formerly TJM Time Calendar) is a PTO (Paid Time Off) and Market Calendar System for Haventech Solutions/TJM Holdings. Built with Python, NiceGUI, and SQLite using a three-tier architecture.
+PTO Central is a PTO (Paid Time Off) and Market Calendar System for Haventech Solutions. Built with Python, NiceGUI, and SQLite using a three-tier architecture.
 
 ## Commands
 

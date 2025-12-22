@@ -1,14 +1,14 @@
-# TJM Time Calendar - Backup Setup Guide
+# PTO Central - Backup Setup Guide
 
 ## Overview
 
-This guide explains how to set up automated database backups for the TJM Time Calendar application.
+This guide explains how to set up automated database backups for the PTO Central application.
 
 ## Backup Script
 
 The backup script is located at `scripts/backup.ps1`. It:
 
-- Creates timestamped copies of `tjm_calendar.db`
+- Creates timestamped copies of `pto_central.db`
 - Stores backups in a configurable directory
 - Automatically removes backups older than the retention period
 - Logs all operations to `backup.log`
@@ -25,14 +25,14 @@ cd c:\Users\jlaboy\codelab\projects\TimeCalendar
 With custom options:
 
 ```powershell
-.\scripts\backup.ps1 -BackupDir "D:\Backups\TJMCalendar" -RetentionDays 14
+.\scripts\backup.ps1 -BackupDir "D:\Backups\PTOCentral" -RetentionDays 14
 ```
 
 ## Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `-BackupDir` | `C:\Backups\TJMCalendar` | Directory to store backups |
+| `-BackupDir` | `C:\Backups\PTOCentral` | Directory to store backups |
 | `-RetentionDays` | `7` | Days to keep old backups |
 
 ## Automated Scheduling (Windows Task Scheduler)
@@ -41,7 +41,7 @@ With custom options:
 
 1. Open Task Scheduler (`taskschd.msc`)
 2. Click "Create Basic Task"
-3. Name: "TJM Calendar Daily Backup"
+3. Name: "PTO Central Daily Backup"
 4. Trigger: Daily at 2:00 AM (or preferred time)
 5. Action: Start a program
    - Program: `powershell.exe`
@@ -60,15 +60,15 @@ $Trigger = New-ScheduledTaskTrigger -Daily -At "2:00AM"
 
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount
 
-Register-ScheduledTask -TaskName "TJM Calendar Daily Backup" `
+Register-ScheduledTask -TaskName "PTO Central Daily Backup" `
     -Action $Action -Trigger $Trigger -Principal $Principal `
-    -Description "Daily backup of TJM Time Calendar database"
+    -Description "Daily backup of PTO Central database"
 ```
 
 To remove the scheduled task:
 
 ```powershell
-Unregister-ScheduledTask -TaskName "TJM Calendar Daily Backup" -Confirm:$false
+Unregister-ScheduledTask -TaskName "PTO Central Daily Backup" -Confirm:$false
 ```
 
 ## Backup Verification
@@ -76,13 +76,13 @@ Unregister-ScheduledTask -TaskName "TJM Calendar Daily Backup" -Confirm:$false
 Check the backup log:
 
 ```powershell
-Get-Content "C:\Backups\TJMCalendar\backup.log" -Tail 20
+Get-Content "C:\Backups\PTOCentral\backup.log" -Tail 20
 ```
 
 List existing backups:
 
 ```powershell
-Get-ChildItem "C:\Backups\TJMCalendar" -Filter "tjm_calendar_*.db" |
+Get-ChildItem "C:\Backups\PTOCentral" -Filter "pto_central_*.db" |
     Sort-Object LastWriteTime -Descending |
     Format-Table Name, Length, LastWriteTime
 ```
@@ -96,8 +96,8 @@ To restore from a backup:
 
 ```powershell
 # Stop the app first, then:
-Copy-Item "C:\Backups\TJMCalendar\tjm_calendar_20250115_020000.db" `
-          "c:\Users\jlaboy\codelab\projects\TimeCalendar\tjm_calendar.db" -Force
+Copy-Item "C:\Backups\PTOCentral\pto_central_20250115_020000.db" `
+          "c:\Users\jlaboy\codelab\projects\TimeCalendar\pto_central.db" -Force
 ```
 
 3. Restart the application
@@ -111,7 +111,7 @@ Copy-Item "C:\Backups\TJMCalendar\tjm_calendar_20250115_020000.db" `
 Example with network share:
 
 ```powershell
-.\scripts\backup.ps1 -BackupDir "\\fileserver\backups\TJMCalendar"
+.\scripts\backup.ps1 -BackupDir "\\fileserver\backups\PTOCentral"
 ```
 
 ## Monitoring

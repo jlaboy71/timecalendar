@@ -8,7 +8,7 @@ Welcome to PTO Central! This is your complete system for managing paid time off 
 - **Submit PTO Requests** - Request vacation, sick, or personal time off
 - **View Your Balances** - See how much leave you have available
 - **Track Request Status** - Monitor pending, approved, and denied requests
-- **Team Calendar** - See when colleagues are out (approved time off)
+- **Team Calendar** - See when teammates are out (approved time off)
 - **Request Carryover** - Carry unused sick time into the next year
 - **Access Employee Handbook** - View company policies
 

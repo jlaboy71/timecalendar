@@ -61,6 +61,9 @@ addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "smoke: Quick smoke tests for critical functionality",
+]
 
 [tool.coverage.run]
 source = ["src", "nicegui_app"]

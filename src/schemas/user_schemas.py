@@ -1,6 +1,6 @@
 """User schemas for Pydantic models."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -58,6 +58,11 @@ class UserUpdate(BaseModel):
     remote_schedule: Optional[str] = None
     anniversary_date: Optional[date] = None
     password: Optional[str] = None
+    # WFH swap eligibility
+    wfh_swap_eligible: Optional[bool] = None
+    # Work schedule times
+    work_start_time: Optional[time] = None
+    work_end_time: Optional[time] = None
     # Trusted employee fields
     is_trusted: Optional[bool] = None
     trusted_by_id: Optional[int] = None

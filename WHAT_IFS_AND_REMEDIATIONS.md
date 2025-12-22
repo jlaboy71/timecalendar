@@ -1,6 +1,6 @@
-# TJM Time Calendar - What-If Scenarios and Remediations
+# PTO Central - What-If Scenarios and Remediations
 
-This document enumerates high-impact what-if scenarios across the TJM Time Calendar system and documents existing controls, detection mechanisms, and recovery procedures.
+This document enumerates high-impact what-if scenarios across the PTO Central system and documents existing controls, detection mechanisms, and recovery procedures.
 
 **Generated:** December 12, 2025
 **Codebase Version:** feature/nicegui-migration branch

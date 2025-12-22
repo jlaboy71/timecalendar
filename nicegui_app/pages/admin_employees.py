@@ -443,14 +443,27 @@ def admin_employees_add_page():
             with ui.row().classes('w-full gap-4 mt-2'):
                 role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
                 role_select = ui.select(role_options, label='Role', value='employee').props('outlined').classes('flex-1')
-                is_active_check = ui.checkbox('Active Employee', value=True).classes('self-center')
-                is_trusted_check = ui.checkbox('Trusted Employee', value=False).classes('self-center')
 
-                # Add tooltip for trusted employee
-                with ui.element('div').classes('self-center'):
-                    with ui.tooltip():
-                        ui.label('Auto-approves Vacation, Sick, Personal PTO').classes('text-xs')
-                    ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                # Active checkbox with help icon
+                with ui.row().classes('items-center gap-1 self-center'):
+                    is_active_check = ui.checkbox('Active', value=True)
+                    with ui.element('div'):
+                        ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                        ui.tooltip('When unchecked, employee cannot log in or submit requests')
+
+                # Trusted checkbox with help icon
+                with ui.row().classes('items-center gap-1 self-center'):
+                    is_trusted_check = ui.checkbox('Trusted', value=False)
+                    with ui.element('div'):
+                        ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                        ui.tooltip('Auto-approves Vacation, Sick, Personal PTO requests')
+
+                # WFH Swap checkbox with help icon
+                with ui.row().classes('items-center gap-1 self-center'):
+                    wfh_swap_check = ui.checkbox('WFH Swap', value=True)
+                    with ui.element('div'):
+                        ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                        ui.tooltip('Allow employee to swap WFH days with teammates')
 
         # Work Location Section
         with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
@@ -647,6 +660,11 @@ def admin_employees_add_page():
                             trusted_at=datetime.now()
                         )
                         user_service.update_user(new_user.id, trust_update)
+
+                    # Set WFH swap eligibility (defaults to True, update if unchecked)
+                    if not wfh_swap_check.value:
+                        swap_update = UserUpdate(wfh_swap_eligible=False)
+                        user_service.update_user(new_user.id, swap_update)
                     AuditService.log_user_create(
                         db, current_user.get('id'),
                         f"{current_user.get('first_name')} {current_user.get('last_name')}",
@@ -793,61 +811,33 @@ def admin_employees_edit_page(user_id: int):
 
                 role_select = None
                 is_trusted_check = None
+                wfh_swap_check = None
                 with ui.row().classes('w-full gap-4 mt-2'):
                     if not is_manager_editing:
                         role_options = {'employee': 'Employee', 'manager': 'Manager', 'admin': 'Admin', 'superadmin': 'Super Admin'}
                         role_select = ui.select(role_options, label='Role', value=user.role).props('outlined').classes('flex-1')
 
-                    is_active_check = ui.checkbox('Active Employee', value=user.is_active).classes('self-center')
-
-                    # Trusted Employee checkbox - only for admins editing employees
-                    if not is_manager_editing and user.role == 'employee':
-                        is_trusted_check = ui.checkbox('Trusted Employee', value=user.is_trusted).classes('self-center')
-
-                        # Add tooltip for trusted employee
-                        with ui.element('div').classes('self-center'):
-                            with ui.tooltip():
-                                ui.label('Auto-approves Vacation, Sick, Personal PTO').classes('text-xs')
+                    # Active checkbox with help icon
+                    with ui.row().classes('items-center gap-1 self-center'):
+                        is_active_check = ui.checkbox('Active', value=user.is_active)
+                        with ui.element('div'):
                             ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                            ui.tooltip('When unchecked, employee cannot log in or submit requests')
 
-                    # Delete button - only for admins (not managers editing their own employees)
-                    if not is_manager_editing:
-                        def confirm_delete_employee():
-                            with ui.dialog() as dialog, ui.card().classes('p-0 max-w-md'):
-                                with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #ef4444'):
-                                    ui.icon('warning', size='md').classes('mr-2')
-                                    ui.label('Delete Employee').classes('text-lg font-bold')
-                                with ui.column().classes('p-4 gap-3'):
-                                    ui.label(f'Are you sure you want to delete {user.first_name} {user.last_name}?').classes('text-base')
-                                    ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm opacity-70')
-                                    ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600')
-                                    with ui.row().classes('w-full justify-end gap-3 mt-2'):
-                                        ui.button('Cancel', on_click=dialog.close).props('flat')
+                    # Trusted checkbox - only for admins editing employees
+                    if not is_manager_editing and user.role == 'employee':
+                        with ui.row().classes('items-center gap-1 self-center'):
+                            is_trusted_check = ui.checkbox('Trusted', value=user.is_trusted)
+                            with ui.element('div'):
+                                ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                                ui.tooltip('Auto-approves Vacation, Sick, Personal PTO requests')
 
-                                        async def do_delete_employee():
-                                            db = next(get_db())
-                                            try:
-                                                user_service = UserService(db)
-                                                if user_service.delete_user(user_id):
-                                                    current_user = app.storage.user.get('user')
-                                                    AuditService.log(
-                                                        db, action='user_delete',
-                                                        user_id=current_user.get('id'),
-                                                        username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
-                                                        entity_type='user', entity_id=user_id,
-                                                        details={'deleted_user': user.username}
-                                                    )
-                                                    dialog.close()
-                                                    ui.navigate.to('/admin/employees')
-                                                else:
-                                                    show_error_dialog('Deletion Failed', 'There was an error deleting the employee.')
-                                            finally:
-                                                db.close()
-
-                                        ui.button('Delete Permanently', on_click=do_delete_employee).props('color=red')
-                            dialog.open()
-
-                        ui.button('Delete', on_click=confirm_delete_employee, icon='delete').props('color=red outline')
+                        # WFH Swap checkbox
+                        with ui.row().classes('items-center gap-1 self-center'):
+                            wfh_swap_check = ui.checkbox('WFH Swap', value=getattr(user, 'wfh_swap_eligible', True))
+                            with ui.element('div'):
+                                ui.icon('help_outline', size='xs').classes('cursor-pointer opacity-60')
+                                ui.tooltip('Allow employee to swap WFH days with teammates')
 
             # Work Location Section - only for admins
             location_state_select = None
@@ -953,6 +943,10 @@ def admin_employees_edit_page(user_id: int):
                             'is_active': is_active_check.value
                         }
 
+                        # WFH swap eligibility - only if checkbox exists
+                        if wfh_swap_check is not None:
+                            update_data['wfh_swap_eligible'] = wfh_swap_check.value
+
                         if not is_manager_editing:
                             update_data['department_id'] = department_select.value
                             update_data['role'] = role_select.value
@@ -1003,7 +997,48 @@ def admin_employees_edit_page(user_id: int):
                     save_btn.props('loading disabled')
                     save_changes()
 
-                save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
+                # Right side buttons - Save and Delete (stacked vertically)
+                with ui.column().classes('gap-2 items-end'):
+                    save_btn = ui.button('Save Changes', on_click=on_save_click, color='positive', icon='save')
+
+                    # Delete button - only for admins (not managers editing their own employees)
+                    if not is_manager_editing:
+                        def confirm_delete_employee():
+                            with ui.dialog() as delete_dialog, ui.card().classes('p-0 max-w-md'):
+                                with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #ef4444'):
+                                    ui.icon('warning', size='md').classes('mr-2')
+                                    ui.label('Delete Employee').classes('text-lg font-bold')
+                                with ui.column().classes('p-4 gap-3'):
+                                    ui.label(f'Are you sure you want to delete {user.first_name} {user.last_name}?').classes('text-base')
+                                    ui.label('This will permanently remove the employee and ALL their PTO records.').classes('text-sm opacity-70')
+                                    ui.label('This action cannot be undone!').classes('text-sm font-bold text-red-600')
+                                    with ui.row().classes('w-full justify-end gap-3 mt-2'):
+                                        ui.button('Cancel', on_click=delete_dialog.close).props('flat')
+
+                                        async def do_delete_employee():
+                                            db = next(get_db())
+                                            try:
+                                                user_service = UserService(db)
+                                                if user_service.delete_user(user_id):
+                                                    current_user = app.storage.user.get('user')
+                                                    AuditService.log(
+                                                        db, action='user_delete',
+                                                        user_id=current_user.get('id'),
+                                                        username=f"{current_user.get('first_name')} {current_user.get('last_name')}",
+                                                        entity_type='user', entity_id=user_id,
+                                                        details={'deleted_user': user.username}
+                                                    )
+                                                    delete_dialog.close()
+                                                    ui.navigate.to('/admin/employees')
+                                                else:
+                                                    show_error_dialog('Deletion Failed', 'There was an error deleting the employee.')
+                                            finally:
+                                                db.close()
+
+                                        ui.button('Delete Permanently', on_click=do_delete_employee).props('color=red')
+                            delete_dialog.open()
+
+                        ui.button('Delete', on_click=confirm_delete_employee, icon='delete').props('color=red outline')
 
             ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6')
 

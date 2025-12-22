@@ -36,6 +36,51 @@ from services.audio_narration import AudioNarrationService
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# VOICE SAMPLES DIRECTORY
+# ═══════════════════════════════════════════════════════════════════════════
+
+SAMPLES_DIR = Path(__file__).parent.parent / 'static' / 'samples'
+SAMPLE_TEXT = "Welcome to PTO Central"
+
+
+def ensure_voice_samples():
+    """Generate voice sample files if they don't exist"""
+    SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+
+    voices = ['onyx', 'alloy', 'nova', 'echo']
+    missing = []
+
+    for voice in voices:
+        sample_path = SAMPLES_DIR / f'welcome_{voice}.mp3'
+        if not sample_path.exists():
+            missing.append(voice)
+
+    if missing and testing_config.openai_api_key:
+        from openai import OpenAI
+        client = OpenAI(api_key=testing_config.openai_api_key)
+
+        for voice in missing:
+            try:
+                sample_path = SAMPLES_DIR / f'welcome_{voice}.mp3'
+                response = client.audio.speech.create(
+                    model=testing_config.tts_model,
+                    voice=voice,
+                    input=SAMPLE_TEXT,
+                    speed=1.0
+                )
+                response.stream_to_file(str(sample_path))
+            except Exception as e:
+                print(f"Failed to generate sample for {voice}: {e}")
+
+    return len(missing) == 0 or not missing
+
+
+def get_sample_path(voice: str) -> str:
+    """Get the URL path for a voice sample"""
+    return f'/static/samples/welcome_{voice}.mp3'
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # PTO CENTRAL BRAND COLORS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -245,7 +290,7 @@ def create_testing_console_page():
 
     with ui.tabs().classes('w-full').style(f'background-color: #1f2937;') as main_tabs:
         run_tab = ui.tab('Run Scenarios', icon='play_circle').style(f'color: {PTO_GOLD};')
-        outputs_tab = ui.tab('Generated Outputs', icon='folder_special')
+        outputs_tab = ui.tab('Media Output', icon='perm_media')
         custom_tab = ui.tab('Custom Scenarios', icon='extension')
         history_tab = ui.tab('Run History', icon='history')
 
@@ -265,83 +310,68 @@ def create_testing_console_page():
             with ui.card().classes('w-full p-4 mb-4').style('background-color: #111827; border: 1px solid #374151;'):
                 with ui.row().classes('items-center gap-1 mb-3'):
                     ui.icon('auto_awesome', size='xs').style(f'color: {PTO_GOLD};')
-                    ui.label('PIPELINE').classes('text-xs font-bold tracking-wider opacity-60')
+                    ui.label('OPTIMIZED PIPELINE').classes('text-xs font-bold tracking-wider opacity-60')
+                    ui.label('(parallel processing enabled)').classes('text-xs opacity-40 ml-2')
 
                 with ui.row().classes('w-full items-center justify-between'):
-                    # Stage 1: Login
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_login:
-                        ui.icon('login', size='md').classes('stage-icon').style('color: #60a5fa;')
-                        ui.label('Login').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['login'] = stage_login
+                    # Stage 1: Record (Login + Execute with video recording)
+                    with ui.column().classes('items-center pipeline-stage idle') as stage_record:
+                        ui.icon('videocam', size='lg').classes('stage-icon').style('color: #60a5fa;')
+                        ui.label('Record').classes('text-sm mt-1 opacity-70 font-medium')
+                        ui.label('Browser Session').classes('text-xs opacity-50')
+                    pipeline_stages['record'] = stage_record
+                    # Legacy mappings for compatibility
+                    pipeline_stages['login'] = stage_record
+                    pipeline_stages['steps'] = stage_record
+                    pipeline_stages['screenshots'] = stage_record
 
                     # Connector 1
-                    conn1 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
+                    conn1 = ui.element('div').classes('flex-grow mx-4 pipeline-connector rounded').style('height: 6px;')
+                    pipeline_connectors['record_process'] = conn1
+                    # Legacy mappings
                     pipeline_connectors['login_steps'] = conn1
+                    pipeline_connectors['steps_screenshots'] = conn1
+                    pipeline_connectors['screenshots_docs'] = conn1
 
-                    # Stage 2: Steps
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_steps:
-                        ui.icon('directions_run', size='md').classes('stage-icon').style('color: #a855f7;')
-                        ui.label('Steps').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['steps'] = stage_steps
+                    # Stage 2: Process (Audio + Docs + Cover in parallel)
+                    with ui.column().classes('items-center pipeline-stage idle') as stage_process:
+                        with ui.row().classes('gap-1'):
+                            ui.icon('graphic_eq', size='sm').classes('stage-icon').style('color: #f59e0b;')
+                            ui.icon('description', size='sm').classes('stage-icon').style('color: #22c55e;')
+                            ui.icon('image', size='sm').classes('stage-icon').style('color: #8b5cf6;')
+                        ui.label('Process').classes('text-sm mt-1 opacity-70 font-medium')
+                        ui.label('Audio + Docs + Cover').classes('text-xs opacity-50')
+                    pipeline_stages['process'] = stage_process
+                    # Legacy mappings for compatibility
+                    pipeline_stages['docs'] = stage_process
+                    pipeline_stages['audio'] = stage_process
+                    pipeline_stages['cover'] = stage_process
 
                     # Connector 2
-                    conn2 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['steps_screenshots'] = conn2
+                    conn2 = ui.element('div').classes('flex-grow mx-4 pipeline-connector rounded').style('height: 6px;')
+                    pipeline_connectors['process_produce'] = conn2
+                    # Legacy mappings
+                    pipeline_connectors['docs_audio'] = conn2
+                    pipeline_connectors['audio_cover'] = conn2
+                    pipeline_connectors['cover_video'] = conn2
 
-                    # Stage 3: Screenshots
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_screenshots:
-                        ui.icon('photo_camera', size='md').classes('stage-icon').style('color: #3b82f6;')
-                        ui.label('Capture').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['screenshots'] = stage_screenshots
+                    # Stage 3: Produce (Final video compilation)
+                    with ui.column().classes('items-center pipeline-stage idle') as stage_produce:
+                        ui.icon('movie', size='lg').classes('stage-icon').style('color: #ec4899;')
+                        ui.label('Produce').classes('text-sm mt-1 opacity-70 font-medium')
+                        ui.label('Final Video').classes('text-xs opacity-50')
+                    pipeline_stages['produce'] = stage_produce
+                    pipeline_stages['video'] = stage_produce
 
-                    # Connector 3
-                    conn3 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['screenshots_docs'] = conn3
+                    # Connector 3 (Produce → Complete)
+                    conn3 = ui.element('div').classes('flex-grow mx-4 pipeline-connector rounded').style('height: 6px;')
+                    pipeline_connectors['produce_complete'] = conn3
+                    pipeline_connectors['video_complete'] = conn3  # Legacy
 
-                    # Stage 4: Documentation
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_docs:
-                        ui.icon('description', size='md').classes('stage-icon').style('color: #22c55e;')
-                        ui.label('Docs').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['docs'] = stage_docs
-
-                    # Connector 4
-                    conn4 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['docs_audio'] = conn4
-
-                    # Stage 5: Audio
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_audio:
-                        ui.icon('graphic_eq', size='md').classes('stage-icon').style('color: #f59e0b;')
-                        ui.label('Audio').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['audio'] = stage_audio
-
-                    # Connector 5
-                    conn5 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['audio_cover'] = conn5
-
-                    # Stage 6: Cover Page (before Video so video can use it)
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_cover:
-                        ui.icon('image', size='md').classes('stage-icon').style('color: #8b5cf6;')
-                        ui.label('Cover').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['cover'] = stage_cover
-
-                    # Connector 6
-                    conn6 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['cover_video'] = conn6
-
-                    # Stage 7: Video Production (uses cover + audio + screenshots)
-                    with ui.column().classes('items-center pipeline-stage idle') as stage_video:
-                        ui.icon('videocam', size='md').classes('stage-icon').style('color: #ec4899;')
-                        ui.label('Video').classes('text-xs mt-1 opacity-70')
-                    pipeline_stages['video'] = stage_video
-
-                    # Connector 7
-                    conn7 = ui.element('div').classes('flex-grow mx-2 pipeline-connector rounded')
-                    pipeline_connectors['video_complete'] = conn7
-
-                    # Stage 8: Complete
+                    # Stage 4: Complete
                     with ui.column().classes('items-center pipeline-stage idle') as stage_complete:
-                        ui.icon('check_circle', size='md').classes('stage-icon').style('color: #10b981;')
-                        ui.label('Done').classes('text-xs mt-1 opacity-70')
+                        ui.icon('check_circle', size='lg').classes('stage-icon').style('color: #10b981;')
+                        ui.label('Done').classes('text-sm mt-1 opacity-70 font-medium')
                     pipeline_stages['complete'] = stage_complete
 
             # Pipeline control functions
@@ -441,15 +471,17 @@ def create_testing_console_page():
                     ui.label('[Console Ready]').classes('text-xs font-mono text-gray-500')
 
             # ═══════════════════════════════════════════════════════════════
-            # MAIN 3-PANEL LAYOUT: SCENARIO | ACCOUNT | GENERATE
+            # MAIN 3-PANEL LAYOUT: SCENARIO & ACCOUNT | VIDEO OPTIONS | GENERATE VIDEO
             # ═══════════════════════════════════════════════════════════════
             with ui.row().classes('w-full gap-4 items-stretch'):
 
-                # SCENARIO PANEL
+                # ═══════════════════════════════════════════════════════════
+                # PANEL 1: SCENARIO & ACCOUNT
+                # ═══════════════════════════════════════════════════════════
                 with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
                     with ui.row().classes('items-center gap-2 mb-3'):
                         ui.icon('movie', size='sm').style(f'color: {PTO_GOLD};')
-                        ui.label('SCENARIO').classes('text-sm font-bold tracking-wide opacity-80')
+                        ui.label('SCENARIO & ACCOUNT').classes('text-sm font-bold tracking-wide opacity-80')
 
                     # Build dropdown options grouped by role
                     scenarios_by_role = get_scenarios_by_role()
@@ -478,10 +510,10 @@ def create_testing_console_page():
                         options=scenario_options,
                         value='pto-request' if 'pto-request' in scenario_options else (list(scenario_options.keys())[0] if scenario_options else None),
                         label='Choose Scenario'
-                    ).props('outlined dense options-dense').classes('w-full mb-3')
+                    ).props('outlined dense options-dense').classes('w-full mb-2')
 
                     # Scenario info
-                    with ui.row().classes('items-center gap-2'):
+                    with ui.row().classes('items-center gap-2 mb-3'):
                         scenario_role_chip = ui.chip('Employee', color='blue').props('dense size=sm')
                         scenario_steps_chip = ui.chip('9 Steps', color='grey').props('dense outline size=sm')
 
@@ -491,34 +523,37 @@ def create_testing_console_page():
                             scenario_role_chip.text = scenario.required_role.title()
                             scenario_steps_chip.text = f'{len(scenario.steps)} Steps'
 
-                    scenario_select.on_value_change(lambda: update_scenario_display())
+                    # Auto-selected account display (based on scenario)
+                    with ui.row().classes('w-full items-center gap-2 p-2 rounded').style('background-color: rgba(201, 162, 39, 0.1); border: 1px solid rgba(201, 162, 39, 0.3);'):
+                        account_icon = ui.icon('person', size='sm').style(f'color: {PTO_GOLD};')
+                        with ui.column().classes('gap-0'):
+                            account_name_label = ui.label('PTO User').classes('text-sm font-medium')
+                            account_role_label = ui.label('Employee').classes('text-xs opacity-60')
 
-                # ACCOUNT PANEL
-                with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
-                    with ui.row().classes('items-center gap-2 mb-3'):
-                        ui.icon('person', size='sm').style(f'color: {PTO_GOLD};')
-                        ui.label('ACCOUNT').classes('text-sm font-bold tracking-wide opacity-80')
+                    def update_account_display():
+                        """Update account display based on selected scenario's default_account."""
+                        scenario = all_scenarios.get(scenario_select.value)
+                        if scenario and hasattr(scenario, 'default_account'):
+                            account = testing_config.get_account(scenario.default_account)
+                            if account:
+                                account_name_label.text = account.display_name
+                                account_role_label.text = account.role.title()
+                                # Update icon based on role
+                                icon_map = {'employee': 'person', 'manager': 'supervisor_account', 'admin': 'security'}
+                                account_icon.name = icon_map.get(account.role, 'person')
 
-                    account_select = ui.select(
-                        options={
-                            key: f"{acc.display_name} ({acc.role.title()})"
-                            for key, acc in testing_config.test_accounts.items()
-                        },
-                        value='ptouser',
-                        label='Select Account'
-                    ).props('outlined dense').classes('w-full mb-3')
+                    # Wire up scenario change to update both displays
+                    def on_scenario_change():
+                        update_scenario_display()
+                        update_account_display()
 
-                    # Account description
-                    account_desc = ui.label('Employee - Submits PTO requests').classes('text-xs opacity-60')
+                    scenario_select.on_value_change(lambda: on_scenario_change())
 
-                    def update_account_info():
-                        account = testing_config.get_account(account_select.value)
-                        if account:
-                            account_desc.text = account.description
+                    # Initialize displays
+                    update_scenario_display()
+                    update_account_display()
 
-                    account_select.on_value_change(lambda: update_account_info())
-
-                    # Hidden fields for compatibility (always use account login)
+                    # Hidden fields for compatibility
                     use_custom = ui.element('div').style('display: none;')
                     use_custom.value = False
                     custom_username = ui.element('div').style('display: none;')
@@ -526,52 +561,104 @@ def create_testing_console_page():
                     custom_password = ui.element('div').style('display: none;')
                     custom_password.value = ''
 
-                    # Hidden output options (all enabled by default)
+                # ═══════════════════════════════════════════════════════════
+                # PANEL 2: VIDEO OPTIONS
+                # ═══════════════════════════════════════════════════════════
+                with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px; display: flex; flex-direction: column;'):
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('tune', size='sm').style(f'color: {PTO_GOLD};')
+                        ui.label('VIDEO OPTIONS').classes('text-sm font-bold tracking-wide opacity-80')
+
+                    # Narrator voice selection with play sample button
+                    with ui.row().classes('w-full items-end gap-2 mb-2'):
+                        voice_select = ui.select(
+                            options={
+                                'onyx': 'Onyx - Professional Male',
+                                'alloy': 'Alloy - Neutral',
+                                'nova': 'Nova - Warm Female',
+                                'echo': 'Echo - Casual Male'
+                            },
+                            value='onyx',
+                            label='Narrator Voice'
+                        ).props('outlined dense').classes('flex-grow')
+
+                        # Hidden audio element for sample playback
+                        sample_audio = ui.audio(get_sample_path('onyx')).props('preload=none').style('display: none;')
+
+                        # Play sample button
+                        async def play_sample():
+                            # Ensure samples exist (generates on first use)
+                            ensure_voice_samples()
+                            # Update audio source to current voice
+                            sample_audio.set_source(get_sample_path(voice_select.value))
+                            await ui.run_javascript(f'''
+                                const audio = document.querySelector('audio[src*="welcome_"]');
+                                if (audio) {{
+                                    audio.currentTime = 0;
+                                    audio.play();
+                                }}
+                            ''')
+
+                        ui.button(icon='play_arrow', on_click=play_sample).props('round dense color=amber').style('margin-bottom: 4px;').tooltip('Play voice sample')
+
+                    # Spacer to push toggles to bottom
+                    ui.element('div').style('flex-grow: 1;')
+
+                    # Toggle options (at bottom)
+                    with ui.column().classes('w-full gap-1'):
+                        with ui.row().classes('w-full items-center gap-2'):
+                            audio_toggle = ui.switch('Audio Narration', value=True).props('dense color=amber')
+                            ui.label('(OpenAI TTS)').classes('text-xs opacity-40')
+
+                        # Debug mode toggle - skips audio, docs, intros for fast iteration
+                        with ui.row().classes('items-center gap-2'):
+                            debug_toggle = ui.switch('Debug Mode', value=False).props('dense color=red')
+                            ui.label('(Skip audio/intros)').classes('text-xs opacity-40')
+
+                    # Hidden output options
                     opt_screenshots = ui.element('div').style('display: none;')
-                    opt_screenshots.value = True
+                    opt_screenshots.value = True  # Screenshots always enabled (required for video)
                     opt_markdown = ui.element('div').style('display: none;')
                     opt_markdown.value = True
                     opt_video = ui.element('div').style('display: none;')
                     opt_video.value = True
                     opt_audio = ui.element('div').style('display: none;')
                     opt_audio.value = True
+                    opt_debug = ui.element('div').style('display: none;')
+                    opt_debug.value = False
 
-                # GENERATE PANEL
-                with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px;'):
-                    with ui.row().classes('items-center gap-2 mb-3'):
-                        ui.icon('auto_awesome', size='sm').style(f'color: {PTO_GOLD};')
-                        ui.label('GENERATE').classes('text-sm font-bold tracking-wide opacity-80')
-
-                    # Voice selection
-                    voice_select = ui.select(
-                        options={
-                            'onyx': 'Onyx - Professional Male',
-                            'alloy': 'Alloy - Neutral',
-                            'nova': 'Nova - Warm Female',
-                            'echo': 'Echo - Casual Male'
-                        },
-                        value='onyx',
-                        label='Narrator Voice'
-                    ).props('outlined dense').classes('w-full mb-2')
-
-                    # Audio generation toggle (costs money - OpenAI API)
-                    with ui.row().classes('w-full items-center gap-2 mb-3'):
-                        audio_toggle = ui.switch('Generate Audio', value=True).props('dense color=amber')
-                        ui.label('(OpenAI API - costs $)').classes('text-xs opacity-50')
-
-                    # Link the visible toggle to the hidden opt_audio
+                    # Link toggles to hidden options
                     def on_audio_toggle(e):
                         opt_audio.value = audio_toggle.value
                     audio_toggle.on('update:model-value', on_audio_toggle)
+
+                    def on_debug_toggle(e):
+                        opt_debug.value = debug_toggle.value
+                        if debug_toggle.value:
+                            # Debug mode disables audio
+                            audio_toggle.value = False
+                            opt_audio.value = False
+                    debug_toggle.on('update:model-value', on_debug_toggle)
+
+                # ═══════════════════════════════════════════════════════════
+                # PANEL 3: GENERATE VIDEO
+                # ═══════════════════════════════════════════════════════════
+                with ui.card().classes('flex-1 p-4').style('background-color: #1f2937; min-height: 200px; display: flex; flex-direction: column;'):
+                    with ui.row().classes('items-center gap-2 mb-3'):
+                        ui.icon('auto_awesome', size='sm').style(f'color: {PTO_GOLD};')
+                        ui.label('GENERATE VIDEO').classes('text-sm font-bold tracking-wide opacity-80')
 
                     # Progress bar
                     progress_bar = ui.linear_progress(value=0, show_value=False).classes('w-full mb-2')
                     console_state.progress_bar = progress_bar
 
-                    step_label = ui.label('Ready').classes('text-xs opacity-60 mb-2')
+                    step_label = ui.label('Ready').classes('text-xs opacity-60')
                     console_state.status_label = step_label
 
-                    # Action buttons
+                    # Spacer to push buttons to bottom
+                    ui.element('div').style('flex-grow: 1;')
+
+                    # Action buttons (at bottom)
                     with ui.row().classes('w-full gap-2'):
                         async def run_scenario():
                             """Execute the selected scenario with visual pipeline animation and per-stage error handling"""
@@ -613,19 +700,58 @@ def create_testing_console_page():
                                     ui.notify('Please select a scenario', type='warning')
                                     return
 
+                                # Check if scenario output already exists
+                                scenario_id = scenario.scenario_id.lower().replace(' ', '-').replace('_', '-')
+                                existing_output = testing_config.output_base / scenario_id
+                                existing_video = existing_output / f"{scenario_id}_training.mp4"
+
+                                if existing_video.exists():
+                                    # Show confirmation dialog
+                                    confirm_result = {'confirmed': False}
+
+                                    with ui.dialog() as confirm_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px;'):
+                                        ui.label('Scenario Already Exists').classes('text-lg font-bold mb-2').style(f'color: {PTO_GOLD};')
+                                        ui.label(f'A training video for "{scenario.name}" already exists.').classes('mb-2')
+                                        ui.label('Do you want to overwrite it with a new recording?').classes('text-sm opacity-70 mb-4')
+
+                                        with ui.row().classes('w-full justify-end gap-2'):
+                                            def on_cancel():
+                                                confirm_result['confirmed'] = False
+                                                confirm_dialog.close()
+
+                                            def on_confirm():
+                                                confirm_result['confirmed'] = True
+                                                confirm_dialog.close()
+
+                                            ui.button('Cancel', on_click=on_cancel).props('flat')
+                                            ui.button('Overwrite', on_click=on_confirm).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
+
+                                    confirm_dialog.open()
+                                    await confirm_dialog
+
+                                    if not confirm_result['confirmed']:
+                                        console_state.log('[INFO] User cancelled - existing scenario preserved', 'info')
+                                        console_state.is_running = False
+                                        run_btn.props(remove='loading')
+                                        return
+
+                                    console_state.log('[INFO] User confirmed overwrite of existing scenario', 'info')
+
                                 # Determine credentials
                                 if use_custom.value and custom_username.value:
                                     credentials = {'username': custom_username.value, 'password': custom_password.value}
                                     account_username = None
                                     console_state.log(f'[VALIDATION] Using custom credentials: {custom_username.value}', 'info')
                                 else:
+                                    # Use scenario's default_account automatically
                                     credentials = None
-                                    account_username = account_select.value
-                                    if not account_username:
-                                        console_state.log('[ERROR] No test account selected', 'error')
-                                        ui.notify('Please select a test account', type='warning')
+                                    account_username = scenario.default_account
+                                    account = testing_config.get_account(account_username)
+                                    if not account:
+                                        console_state.log(f'[ERROR] Test account "{account_username}" not found in config', 'error')
+                                        ui.notify(f'Test account "{account_username}" not configured', type='warning')
                                         return
-                                    console_state.log(f'[VALIDATION] Using test account: {account_username}', 'info')
+                                    console_state.log(f'[VALIDATION] Using test account: {account.display_name} ({account.role})', 'info')
 
                                 # Update config
                                 testing_config.generate_screenshots = opt_screenshots.value
@@ -647,15 +773,41 @@ def create_testing_console_page():
                                     raise Exception('Cancelled by user')
 
                                 # ═══════════════════════════════════════════════════════════
-                                # STAGE 1: LOGIN
+                                # STAGE 0.5: SETUP (Create test data if scenario needs it)
                                 # ═══════════════════════════════════════════════════════════
-                                current_stage = 'login'
-                                console_state.log('[LOGIN] Initializing browser and login...', 'info')
-                                set_stage_active('login')
-                                activate_connector('login_steps')
+                                if hasattr(scenario, 'setup_actions') and scenario.setup_actions:
+                                    console_state.log(f'[SETUP] Running {len(scenario.setup_actions)} setup action(s)...', 'info')
+
+                                    def log_setup(msg: str, level: str = 'info'):
+                                        console_state.log(f'[SETUP] {msg}', level)
+
+                                    from services.scenario_setup_service import ScenarioSetupService
+                                    setup_success = ScenarioSetupService.run_setup_actions(
+                                        scenario.setup_actions,
+                                        log_callback=log_setup
+                                    )
+
+                                    if not setup_success:
+                                        console_state.log('[SETUP] Warning: Setup encountered issues, proceeding anyway...', 'warning')
+                                    else:
+                                        console_state.log('[SETUP] Test data created successfully ✓', 'success')
+                                else:
+                                    console_state.log('[SETUP] No setup actions required', 'info')
+
+                                # ═══════════════════════════════════════════════════════════
+                                # STAGE 1: RECORD (Login + Execute + Capture)
+                                # ═══════════════════════════════════════════════════════════
+                                current_stage = 'record'
+                                console_state.log('[RECORD] Starting browser recording session...', 'info')
+                                step_label.text = 'Capturing screenshots...'
+                                progress_bar.value = 0.1
+                                set_stage_active('record')
+                                activate_connector('record_process')
                                 await asyncio.sleep(0.2)
 
                                 try:
+                                    console_state.log('[RECORD] Launching browser...', 'info')
+
                                     def run_playwright():
                                         engine = PlaywrightEngine()
                                         return engine.run_scenario_sync(
@@ -664,31 +816,7 @@ def create_testing_console_page():
                                             custom_credentials=credentials
                                         )
 
-                                    # PIPELINE: Login complete, steps active
-                                    set_stage_complete('login', 'login_steps')
-                                    console_state.log('[LOGIN] Login stage complete ✓', 'success')
-
-                                except Exception as login_error:
-                                    console_state.log(f'[LOGIN ERROR] {str(login_error)}', 'error')
-                                    console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                    set_stage_failed('login', 'login_steps')
-                                    pipeline_failed = True
-                                    raise
-
-                                # Check for cancellation
-                                if check_cancelled():
-                                    pipeline_failed = True
-                                    raise Exception('Cancelled by user')
-
-                                # ═══════════════════════════════════════════════════════════
-                                # STAGE 2: STEPS EXECUTION
-                                # ═══════════════════════════════════════════════════════════
-                                current_stage = 'steps'
-                                console_state.log('[STEPS] Executing scenario steps...', 'info')
-                                set_stage_active('steps')
-                                activate_connector('steps_screenshots')
-
-                                try:
+                                    console_state.log('[RECORD] Executing scenario with video capture...', 'info')
                                     loop = asyncio.get_event_loop()
                                     result = await loop.run_in_executor(None, run_playwright)
                                     console_state.last_result = result
@@ -696,26 +824,7 @@ def create_testing_console_page():
                                     if not result:
                                         raise Exception('Playwright returned no result')
 
-                                    set_stage_complete('steps', 'steps_screenshots')
-                                    console_state.log(f'[STEPS] Executed {len(result.steps)} steps', 'success')
-
-                                except Exception as steps_error:
-                                    console_state.log(f'[STEPS ERROR] {str(steps_error)}', 'error')
-                                    console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                    set_stage_failed('steps', 'steps_screenshots')
-                                    pipeline_failed = True
-                                    raise
-
-                                # ═══════════════════════════════════════════════════════════
-                                # STAGE 3: CAPTURE/SCREENSHOTS
-                                # ═══════════════════════════════════════════════════════════
-                                current_stage = 'screenshots'
-                                console_state.log('[CAPTURE] Processing captured content...', 'info')
-                                set_stage_active('screenshots')
-                                activate_connector('screenshots_docs')
-                                await asyncio.sleep(0.3)
-
-                                try:
+                                    # Log step results
                                     step_errors = 0
                                     for step in result.steps:
                                         status = 'success' if step.success else 'error'
@@ -724,210 +833,262 @@ def create_testing_console_page():
                                             step_errors += 1
 
                                     if step_errors > 0:
-                                        console_state.log(f'[CAPTURE WARNING] {step_errors} step(s) had errors', 'warning')
+                                        console_state.log(f'[RECORD] {step_errors} step(s) had errors', 'warning')
 
-                                    set_stage_complete('screenshots', 'screenshots_docs')
-                                    console_state.log('[CAPTURE] Screenshot processing complete ✓', 'success')
+                                    set_stage_complete('record', 'record_process')
+                                    progress_bar.value = 0.3
+                                    step_label.text = f'Captured {len(result.steps)} steps'
+                                    console_state.log(f'[RECORD] Recording complete: {len(result.steps)} steps captured ✓', 'success')
 
-                                except Exception as capture_error:
-                                    console_state.log(f'[CAPTURE ERROR] {str(capture_error)}', 'error')
+                                except Exception as record_error:
+                                    console_state.log(f'[RECORD ERROR] {str(record_error)}', 'error')
                                     console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                    set_stage_failed('screenshots', 'screenshots_docs')
+                                    set_stage_failed('record', 'record_process')
                                     pipeline_failed = True
                                     raise
+
+                                # Check for cancellation
+                                if check_cancelled():
+                                    pipeline_failed = True
+                                    raise Exception('Cancelled by user')
 
                                 # Check if scenario itself succeeded before proceeding
                                 if not result.success:
                                     console_state.log(f'[SCENARIO FAILED] {result.error_message}', 'error')
-                                    set_stage_failed('docs', 'docs_audio')
+                                    set_stage_failed('process', 'process_produce')
                                     ui.notify(f'Scenario failed: {result.error_message}', type='negative')
                                     pipeline_failed = True
                                 else:
                                     # ═══════════════════════════════════════════════════════════
-                                    # STAGE 4: DOCUMENTATION GENERATION
+                                    # STAGE 2: PARALLEL PROCESSING (Audio + Docs + Cover)
                                     # ═══════════════════════════════════════════════════════════
-                                    current_stage = 'docs'
-                                    console_state.log('[DOCS] Generating documentation...', 'info')
-                                    set_stage_active('docs')
-                                    activate_connector('docs_audio')
+                                    current_stage = 'process'
+                                    console_state.log('[PROCESS] Starting parallel processing...', 'info')
+                                    step_label.text = 'Processing (Audio + Docs + Cover)...'
+                                    progress_bar.value = 0.4
+                                    set_stage_active('process')
+                                    activate_connector('process_produce')
 
-                                    try:
-                                        console_state.log('[DOCS] This may take a moment...', 'info')
-
-                                        def run_doc_gen():
-                                            doc_gen = DocumentationGenerator()
-                                            return doc_gen.generate_all(result)
-
-                                        outputs = await loop.run_in_executor(None, run_doc_gen)
-                                        for output_type, path in outputs.items():
-                                            console_state.log(f"  Generated: {path}", 'success')
-
-                                        set_stage_complete('docs', 'docs_audio')
-                                        console_state.log('[DOCS] Documentation generation complete ✓', 'success')
-                                        await asyncio.sleep(0.2)
-
-                                    except Exception as docs_error:
-                                        console_state.log(f'[DOCS ERROR] {str(docs_error)}', 'error')
-                                        console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                        set_stage_failed('docs', 'docs_audio')
-                                        pipeline_failed = True
-                                        # Continue to audio if possible
-
-                                    # ═══════════════════════════════════════════════════════════
-                                    # STAGE 5: AUDIO NARRATION
-                                    # ═══════════════════════════════════════════════════════════
-                                    current_stage = 'audio'
-                                    if opt_audio.value:
-                                        console_state.log('[AUDIO] Generating audio narration...', 'info')
-                                        set_stage_active('audio')
-                                        activate_connector('audio_cover')
-
-                                        try:
-                                            audio_service = AudioNarrationService()
-                                            if audio_service.is_available():
-                                                console_state.log('[AUDIO] Calling OpenAI TTS API (this may take 30-60 seconds)...', 'info')
-
-                                                def run_audio_gen():
-                                                    return audio_service.generate_all_narration(result, TTSVoice(voice_select.value))
-
-                                                segments = await loop.run_in_executor(None, run_audio_gen)
-                                                console_state.log(f"  Generated {len(segments)} audio segments", 'success')
-                                                set_stage_complete('audio', 'audio_cover')
-                                                console_state.log('[AUDIO] Audio generation complete ✓', 'success')
-                                            else:
-                                                console_state.log('[AUDIO WARNING] Audio service not available (OpenAI API key missing?)', 'warning')
-                                                set_stage_complete('audio', 'audio_cover')
-
-                                        except Exception as audio_error:
-                                            console_state.log(f'[AUDIO ERROR] {str(audio_error)}', 'error')
-                                            console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                            set_stage_failed('audio', 'audio_cover')
-                                            # Audio failure is non-fatal, continue
-                                    else:
-                                        console_state.log('[AUDIO] Skipped (disabled in options)', 'info')
-                                        set_stage_complete('audio', 'audio_cover')
-
-                                    # ═══════════════════════════════════════════════════════════
-                                    # STAGE 6: COVER PAGE GENERATION (before Video so video can use it)
-                                    # ═══════════════════════════════════════════════════════════
-                                    current_stage = 'cover'
+                                    # Prepare scenario media directory
+                                    scenario_media_dir = testing_config.output_base / result.scenario_id
+                                    scenario_media_dir.mkdir(parents=True, exist_ok=True)
                                     cover_path = None
-                                    if not pipeline_failed:
-                                        console_state.log('[COVER] Generating cover page...', 'info')
-                                        set_stage_active('cover')
-                                        activate_connector('cover_video')
 
+                                    # Define async tasks for parallel execution
+                                    async def generate_docs():
+                                        """Generate documentation in parallel"""
+                                        if opt_debug.value:
+                                            console_state.log('[DOCS] Skipped (debug mode)', 'info')
+                                            return ('docs', True, None)
                                         try:
+                                            console_state.log('[DOCS] Generating documentation...', 'info')
+                                            def run_doc_gen():
+                                                doc_gen = DocumentationGenerator()
+                                                return doc_gen.generate_all(result)
+                                            outputs = await loop.run_in_executor(None, run_doc_gen)
+                                            for output_type, path in outputs.items():
+                                                console_state.log(f"  [DOCS] {path}", 'success')
+                                            return ('docs', True, outputs)
+                                        except Exception as e:
+                                            console_state.log(f'[DOCS ERROR] {str(e)}', 'error')
+                                            return ('docs', False, str(e))
+
+                                    async def generate_audio():
+                                        """Generate audio narration in parallel"""
+                                        if opt_debug.value or not opt_audio.value:
+                                            console_state.log('[AUDIO] Skipped (debug mode or disabled)', 'info')
+                                            return ('audio', True, None)
+                                        try:
+                                            console_state.log('[AUDIO] Generating narration (OpenAI TTS)...', 'info')
+                                            audio_service = AudioNarrationService()
+                                            if not audio_service.is_available():
+                                                console_state.log('[AUDIO] Service not available (API key?)', 'warning')
+                                                return ('audio', True, None)
+                                            def run_audio():
+                                                return audio_service.generate_all_narration(result, TTSVoice(voice_select.value))
+                                            segments = await loop.run_in_executor(None, run_audio)
+                                            console_state.log(f"  [AUDIO] Generated {len(segments)} segments", 'success')
+                                            return ('audio', True, segments)
+                                        except Exception as e:
+                                            console_state.log(f'[AUDIO ERROR] {str(e)}', 'error')
+                                            return ('audio', False, str(e))
+
+                                    async def generate_cover():
+                                        """Generate cover page in parallel"""
+                                        if opt_debug.value:
+                                            console_state.log('[COVER] Skipped (debug mode)', 'info')
+                                            return ('cover', True, None)
+                                        try:
+                                            console_state.log('[COVER] Generating cover page...', 'info')
                                             from PIL import Image, ImageDraw, ImageFont
                                             from pathlib import Path
 
-                                            # Create cover page in scenario folder
-                                            scenario_media_dir = testing_config.output_base / result.scenario_id
-                                            scenario_media_dir.mkdir(parents=True, exist_ok=True)
+                                            def create_cover():
+                                                width, height = 1920, 1080
+                                                img = Image.new('RGB', (width, height), (31, 41, 55))
+                                                draw = ImageDraw.Draw(img)
 
-                                            width, height = 1920, 1080
-                                            img = Image.new('RGB', (width, height), (31, 41, 55))
-                                            draw = ImageDraw.Draw(img)
+                                                # PTO gold accent bar
+                                                draw.rectangle([0, height//2 - 120, width, height//2 - 114], fill=(201, 162, 39))
 
-                                            # TJM gold accent bar
-                                            draw.rectangle([0, height//2 - 120, width, height//2 - 114], fill=(201, 162, 39))
+                                                # Load fonts
+                                                try:
+                                                    title_font = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 64)
+                                                    subtitle_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 32)
+                                                    desc_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 24)
+                                                except Exception:
+                                                    title_font = ImageFont.load_default()
+                                                    subtitle_font = ImageFont.load_default()
+                                                    desc_font = ImageFont.load_default()
 
-                                            # Load fonts
-                                            try:
-                                                title_font = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 64)
-                                                subtitle_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 32)
-                                                desc_font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 24)
-                                            except Exception:
-                                                title_font = ImageFont.load_default()
-                                                subtitle_font = ImageFont.load_default()
-                                                desc_font = ImageFont.load_default()
+                                                # Add PTO Central logo if available
+                                                logo_path = Path(__file__).parent.parent / 'static' / 'PTOCentralLogo.png'
+                                                if logo_path.exists():
+                                                    logo = Image.open(logo_path)
+                                                    logo_height = 100
+                                                    aspect = logo.width / logo.height
+                                                    logo_width = int(logo_height * aspect)
+                                                    logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+                                                    logo_x = (width - logo_width) // 2
+                                                    img.paste(logo, (logo_x, 80), logo if logo.mode == 'RGBA' else None)
 
-                                            # Add PTO Central logo if available
-                                            logo_path = Path(__file__).parent.parent / 'static' / 'PTOCentralLogo.png'
-                                            if logo_path.exists():
-                                                logo = Image.open(logo_path)
-                                                # Resize logo to fit
-                                                logo_height = 100
-                                                aspect = logo.width / logo.height
-                                                logo_width = int(logo_height * aspect)
-                                                logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
-                                                # Center horizontally at top
-                                                logo_x = (width - logo_width) // 2
-                                                img.paste(logo, (logo_x, 80), logo if logo.mode == 'RGBA' else None)
+                                                # Draw scenario title
+                                                title_text = scenario.name
+                                                title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+                                                title_width = title_bbox[2] - title_bbox[0]
+                                                title_x = (width - title_width) // 2
+                                                draw.text((title_x, height//2 - 80), title_text, fill=(255, 255, 255), font=title_font)
 
-                                            # Draw scenario title
-                                            title_text = scenario.name
-                                            title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
-                                            title_width = title_bbox[2] - title_bbox[0]
-                                            title_x = (width - title_width) // 2
-                                            draw.text((title_x, height//2 - 80), title_text, fill=(255, 255, 255), font=title_font)
+                                                # Draw description
+                                                desc_text = scenario.description
+                                                desc_bbox = draw.textbbox((0, 0), desc_text, font=desc_font)
+                                                desc_width = desc_bbox[2] - desc_bbox[0]
+                                                desc_x = (width - desc_width) // 2
+                                                draw.text((desc_x, height//2 + 20), desc_text, fill=(180, 180, 180), font=desc_font)
 
-                                            # Draw description
-                                            desc_text = scenario.description
-                                            desc_bbox = draw.textbbox((0, 0), desc_text, font=desc_font)
-                                            desc_width = desc_bbox[2] - desc_bbox[0]
-                                            desc_x = (width - desc_width) // 2
-                                            draw.text((desc_x, height//2 + 20), desc_text, fill=(180, 180, 180), font=desc_font)
+                                                # Draw subtitle
+                                                subtitle_text = "PTO Central Training"
+                                                sub_bbox = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
+                                                sub_width = sub_bbox[2] - sub_bbox[0]
+                                                sub_x = (width - sub_width) // 2
+                                                draw.text((sub_x, height//2 + 80), subtitle_text, fill=(201, 162, 39), font=subtitle_font)
 
-                                            # Draw subtitle
-                                            subtitle_text = "PTO Central Training"
-                                            sub_bbox = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
-                                            sub_width = sub_bbox[2] - sub_bbox[0]
-                                            sub_x = (width - sub_width) // 2
-                                            draw.text((sub_x, height//2 + 80), subtitle_text, fill=(201, 162, 39), font=subtitle_font)
+                                                # Save cover
+                                                cover_file = scenario_media_dir / f"{result.scenario_id}_cover.png"
+                                                img.save(cover_file, 'PNG', quality=95)
+                                                return cover_file
 
-                                            # Save cover in scenario folder
-                                            cover_path = scenario_media_dir / f"{result.scenario_id}_cover.png"
-                                            img.save(cover_path, 'PNG', quality=95)
-                                            console_state.log(f"  Generated: {cover_path.name}", 'success')
+                                            path = await loop.run_in_executor(None, create_cover)
+                                            console_state.log(f"  [COVER] {path.name}", 'success')
+                                            return ('cover', True, path)
+                                        except Exception as e:
+                                            console_state.log(f'[COVER ERROR] {str(e)}', 'error')
+                                            return ('cover', False, str(e))
 
-                                            set_stage_complete('cover', 'cover_video')
-                                            console_state.log('[COVER] Cover page generation complete ✓', 'success')
+                                    # Run all three tasks in parallel
+                                    console_state.log('[PROCESS] Running Audio + Docs + Cover in parallel...', 'info')
+                                    try:
+                                        parallel_results = await asyncio.gather(
+                                            generate_docs(),
+                                            generate_audio(),
+                                            generate_cover(),
+                                            return_exceptions=True
+                                        )
 
-                                        except Exception as cover_error:
-                                            console_state.log(f'[COVER ERROR] {str(cover_error)}', 'error')
-                                            console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                            set_stage_failed('cover', 'cover_video')
-                                            # Cover failure is non-fatal
-                                    else:
-                                        set_stage_complete('cover', 'cover_video')
+                                        # Process results
+                                        process_success = True
+                                        for task_result in parallel_results:
+                                            if isinstance(task_result, Exception):
+                                                console_state.log(f'[PROCESS ERROR] Task failed: {str(task_result)}', 'error')
+                                                process_success = False
+                                            elif isinstance(task_result, tuple):
+                                                task_name, success, data = task_result
+                                                if not success:
+                                                    console_state.log(f'[PROCESS] {task_name} had issues', 'warning')
+                                                if task_name == 'cover' and success and data:
+                                                    cover_path = data
+
+                                        if process_success:
+                                            set_stage_complete('process', 'process_produce')
+                                            step_label.text = 'Processing complete'
+                                            progress_bar.value = 0.6
+                                            console_state.log('[PROCESS] Parallel processing complete ✓', 'success')
+                                        else:
+                                            console_state.log('[PROCESS] Completed with some errors', 'warning')
+                                            step_label.text = 'Processing complete (with warnings)'
+                                            progress_bar.value = 0.6
+                                            set_stage_complete('process', 'process_produce')
+
+                                    except Exception as process_error:
+                                        console_state.log(f'[PROCESS ERROR] {str(process_error)}', 'error')
+                                        console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
+                                        set_stage_failed('process', 'process_produce')
+                                        # Non-fatal, continue to video if possible
 
                                     # ═══════════════════════════════════════════════════════════
-                                    # STAGE 7: VIDEO PRODUCTION (uses cover + audio + screenshots)
+                                    # STAGE 3: PRODUCE (Final video compilation)
                                     # ═══════════════════════════════════════════════════════════
-                                    current_stage = 'video'
+                                    current_stage = 'produce'
                                     if opt_video.value and not pipeline_failed:
-                                        console_state.log('[VIDEO] Producing training video...', 'info')
-                                        set_stage_active('video')
+                                        console_state.log('[PRODUCE] Creating final training video...', 'info')
+                                        step_label.text = 'Producing final video...'
+                                        progress_bar.value = 0.7
+                                        set_stage_active('produce')
                                         activate_connector('video_complete')
 
                                         try:
                                             from services.video_producer import VideoProducer, MOVIEPY_AVAILABLE
 
                                             if MOVIEPY_AVAILABLE:
-                                                console_state.log('[VIDEO] Creating training video with synced audio...', 'info')
-
                                                 # All media goes into scenario folder
                                                 scenario_media_dir = testing_config.output_base / result.scenario_id
                                                 scenario_media_dir.mkdir(parents=True, exist_ok=True)
 
-                                                # Use timeline-based production (raw video + timed audio overlay)
                                                 timeline_path = testing_config.videos_dir / f'{result.scenario_id}.timeline.json'
                                                 audio_dir = testing_config.audio_dir / result.scenario_id
 
-                                                if timeline_path.exists():
-                                                    console_state.log('[VIDEO] Using timeline-based production (best quality)', 'info')
+                                                # Progress callback to update UI
+                                                def update_video_progress(progress: float, status: str):
+                                                    """Update progress bar during video encoding"""
+                                                    try:
+                                                        if progress_bar:
+                                                            # Scale progress: 0.6 to 0.9 range for encoding phase
+                                                            scaled = 0.6 + (progress * 0.3)
+                                                            progress_bar.value = scaled
+                                                        if step_label:
+                                                            step_label.text = f'Encoding: {int(progress*100)}%'
+                                                        console_state.log(f'[VIDEO] {int(progress*100)}% - {status}', 'info')
+                                                    except Exception:
+                                                        pass  # UI update may fail if context changed
+
+                                                # Debug mode: just use raw video (no processing)
+                                                if opt_debug.value:
+                                                    console_state.log('[VIDEO] DEBUG MODE - Using raw Playwright recording (no processing)', 'info')
+                                                    if result.video_path and result.video_path.exists():
+                                                        import shutil
+                                                        raw_output = scenario_media_dir / f"{result.scenario_id}_debug_raw.webm"
+                                                        shutil.copy(result.video_path, raw_output)
+                                                        video_path = raw_output
+                                                        console_state.log(f"[VIDEO] Raw video copied: {raw_output.name}", 'success')
+                                                    else:
+                                                        console_state.log('[VIDEO] No raw video found from recording', 'warning')
+                                                        video_path = None
+                                                # Normal mode: Use slideshow with audio sync
+                                                elif timeline_path.exists():
+                                                    console_state.log('[VIDEO] Using SLIDESHOW mode (screenshots + audio sync)', 'info')
 
                                                     def run_video_production():
                                                         video_producer = VideoProducer(scenario_media_dir)
-                                                        return video_producer.create_video_from_timeline(
+                                                        return video_producer.create_slideshow_from_timeline(
                                                             timeline_path=timeline_path,
                                                             audio_dir=audio_dir,
-                                                            output_path=scenario_media_dir / f"{result.scenario_id}_training.mp4"
+                                                            output_path=scenario_media_dir / f"{result.scenario_id}_training.mp4",
+                                                            transition_duration=0.5,
+                                                            progress_callback=update_video_progress
                                                         )
                                                 else:
-                                                    # Fallback to screenshot-based if no timeline
-                                                    console_state.log('[VIDEO] No timeline found, using screenshot-based production', 'warning')
+                                                    # Legacy fallback to screenshot-based if no timeline
+                                                    console_state.log('[VIDEO] No timeline found, using legacy screenshot-based production', 'warning')
                                                     screenshots_dir = testing_config.screenshots_dir / result.scenario_id
 
                                                     def run_video_production():
@@ -939,26 +1100,49 @@ def create_testing_console_page():
                                                             output_path=scenario_media_dir / f"{result.scenario_id}_training.mp4"
                                                         )
 
-                                                video_path = await loop.run_in_executor(None, run_video_production)
-                                                console_state.log(f"  Generated: {video_path.name}", 'success')
-                                                set_stage_complete('video', 'video_complete')
-                                                console_state.log('[VIDEO] Video production complete ✓', 'success')
+                                                # Only run video production if not in debug mode (debug mode already set video_path)
+                                                if not opt_debug.value:
+                                                    video_path = await loop.run_in_executor(None, run_video_production)
+
+                                                # Log detailed video specifications
+                                                if video_path and video_path.exists():
+                                                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
+                                                    console_state.log(f"[VIDEO] ════════════════════════════════════════", 'success')
+                                                    if opt_debug.value:
+                                                        console_state.log(f"[VIDEO] DEBUG RAW VIDEO READY", 'success')
+                                                        console_state.log(f"[VIDEO] (No processing - raw Playwright recording)", 'info')
+                                                    else:
+                                                        console_state.log(f"[VIDEO] TRAINING VIDEO COMPLETE", 'success')
+                                                    console_state.log(f"[VIDEO] ════════════════════════════════════════", 'success')
+                                                    console_state.log(f"[VIDEO] File: {video_path.name}", 'info')
+                                                    console_state.log(f"[VIDEO] Resolution: 1920 x 1080 (Full HD)", 'info')
+                                                    console_state.log(f"[VIDEO] File Size: {file_size_mb:.1f} MB", 'info')
+                                                    console_state.log(f"[VIDEO] ════════════════════════════════════════", 'success')
+
+                                                set_stage_complete('produce', 'produce_complete')
+                                                step_label.text = 'Video ready!' if video_path else 'No video'
+                                                progress_bar.value = 0.9
+                                                console_state.log('[PRODUCE] Video stage complete ✓', 'success')
                                             else:
-                                                console_state.log('[VIDEO WARNING] MoviePy not installed - video production skipped', 'warning')
-                                                console_state.log('[VIDEO] Install with: pip install moviepy', 'info')
-                                                set_stage_complete('video', 'video_complete')
+                                                console_state.log('[PRODUCE] MoviePy not installed - skipping video', 'warning')
+                                                console_state.log('[PRODUCE] Install with: pip install moviepy', 'info')
+                                                step_label.text = 'Video skipped (no MoviePy)'
+                                                progress_bar.value = 0.9
+                                                set_stage_complete('produce', 'produce_complete')
 
                                         except Exception as video_error:
-                                            console_state.log(f'[VIDEO ERROR] {str(video_error)}', 'error')
+                                            console_state.log(f'[PRODUCE ERROR] {str(video_error)}', 'error')
                                             console_state.log(f'[TRACEBACK] {traceback.format_exc()}', 'error')
-                                            set_stage_failed('video', 'video_complete')
+                                            set_stage_failed('produce', 'produce_complete')
                                             # Video failure is non-fatal
                                     else:
-                                        console_state.log('[VIDEO] Skipped (disabled in options)', 'info')
-                                        set_stage_complete('video', 'video_complete')
+                                        console_state.log('[PRODUCE] Skipped (disabled)', 'info')
+                                        step_label.text = 'Video skipped (disabled)'
+                                        progress_bar.value = 0.9
+                                        set_stage_complete('produce', 'produce_complete')
 
                                     # ═══════════════════════════════════════════════════════════
-                                    # STAGE 8: COMPLETION
+                                    # STAGE 4: COMPLETE
                                     # ═══════════════════════════════════════════════════════════
                                     current_stage = 'complete'
                                     if not pipeline_failed:
@@ -992,6 +1176,16 @@ def create_testing_console_page():
                                 ui.notify(f'Error: {str(e)}', type='negative')
                                 step_label.text = f'Failed at: {current_stage}'
                             finally:
+                                # Cleanup test data if scenario has cleanup_after=True (default)
+                                if hasattr(scenario, 'setup_actions') and scenario.setup_actions:
+                                    if not hasattr(scenario, 'cleanup_after') or scenario.cleanup_after:
+                                        try:
+                                            from services.scenario_setup_service import ScenarioSetupService
+                                            console_state.log('[CLEANUP] Removing test data...', 'info')
+                                            ScenarioSetupService.cleanup(log_callback=lambda msg, level: console_state.log(f'[CLEANUP] {msg}', level))
+                                        except Exception as cleanup_error:
+                                            console_state.log(f'[WARNING] Cleanup failed: {str(cleanup_error)}', 'warning')
+
                                 console_state.is_running = False
                                 run_btn.props(remove='loading')
                                 console_state.log('═' * 50, 'info')
@@ -1001,14 +1195,16 @@ def create_testing_console_page():
 
                         def stop_execution():
                             if console_state.request_cancel():
-                                ui.notify('Stop requested - cancelling...', type='warning')
+                                ui.notify('Stop requested - will cancel after current phase completes', type='warning')
+                                step_label.text = 'Stopping after current phase...'
+                                console_state.log('[STOP] Cancellation requested by user', 'warning')
                             else:
                                 ui.notify('No scenario running', type='info')
 
                         ui.button('Stop', icon='stop', on_click=stop_execution).props('outline color=red')
 
         # ═══════════════════════════════════════════════════════════════════
-        # TAB 2: GENERATED OUTPUTS (Organized by Scenario Folder)
+        # TAB 2: MEDIA OUTPUT (Organized by Scenario Folder)
         # ═══════════════════════════════════════════════════════════════════
         with ui.tab_panel(outputs_tab):
 
@@ -1445,7 +1641,7 @@ def create_testing_console_page():
                 folder_dlg.open()
 
             def generate_video_from_outputs(scenario_name: str, data: dict, parent_dialog):
-                """Generate a training video using timeline-based audio overlay on raw video"""
+                """Generate a training video using slideshow mode (static screenshots + crossfade transitions)"""
                 try:
                     from services.video_producer import VideoProducer, MOVIEPY_AVAILABLE
 
@@ -1478,17 +1674,18 @@ def create_testing_console_page():
                             producer = VideoProducer(scenario_output_dir)
 
                             if timeline_path.exists():
-                                progress_label.text = 'Using timeline-based production (raw video + synced audio)...'
+                                progress_label.text = 'Creating slideshow with crossfade transitions...'
                                 progress_bar.value = 0.3
                                 await asyncio.sleep(0.1)
 
-                                # Run timeline-based video creation
+                                # Run slideshow-based video creation (no flickering)
                                 import concurrent.futures
                                 def run_production():
-                                    return producer.create_video_from_timeline(
+                                    return producer.create_slideshow_from_timeline(
                                         timeline_path=timeline_path,
                                         audio_dir=audio_dir,
-                                        output_path=scenario_output_dir / f'{scenario_name}_training.mp4'
+                                        output_path=scenario_output_dir / f'{scenario_name}_training.mp4',
+                                        transition_duration=0.5
                                     )
 
                                 progress_label.text = 'Compiling video with synced narration (1-2 min)...'
@@ -1703,52 +1900,69 @@ def create_testing_console_page():
                 import shutil
 
                 async def do_delete():
+                    deleted_count = 0
                     try:
+                        # Delete scenario folder from output_base (contains training video, cover, annotated frames)
+                        scenario_media_dir = testing_config.output_base / scenario_name
+                        if scenario_media_dir.exists():
+                            shutil.rmtree(scenario_media_dir)
+                            deleted_count += 1
+
                         # Delete screenshots folder
                         screenshots_dir = testing_config.screenshots_dir / scenario_name
                         if screenshots_dir.exists():
                             shutil.rmtree(screenshots_dir)
+                            deleted_count += 1
 
                         # Delete audio folder
                         audio_dir = testing_config.audio_dir / scenario_name
                         if audio_dir.exists():
                             shutil.rmtree(audio_dir)
+                            deleted_count += 1
 
-                        # Delete video folder
+                        # Delete video folder (raw Playwright recordings)
                         video_dir = testing_config.videos_dir / scenario_name
                         if video_dir.exists():
                             shutil.rmtree(video_dir)
+                            deleted_count += 1
 
-                        # Delete timeline, srt, vtt files
+                        # Delete timeline, srt, vtt files from videos_dir
                         for ext in ['.timeline.json', '.srt', '.vtt']:
                             file_path = testing_config.videos_dir / f'{scenario_name}{ext}'
                             if file_path.exists():
                                 file_path.unlink()
+                                deleted_count += 1
 
-                        # Delete training video
+                        # Delete training video (legacy location)
                         training_path = testing_config.videos_dir / f'{scenario_name}_training.mp4'
                         if training_path.exists():
                             training_path.unlink()
+                            deleted_count += 1
 
                         # Delete docs
                         docs_path = testing_config.docs_dir / f'{scenario_name}.md'
                         if docs_path.exists():
                             docs_path.unlink()
+                            deleted_count += 1
 
-                        ui.notify(f'Deleted scenario: {scenario_name}', type='positive')
-                        navigate_to('root')
+                        dialog.close()
+                        ui.notify(f'Deleted scenario "{scenario_name}" ({deleted_count} items)', type='positive')
+                        # Refresh the browser view
+                        render_browser()
                     except Exception as e:
+                        dialog.close()
                         ui.notify(f'Delete failed: {e}', type='negative')
-                    dialog.close()
 
                 with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 400px;'):
                     ui.label('Delete Scenario?').classes('text-xl font-bold mb-4')
                     ui.label(f'This will permanently delete all files for "{scenario_name}":').classes('mb-2')
-                    ui.label('• Screenshots, Audio, Videos, Documentation').classes('text-sm opacity-60 ml-4')
+                    ui.label('• Training videos, covers, annotated frames').classes('text-sm opacity-60 ml-4')
+                    ui.label('• Screenshots, audio narration').classes('text-sm opacity-60 ml-4')
+                    ui.label('• Raw recordings, documentation').classes('text-sm opacity-60 ml-4')
                     ui.label('This action cannot be undone.').classes('text-sm text-red-400 mt-4')
                     with ui.row().classes('w-full justify-end gap-2 mt-6'):
                         ui.button('Cancel', on_click=dialog.close).props('flat')
-                        ui.button('Delete', on_click=do_delete).props('color=negative').style('background-color: #dc2626 !important;')
+                        ui.button('Delete All', icon='delete_forever', on_click=do_delete).props('color=negative').style('background-color: #dc2626 !important;')
                 dialog.open()
 
             def delete_file(file_path, file_type: str, scenario_name: str):
@@ -1757,19 +1971,29 @@ def create_testing_console_page():
                     try:
                         if file_path.exists():
                             file_path.unlink()
+                            dialog.close()
                             ui.notify(f'Deleted: {file_path.name}', type='positive')
-                        render_browser()
+                            render_browser()
+                        else:
+                            dialog.close()
+                            ui.notify(f'File not found: {file_path.name}', type='warning')
                     except Exception as e:
+                        dialog.close()
                         ui.notify(f'Delete failed: {e}', type='negative')
-                    dialog.close()
 
                 with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 350px;'):
                     ui.label('Delete File?').classes('text-xl font-bold mb-4')
-                    ui.label(f'Delete "{file_path.name}"?').classes('mb-2')
+                    ui.label(f'{file_type}: "{file_path.name}"').classes('mb-2 font-medium')
+                    if file_path.exists():
+                        size_kb = file_path.stat().st_size / 1024
+                        if size_kb > 1024:
+                            ui.label(f'Size: {size_kb/1024:.1f} MB').classes('text-xs opacity-50')
+                        else:
+                            ui.label(f'Size: {size_kb:.1f} KB').classes('text-xs opacity-50')
                     ui.label('This action cannot be undone.').classes('text-sm text-red-400 mt-2')
                     with ui.row().classes('w-full justify-end gap-2 mt-4'):
                         ui.button('Cancel', on_click=dialog.close).props('flat')
-                        ui.button('Delete', on_click=do_delete).props('color=negative').style('background-color: #dc2626 !important;')
+                        ui.button('Delete', icon='delete', on_click=do_delete).props('color=negative').style('background-color: #dc2626 !important;')
                 dialog.open()
 
             def render_browser():
@@ -1818,12 +2042,14 @@ def create_testing_console_page():
                                 from datetime import datetime
                                 mtime = datetime.fromtimestamp(data['mtime'])
 
-                                # Folder card
+                                # Folder card - entire row is clickable
                                 def make_click(sn):
                                     return lambda e: navigate_to('scenario', sn)
 
                                 def make_delete(sn):
-                                    return lambda e: (e.stop_propagation(), delete_scenario(sn))
+                                    def handler(e):
+                                        delete_scenario(sn)
+                                    return handler
 
                                 with ui.card().classes('w-full p-4 cursor-pointer hover:ring-2 transition-all').style(f'background-color: #1f2937; ring-color: {PTO_GOLD};').on('click', make_click(scenario_name)):
                                     with ui.row().classes('w-full items-center gap-4'):
@@ -1852,8 +2078,9 @@ def create_testing_console_page():
 
                                         ui.label(f'{total} items').classes('text-sm opacity-50')
 
-                                        # Delete button
-                                        ui.button(icon='delete', on_click=make_delete(scenario_name)).props('flat round dense').classes('opacity-50 hover:opacity-100').style('color: #ef4444;').tooltip('Delete Scenario')
+                                        # Delete button - wrapped to stop event propagation
+                                        with ui.element('div').on('click.stop', lambda e: None):
+                                            ui.button(icon='delete', on_click=make_delete(scenario_name)).props('flat round dense').classes('opacity-50 hover:opacity-100').style('color: #ef4444;').tooltip('Delete Scenario')
 
                                         ui.icon('chevron_right').classes('opacity-50')
 
@@ -1981,8 +2208,10 @@ def create_testing_console_page():
                                             ui.button(icon='delete', on_click=delete_training(training_path, scenario_name)).props('flat round dense').style('color: #ef4444;').tooltip('Delete Training Video')
 
                                     # Inline video player - build URL with forward slashes
+                                    # Add cache-busting parameter to force browser to reload when file changes
                                     rel_path = training_path.relative_to(testing_config.output_base)
-                                    video_url = f'/static/help/{rel_path.as_posix()}'
+                                    cache_buster = int(training_path.stat().st_mtime)
+                                    video_url = f'/static/help/{rel_path.as_posix()}?v={cache_buster}'
                                     ui.video(video_url).classes('w-full rounded-lg').style('max-height: 500px;').props('controls')
 
                         # Raw Videos with Timeline Captions
@@ -2082,13 +2311,16 @@ def create_testing_console_page():
                                         return lambda e: show_image_lightbox(scenario_name, data['screenshots'], idx)
 
                                     def make_img_delete(ip, sn):
-                                        return lambda e: (e.stop_propagation(), delete_file(ip, 'screenshot', sn))
+                                        def handler(e):
+                                            delete_file(ip, 'screenshot', sn)
+                                        return handler
 
                                     with ui.card().classes('p-2 cursor-pointer hover:ring-2 transition-all relative').style(f'background-color: #1f2937; ring-color: {PTO_GOLD};').on('click', make_lightbox(i)):
                                         ui.image(f'/static/help/screenshots/{scenario_name}/{img_name}').classes('rounded').style('width: 200px; height: 113px; object-fit: cover;')
                                         with ui.row().classes('w-full items-center justify-between mt-1'):
                                             ui.label(img_path.stem.replace('-', ' ').title()).classes('text-xs opacity-70 flex-grow')
-                                            ui.button(icon='delete', on_click=make_img_delete(img_path, scenario_name)).props('flat round dense size=xs').style('color: #ef4444;').tooltip('Delete')
+                                            with ui.element('div').on('click.stop', lambda e: None):
+                                                ui.button(icon='delete', on_click=make_img_delete(img_path, scenario_name)).props('flat round dense size=xs').style('color: #ef4444;').tooltip('Delete')
 
                         # Audio
                         elif media_type == 'audio':

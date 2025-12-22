@@ -1,10 +1,10 @@
-# TJM Time Calendar
+# PTO Central
 
-Employee PTO (Paid Time Off) and Market Calendar management system for TJM Holdings / Haventech Solutions.
+Employee PTO (Paid Time Off) and Market Calendar management system for Haventech Solutions.
 
 ## Overview
 
-TJM Time Calendar is a comprehensive employee scheduling system that integrates NYSE/CME/CBOE market holidays with PTO management. The system provides role-based access control, approval workflows, and complete audit trails for regulatory compliance.
+PTO Central is a comprehensive employee scheduling system that integrates NYSE/CME/CBOE market holidays with PTO management. The system provides role-based access control, approval workflows, and complete audit trails for regulatory compliance.
 
 ## Features
 
@@ -91,8 +91,8 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=your-email@example.com
 SMTP_PASSWORD=your-password
-EMAIL_FROM=noreply@tjm.com
-EMAIL_FROM_NAME=TJM Calendar
+EMAIL_FROM=noreply@ptocentral.haventech.com
+EMAIL_FROM_NAME=PTO Central
 
 # Digest Scheduler
 ENABLE_DIGEST_SCHEDULER=true
@@ -212,9 +212,9 @@ https://localhost:8080/health
 
 ## License
 
-**Internal Use Only** - TJM Holdings / Haventech Solutions
+**Internal Use Only** - Haventech Solutions
 
 ---
 
 **Project Lead**: Jose LaBoy, CTO
-**Organization**: TJM Holdings / Haventech Solutions
+**Organization**: Haventech Solutions

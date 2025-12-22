@@ -1,10 +1,46 @@
 """
-Logging configuration for TJM Time Calendar.
+Logging configuration for PTO Central.
 """
 import os
+import sys
 import logging
 import logging.handlers
 from pathlib import Path
+
+
+class InvalidHTTPFilter(logging.Filter):
+    """Filter out 'Invalid HTTP request received' messages from uvicorn."""
+
+    def filter(self, record):
+        # Filter out the annoying invalid HTTP request messages
+        if hasattr(record, 'msg') and 'Invalid HTTP request received' in str(record.msg):
+            return False
+        return True
+
+
+class StderrFilter:
+    """
+    Custom stderr wrapper that filters out unwanted messages.
+    Used to suppress messages that bypass the logging system.
+    """
+    def __init__(self, original_stderr):
+        self.original_stderr = original_stderr
+        self.suppressed_patterns = [
+            'Invalid HTTP request received',
+        ]
+
+    def write(self, message):
+        # Check if message should be suppressed
+        for pattern in self.suppressed_patterns:
+            if pattern in message:
+                return  # Suppress this message
+        self.original_stderr.write(message)
+
+    def flush(self):
+        self.original_stderr.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.original_stderr, name)
 
 
 def setup_logging():
@@ -90,6 +126,14 @@ def setup_logging():
     uvicorn_root.setLevel(logging.WARNING)
     uvicorn_root.propagate = False
     uvicorn_root.addHandler(file_handler)
+
+    # Add filter for Invalid HTTP request messages (all handlers)
+    http_filter = InvalidHTTPFilter()
+    console_handler.addFilter(http_filter)
+
+    # Wrap stderr to catch messages that bypass the logging system
+    # (uvicorn prints some messages directly to stderr)
+    sys.stderr = StderrFilter(sys.stderr)
 
     return root_logger
 

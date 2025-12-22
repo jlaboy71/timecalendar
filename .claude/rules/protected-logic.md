@@ -49,3 +49,62 @@ Balance calculations are the core of this application. Incorrect math means:
 - Audit trail becomes unreliable
 
 Any change to these formulas requires careful review and explicit approval.
+
+## CRITICAL: Hire Date & Balance Auto-Calculation
+
+### Automatic Balance Calculation (IMPLEMENTED)
+
+**The following is now handled AUTOMATICALLY by `UserService`:**
+
+1. **User Creation** (`create_user()`):
+   - PTO balance is created with proper tenure-based vacation allocation
+   - Chicago Paid Leave is set for Chicago employees
+
+2. **Hire Date Changes** (`update_user()`):
+   - When `hire_date` changes, balance is automatically recalculated
+   - When `location_city` changes, Chicago Leave is recalculated
+
+**Location:** `src/services/user_service.py`
+- `_calculate_vacation_days()` - Calculates vacation days based on tenure
+- `_update_or_create_balance()` - Creates/updates balance with proper allocations
+
+### Vacation Tiers (MUST match year_end_service.py)
+| Years of Service | Vacation Days | Hours |
+|-----------------|---------------|-------|
+| 10+ years | 20 days | 160 hours |
+| 5-9 years | 15 days | 120 hours |
+| 2-4 years | 12 days | 96 hours |
+| 0-1 years | 10 days | 80 hours |
+
+Plus: Sick = 5 days (40 hours), Personal = 2 days (16 hours)
+
+### DO NOT Bypass UserService
+
+**CRITICAL**: When modifying hire dates, ALWAYS use `UserService.update_user()`.
+
+```python
+# CORRECT - Uses UserService, balance auto-updates
+user_service = UserService(db)
+update_data = UserUpdate(hire_date=new_date)
+user_service.update_user(user_id, update_data)
+
+# WRONG - Direct modification bypasses balance recalculation!
+user.hire_date = new_date
+db.commit()  # Balance NOT updated!
+```
+
+### For Scripts Modifying Multiple Users
+If you need to bypass UserService for performance (bulk updates), call `_update_or_create_balance()` manually:
+
+```python
+from src.services.user_service import UserService
+
+user_service = UserService(db)
+for user in users:
+    user.hire_date = new_date
+    user_service._update_or_create_balance(user)
+db.commit()
+```
+
+### Reference Script
+See `scripts/update_pto_users.py` for the correct bulk update pattern.
