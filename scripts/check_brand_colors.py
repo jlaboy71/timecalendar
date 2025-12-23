@@ -41,6 +41,8 @@ WHITELIST_PATTERNS = [
     '__pycache__',         # Python cache
     '.pyc',                # Compiled Python
     'check_brand_colors.py',  # This script
+    'playwright_engine.py',   # Automation - needs inline JS colors
+    'video_producer.py',      # Automation - needs RGB tuples for PIL
 ]
 
 # Directories to scan

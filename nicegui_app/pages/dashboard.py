@@ -17,7 +17,7 @@ from datetime import datetime, date, timedelta
 import pytz
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.header import get_time_based_greeting
-from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, skeleton_card, show_warning_dialog, show_error_dialog, show_success_dialog, PTO_GOLD, PTO_GRAY
 from nicegui_app.components.formatting import format_days_hours, fmt_days
 from nicegui_app.components.realtime_updates import setup_dashboard_updates
 
@@ -49,35 +49,35 @@ def dashboard_page():
     apply_dark_mode()
 
     # Add custom CSS for admin dashboard enhancements
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
-        @keyframes pulse-pending {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-            50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
-        }
-        .pulse-pending {
+        @keyframes pulse-pending {{
+            0%, 100% {{ box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }}
+            50% {{ box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }}
+        }}
+        .pulse-pending {{
             animation: pulse-pending 2s ease-in-out infinite;
-        }
-        .admin-stat-card {
+        }}
+        .admin-stat-card {{
             transition: all 0.2s ease;
-        }
-        .admin-stat-card:hover {
+        }}
+        .admin-stat-card:hover {{
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        .admin-btn {
+        }}
+        .admin-btn {{
             transition: all 0.2s ease;
             border: 2px solid transparent !important;
-        }
-        .admin-btn:hover {
-            border-color: #C9A227 !important;
+        }}
+        .admin-btn:hover {{
+            border-color: {PTO_GOLD} !important;
             transform: scale(1.02);
-        }
-        .section-header {
-            border-left: 3px solid #C9A227;
+        }}
+        .section-header {{
+            border-left: 3px solid {PTO_GOLD};
             padding-left: 12px;
             margin-bottom: 12px;
-        }
+        }}
     </style>
     ''')
 
@@ -146,7 +146,7 @@ def dashboard_page():
 
             # Header with logo, greeting and logout
             is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
-            greeting_color = '#C9A227' if is_dark else '#5a6a72'
+            greeting_color = PTO_GOLD if is_dark else PTO_GRAY
             with ui.row().classes('w-full justify-between items-start mb-6'):
                 with ui.column().classes('gap-1'):
                     ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 70px; width: auto;')
@@ -183,7 +183,7 @@ def dashboard_page():
                             on_click=toggle_dark_mode
                         ).props('flat round')
 
-                        ui.button('LOGOUT', on_click=lambda: logout()).props('outline dense').style('color: #ef4444 !important; border-color: #C9A227 !important; font-weight: 600;')
+                        ui.button('LOGOUT', on_click=lambda: logout()).props('outline dense').style(f'color: #ef4444 !important; border-color: {PTO_GOLD} !important; font-weight: 600;')
 
             # ============ WHAT'S NEW SECTION (Policy Changes) ============
             if current_user:
@@ -191,7 +191,7 @@ def dashboard_page():
 
             # ============ PTO BALANCES CARD (not for admin/superadmin - they don't take PTO) ============
             if user_role not in ['admin', 'superadmin']:
-              with ui.card().classes('w-full mb-4'):
+              with ui.card().classes('w-full mb-4 shadow-md'):
                 # Year selector state
                 selected_year = {'value': current_year}
                 next_year = current_year + 1
@@ -549,7 +549,7 @@ def dashboard_page():
 
             # ============ QUICK ACTIONS (employees and managers only) ============
             if user_role not in ['admin', 'superadmin']:
-                with ui.card().classes('w-full mb-4 p-4'):
+                with ui.card().classes('w-full mb-4 p-4 shadow-md'):
                     # Row 1: My Time Off Actions
                     with ui.column().classes('w-full gap-3'):
                         def show_time_off_help():
@@ -647,7 +647,7 @@ def dashboard_page():
                     if conflicts:
                         request_conflicts[req['request_id']] = len(conflicts)
 
-                with ui.card().classes('w-full mb-4 border-l-4 border-indigo-500'):
+                with ui.card().classes('w-full mb-4 border-l-4 border-indigo-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('supervisor_account', color='indigo').classes('text-xl')
@@ -748,7 +748,7 @@ def dashboard_page():
                 type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
                 type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
-                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('cancel_schedule_send', color='amber').classes('text-xl')
@@ -793,7 +793,7 @@ def dashboard_page():
                     team_members = [m for m in team_members if m.id != user_id and m.is_active]
 
                     if team_members:
-                        with ui.card().classes('w-full mb-4'):
+                        with ui.card().classes('w-full mb-4 shadow-md'):
                             with ui.row().classes('w-full justify-between items-center mb-3'):
                                 with ui.row().classes('items-center gap-2'):
                                     ui.icon('groups', color='teal').classes('text-xl')
@@ -828,7 +828,7 @@ def dashboard_page():
                 pending_type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
                 pending_type_icons = {'vacation': 'beach_access', 'sick': 'medical_services', 'personal': 'person', 'work_from_home': 'home_work'}
 
-                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                with ui.card().classes('w-full mb-4 border-l-4 border-amber-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('pending', color='amber').classes('text-xl')
@@ -878,7 +878,7 @@ def dashboard_page():
 
             # ============ RECENT APPROVED REQUESTS (not for admin/superadmin) ============
             if user_role not in ['admin', 'superadmin']:
-              with ui.card().classes('w-full mb-4'):
+              with ui.card().classes('w-full mb-4 shadow-md'):
                 # View state for My/Team toggle (managers only)
                 view_state = {'mode': 'my'}  # 'my' or 'team'
                 view_buttons = {}
@@ -893,13 +893,13 @@ def dashboard_page():
                                 # Update button styles
                                 for btn_mode, btn in view_buttons.items():
                                     if btn_mode == mode:
-                                        btn.style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                                        btn.style(f'color: {PTO_GOLD} !important; border-color: {PTO_GOLD} !important; border-width: 2px !important;')
                                     else:
                                         btn.style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
                                 # Re-render the list
                                 render_filtered_requests()
 
-                            view_buttons['my'] = ui.button('My', icon='person', on_click=lambda: update_view('my')).props('dense outline size=sm').style('color: #C9A227 !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                            view_buttons['my'] = ui.button('My', icon='person', on_click=lambda: update_view('my')).props('dense outline size=sm').style(f'color: {PTO_GOLD} !important; border-color: {PTO_GOLD} !important; border-width: 2px !important;')
                             view_buttons['team'] = ui.button('Team', icon='group', on_click=lambda: update_view('team')).props('dense outline size=sm').style('color: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
 
                         count_label = ui.label(f'{len(recent_requests)} requests').classes('text-xs opacity-50')
@@ -907,7 +907,7 @@ def dashboard_page():
                 if recent_requests or team_approved_requests:
                     # Hex colors for inline styling (icon + text)
                     type_hex_colors = {
-                        'all': '#C9A227',  # Brand Gold
+                        'all': PTO_GOLD,  # Brand Gold
                         'vacation': '#3b82f6',  # Blue
                         'sick': '#22c55e',  # Green
                         'personal': '#a855f7',  # Purple
@@ -931,7 +931,7 @@ def dashboard_page():
                             btn_color = button_colors.get(btn_type, '#6b7280')
                             if btn_type == new_type:
                                 # Selected: gold border, colored text
-                                btn.style(f'color: {btn_color} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                                btn.style(f'color: {btn_color} !important; border-color: {PTO_GOLD} !important; border-width: 2px !important;')
                             else:
                                 # Unselected: subtle border, colored text
                                 btn.style(f'color: {btn_color} !important; border-color: rgba(255,255,255,0.3) !important; border-width: 1px !important;')
@@ -945,7 +945,7 @@ def dashboard_page():
                     with ui.row().classes('w-full gap-2 mb-3 flex-wrap'):
                         # All button - starts selected with gold border
                         button_colors['all'] = type_hex_colors['all']
-                        filter_buttons['all'] = ui.button('All', icon='list', on_click=lambda: update_filter('all')).props('dense outline size=sm').style(f'color: {type_hex_colors["all"]} !important; border-color: #C9A227 !important; border-width: 2px !important;')
+                        filter_buttons['all'] = ui.button('All', icon='list', on_click=lambda: update_filter('all')).props('dense outline size=sm').style(f'color: {type_hex_colors["all"]} !important; border-color: {PTO_GOLD} !important; border-width: 2px !important;')
 
                         # Vacation
                         button_colors['vacation'] = type_hex_colors['vacation']
@@ -1043,7 +1043,7 @@ def dashboard_page():
 
             # ============ INCOMING WFH SWAP REQUESTS (if any) ============
             if pending_wfh_swaps:
-                with ui.card().classes('w-full mb-4 border-l-4 border-orange-500'):
+                with ui.card().classes('w-full mb-4 border-l-4 border-orange-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('swap_horiz', color='orange').classes('text-xl')
@@ -1111,7 +1111,7 @@ def dashboard_page():
                 pending_count = len(admin_pending_requests)
 
                 # Admin Overview Stats
-                with ui.card().classes('w-full mb-4 p-4 border-l-4 border-red-500'):
+                with ui.card().classes('w-full mb-4 p-4 border-l-4 border-red-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-4'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('admin_panel_settings', color='red').classes('text-2xl')
@@ -1185,7 +1185,7 @@ def dashboard_page():
                 # ============ QUICK INSIGHTS PANEL ============
                 with ui.row().classes('w-full gap-4 mb-4'):
                     # Upcoming Time Off card - fixed height with scroll
-                    with ui.card().classes('flex-1 p-4').style('height: 220px;'):
+                    with ui.card().classes('flex-1 p-4 shadow-md').style('height: 220px;'):
                         with ui.row().classes('items-center gap-2 mb-3'):
                             ui.icon('calendar_today', color='primary').classes('text-lg')
                             ui.label('Upcoming Time Off').classes('font-semibold')
@@ -1217,7 +1217,7 @@ def dashboard_page():
                                 ui.label('No upcoming time off').classes('text-sm')
 
                     # Department PTO Usage card - same fixed height
-                    with ui.card().classes('flex-1 p-4').style('height: 220px;'):
+                    with ui.card().classes('flex-1 p-4 shadow-md').style('height: 220px;'):
                         with ui.row().classes('items-center gap-2 mb-3'):
                             ui.icon('bar_chart', color='secondary').classes('text-lg')
                             ui.label('Department PTO Usage').classes('font-semibold')
@@ -1274,7 +1274,7 @@ def dashboard_page():
                         if conflicts:
                             request_conflicts[req['request_id']] = len(conflicts)
 
-                    with ui.card().classes('w-full mb-4 border-l-4 border-amber-500'):
+                    with ui.card().classes('w-full mb-4 border-l-4 border-amber-500 shadow-md'):
                         with ui.row().classes('w-full justify-between items-center mb-3'):
                             with ui.row().classes('items-center gap-2'):
                                 ui.icon('pending_actions', color='amber').classes('text-xl')
@@ -1333,7 +1333,7 @@ def dashboard_page():
                 ).count()
 
                 if pending_carryovers > 0:
-                    with ui.card().classes('w-full mb-4 border-l-4 border-purple-500 cursor-pointer hover:shadow-lg').on('click', lambda: ui.navigate.to('/manager/carryover')):
+                    with ui.card().classes('w-full mb-4 border-l-4 border-purple-500 cursor-pointer shadow-md hover:shadow-xl').on('click', lambda: ui.navigate.to('/manager/carryover')):
                         with ui.row().classes('w-full justify-between items-center p-2'):
                             with ui.row().classes('items-center gap-3'):
                                 ui.icon('move_down', color='purple').classes('text-2xl')
@@ -1343,7 +1343,7 @@ def dashboard_page():
                             ui.badge(str(pending_carryovers), color='purple')
 
                 # Admin Quick Actions
-                with ui.card().classes('w-full mb-4 p-4'):
+                with ui.card().classes('w-full mb-4 p-4 shadow-md'):
                     # Management section with icon
                     with ui.row().classes('items-center gap-2 mb-3'):
                         ui.icon('settings', size='sm').classes('opacity-60')
@@ -1405,7 +1405,7 @@ def dashboard_page():
             accepted_swaps = list(db.execute(accepted_swaps_stmt).scalars().all())
 
             if accepted_swaps:
-                with ui.card().classes('w-full mb-4 border-l-4 border-green-500'):
+                with ui.card().classes('w-full mb-4 border-l-4 border-green-500 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-3'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('check_circle', color='green').classes('text-xl')
@@ -1588,7 +1588,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
         # Create dialog
         with ui.dialog() as history_dialog, ui.card().classes('w-full max-w-4xl p-0'):
             # Header - using brand gray for better readability
-            with ui.row().classes('w-full justify-between items-center p-4 text-white').style('background-color: #5a6a72;'):
+            with ui.row().classes('w-full justify-between items-center p-4 text-white').style(f'background-color: {PTO_GRAY};'):
                 with ui.column().classes('gap-0'):
                     ui.label(employee_name).classes('text-xl font-bold')
                     ui.label(employee.email).classes('text-sm opacity-80')
@@ -2152,7 +2152,7 @@ def show_user_profile_dialog(user, _db=None):
 
     # Use app theme color for header
     is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
-    header_color = '#C9A227' if is_dark else '#5a6a72'
+    header_color = PTO_GOLD if is_dark else PTO_GRAY
 
     with ui.dialog() as profile_dialog, ui.card().classes('w-full max-w-md p-0'):
         # Header - using app theme color
