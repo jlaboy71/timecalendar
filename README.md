@@ -8,18 +8,32 @@ PTO Central is a comprehensive employee scheduling system that integrates NYSE/C
 
 ## Features
 
+### Core PTO Management
 - **PTO Request Management**: Submit, approve, deny, and cancel time-off requests
 - **Balance Tracking**: Vacation, sick, personal days with carryover support
 - **Team Calendar**: Visual calendar with market holidays and team PTO visibility
 - **Manager Dashboard**: Approve/deny team requests, view team availability
 - **Admin Controls**: Manage employees, departments, system settings
+
+### AI-Powered Features
+- **Smart Scheduler Agent**: AI assistant that helps employees find optimal vacation dates, checks balances, team coverage, and can submit requests with human-in-the-loop confirmation
+- **RAG Knowledge Base**: Policy documents indexed for accurate AI responses about carryover rules, leave policies, and company procedures
+
+### Collaboration Features
+- **WFH Day Swap**: Peer-to-peer work-from-home day exchange system with weekly limits and federal holiday awareness
 - **Trusted Employee System**: Auto-approve PTO for designated trusted employees
-- **Multi-State Policy Support**: Chicago Safe Leave and location-specific policies
+
+### Enterprise Features
+- **Multi-State Policy Support**: Chicago Paid Leave and location-specific policies
 - **Audit Trail**: Complete logging of all PTO-related actions
 - **Email Notifications**: Automated notifications for request status changes
 - **Report Generation**: Export PTO reports in PDF, CSV, and HTML formats
 - **iCal Export**: Download calendar events for Outlook/Google Calendar integration
 - **Year-End Processing**: Automatic balance rollover and carryover handling
+
+### UI/UX
+- **Gold/Dark Theme**: Professional dark mode with TJM gold accent colors
+- **Mobile-Responsive**: Works on desktop and mobile devices
 
 ## Technology Stack
 
@@ -30,6 +44,7 @@ PTO Central is a comprehensive employee scheduling system that integrates NYSE/C
 | Database | SQLite |
 | ORM | SQLAlchemy 2.0 |
 | Migrations | Alembic |
+| AI | Anthropic Claude (Smart Scheduler Agent) |
 | Styling | Tailwind CSS, Quasar Components |
 | SSL | HTTPS with custom certificates |
 
@@ -96,7 +111,12 @@ EMAIL_FROM_NAME=PTO Central
 
 # Digest Scheduler
 ENABLE_DIGEST_SCHEDULER=true
+
+# AI Features (Smart Scheduler Agent)
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
 ```
+
+> **Note**: The `ANTHROPIC_API_KEY` is required for the Smart Scheduler Agent feature. Without it, the AI assistant will be disabled but all other features work normally.
 
 ## Running the Application
 
@@ -125,19 +145,28 @@ TimeCalendar/
 │   ├── pages/             # Page components
 │   │   ├── dashboard.py   # Main dashboard
 │   │   ├── calendar.py    # Team calendar
+│   │   ├── assistant.py   # Smart Scheduler AI chat
+│   │   ├── wfh_swap.py    # WFH Day Swap
 │   │   ├── reports.py     # Report generation
 │   │   ├── admin_*.py     # Admin pages
 │   │   └── manager_*.py   # Manager pages
 │   └── components/        # Reusable UI components
 │       ├── header.py      # Page headers
-│       ├── theme.py       # Dark mode, dialogs
+│       ├── theme.py       # Dark mode, brand colors
 │       └── formatting.py  # Display helpers
 ├── src/
 │   ├── models/            # SQLAlchemy models
 │   ├── services/          # Business logic services
+│   │   ├── agent_service.py   # AI agent orchestration
+│   │   └── wfh_swap_service.py # WFH swap logic
 │   ├── schemas/           # Pydantic validation schemas
 │   ├── config.py          # Application configuration
 │   └── database.py        # Database connection
+├── mcp/                   # MCP tools for AI agents
+│   ├── mcp_server.py      # RAG query server
+│   └── pto_central_mcp.py # PTO-specific tools
+├── skills/                # Claude Code skill packages
+├── data/                  # RAG index and help docs
 ├── alembic/               # Database migrations
 ├── tests/                 # Test files
 ├── certs/                 # SSL certificates
@@ -194,11 +223,18 @@ https://localhost:8080/health
 
 ## Current Status
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Status**: Production Ready
 **Last Updated**: December 2025
 
-### Completed Features
+### Recent Updates (v2.0)
+- Smart Scheduler Agent (AI-powered PTO planning)
+- WFH Day Swap (peer-to-peer schedule exchange)
+- RAG Knowledge Base (policy document search)
+- Gold/Dark Theme (professional UI refresh)
+- Calendar date verification (prevents AI date hallucination)
+
+### Core Features
 - Full PTO request lifecycle
 - Manager approval workflows
 - Admin employee management

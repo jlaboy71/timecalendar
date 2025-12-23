@@ -22,8 +22,8 @@ pypdf>=4.0.0
 # Market Calendar
 pandas-market-calendars>=4.0.0
 
-# AI Integration
-anthropic>=0.18.0
+# AI Integration (Smart Scheduler Agent)
+anthropic>=0.40.0
 
 # Utilities
 python-dotenv==1.0.0

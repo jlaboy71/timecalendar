@@ -3791,9 +3791,23 @@ calendar_event_id: String  # Google/Outlook calendar event ID
 5. `src/services/audit_service.py` - Add `log_notification_preference_change` method
 6. `nicegui_app/pages/help.py` - Add notification preferences help article
 
+### Proactive Weekly Limit Warning ✅ COMPLETED
+- **Location**: WFH Swap page (`nicegui_app/pages/wfh_swap.py`)
+- **Implemented**: Dec 22, 2025
+- **Components**:
+  - `limit_warning_container` - Amber warning banner displayed below week toggle
+  - `render_limit_warning()` - Function to check `user['id'] in users_with_swaps`
+  - Disabled state for all employee items when user has reached weekly limit
+- **Behavior**:
+  - When user has a pending/accepted swap for the displayed week, shows amber banner: "Weekly Limit Reached — You already have a swap request for this week"
+  - All other employees become non-clickable with `cursor: not-allowed` and tooltip
+  - Warning updates dynamically when toggling between "This Week" and "Next Week"
+- **Verification**: Policy parity check passed (100%/100% coverage)
+- **Media Studio Fix**: Removed sample swap request from scenario setup (`services/playwright_engine.py`) to allow training video to record "Initiate Swap" flow without triggering the weekly limit block.
+
 ---
 
-*Document Version: 1.2*
+*Document Version: 1.3*
 *Created: December 2024*
-*Updated: December 2024 - Added Help Documentation, UI Help Buttons, Testing Scenarios, and Email Notification Preferences*
-*For: TJM Time Calendar - WFH Day Swap Feature*
+*Updated: December 22, 2025 - Added Proactive Weekly Limit Warning (completed)*
+*For: PTO Central - WFH Day Swap Feature*
