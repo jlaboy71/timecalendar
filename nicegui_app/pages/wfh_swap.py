@@ -335,6 +335,21 @@ def wfh_swap_page():
                 # Week toggle buttons
                 week_toggle_container = ui.row().classes('gap-0')
 
+            # Weekly limit warning indicator container
+            limit_warning_container = ui.row().classes('w-full justify-center mb-2')
+
+            def render_limit_warning():
+                """Render weekly limit warning if current user already has a swap this week."""
+                limit_warning_container.clear()
+                # Check if current user has a swap for the selected week
+                current_user_has_swap = user['id'] in users_with_swaps
+                if current_user_has_swap:
+                    with limit_warning_container:
+                        with ui.row().classes('items-center gap-2 p-2 px-4 rounded-lg').style('background-color: #f59e0b20; border: 1px solid #f59e0b;'):
+                            ui.icon('warning', size='xs').style('color: #f59e0b;')
+                            ui.label('Weekly Limit Reached').classes('text-sm font-semibold').style('color: #f59e0b;')
+                            ui.label('— You already have a swap request for this week').classes('text-sm opacity-70')
+
             def render_week_toggle():
                 week_toggle_container.clear()
                 with week_toggle_container:
@@ -628,6 +643,9 @@ def wfh_swap_page():
                 users_with_swaps, user_swap_colors, week_swap_colors = get_users_with_swaps_for_week(week_offset)
                 swap_id_colors.update(week_swap_colors)  # Merge into main mapping
 
+                # Update weekly limit warning display
+                render_limit_warning()
+
                 # Determine user's effective day for this week (swapped or default)
                 effective_user_day = user_wfh_day.lower() if user_wfh_day else None
                 if user['id'] in user_swapped_day:
@@ -780,18 +798,31 @@ def wfh_swap_page():
                                 if schedule_text:
                                     ui.label(schedule_text).classes('text-xs opacity-50')
                 else:
-                    # Normal clickable employee (no swap yet)
-                    def open_swap_dialog(e, employee=emp, day=day_info):
-                        show_swap_dialog(employee, day)
+                    # Check if current user has reached their weekly limit
+                    current_user_has_swap = user['id'] in users_with_swaps
 
-                    with ui.element('div').classes('employee-item').on('click', open_swap_dialog):
-                        with ui.row().classes('items-center gap-2'):
-                            # Small colored dot indicator
-                            ui.element('div').classes('w-2 h-2 rounded-full').style(f'background-color: {day_color};')
-                            with ui.column().classes('gap-0'):
-                                ui.label(emp_name).classes('text-sm')
-                                if schedule_text:
-                                    ui.label(schedule_text).classes('text-xs opacity-50')
+                    if current_user_has_swap:
+                        # Current user has a swap - can't initiate another one this week
+                        with ui.element('div').classes('p-1.5 rounded opacity-60').style('cursor: not-allowed;').tooltip('You already have a swap this week'):
+                            with ui.row().classes('items-center gap-2'):
+                                ui.element('div').classes('w-2 h-2 rounded-full').style(f'background-color: {day_color};')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(emp_name).classes('text-sm')
+                                    if schedule_text:
+                                        ui.label(schedule_text).classes('text-xs opacity-50')
+                    else:
+                        # Normal clickable employee (no swap yet)
+                        def open_swap_dialog(e, employee=emp, day=day_info):
+                            show_swap_dialog(employee, day)
+
+                        with ui.element('div').classes('employee-item').on('click', open_swap_dialog):
+                            with ui.row().classes('items-center gap-2'):
+                                # Small colored dot indicator
+                                ui.element('div').classes('w-2 h-2 rounded-full').style(f'background-color: {day_color};')
+                                with ui.column().classes('gap-0'):
+                                    ui.label(emp_name).classes('text-sm')
+                                    if schedule_text:
+                                        ui.label(schedule_text).classes('text-xs opacity-50')
 
             def show_swap_dialog(employee, day_info):
                 """Show modern swap request dialog."""
