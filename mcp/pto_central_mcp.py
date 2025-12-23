@@ -848,7 +848,7 @@ def validate_request(
         if not date_result.is_valid:
             return {
                 "valid": False,
-                "error": date_result.error_message,
+                "error": date_result.rejection_reason,
                 "working_days": working_days,
                 "hours": hours
             }
