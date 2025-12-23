@@ -9,10 +9,7 @@ from nicegui import ui
 from src.models.policy_change_log import PolicyChangeLog
 from src.models.user import User
 from src.services.policy_change_service import PolicyChangeService
-
-
-# PTO Central Brand Colors
-PTO_GOLD = '#c9a227'
+from nicegui_app.components.theme import PTO_GOLD
 
 
 def policy_change_badge(change: PolicyChangeLog) -> None:

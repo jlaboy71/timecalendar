@@ -12,7 +12,7 @@ from src.models.audit_log import AuditLog
 from src.models.vacation_accrual_tier import VacationAccrualTier
 from src.models.leave_policy import LeavePolicy
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, create_help_button
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, create_help_button, PTO_GOLD
 
 
 def admin_system_page():
@@ -20,35 +20,35 @@ def admin_system_page():
     apply_dark_mode()
 
     # Add custom CSS for pulse animation and hover effects
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
-        @keyframes pulse-attention {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-        }
-        .pulse-attention {
+        @keyframes pulse-attention {{
+            0%, 100% {{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }}
+            50% {{ box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }}
+        }}
+        .pulse-attention {{
             animation: pulse-attention 2s ease-in-out infinite;
-        }
-        .nav-hub-card {
+        }}
+        .nav-hub-card {{
             transition: all 0.2s ease;
             border: 2px solid transparent;
-        }
-        .nav-hub-card:hover {
-            border-color: #C9A227 !important;
+        }}
+        .nav-hub-card:hover {{
+            border-color: {PTO_GOLD} !important;
             transform: translateY(-2px);
-        }
-        .stat-card {
+        }}
+        .stat-card {{
             transition: all 0.2s ease;
-        }
-        .stat-card:hover {
+        }}
+        .stat-card:hover {{
             transform: scale(1.02);
-        }
-        .activity-item {
+        }}
+        .activity-item {{
             transition: background-color 0.2s ease;
-        }
-        .activity-item:hover {
+        }}
+        .activity-item:hover {{
             background-color: rgba(201, 162, 39, 0.1);
-        }
+        }}
     </style>
     ''')
 
@@ -80,7 +80,7 @@ def admin_system_page():
         logs_dir = Path(__file__).parent.parent.parent / 'logs'
         has_errors = (logs_dir / 'pto_central_errors.log').exists() and (logs_dir / 'pto_central_errors.log').stat().st_size > 0
 
-        with ui.card().classes('w-full p-4 mb-4').style('background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid #C9A227;'):
+        with ui.card().classes('w-full p-4 mb-4').style(f'background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid {PTO_GOLD};'):
             with ui.row().classes('w-full items-center justify-between'):
                 with ui.row().classes('items-center gap-3'):
                     ui.icon('monitor_heart', size='md', color='blue')
@@ -141,7 +141,7 @@ def admin_system_page():
 
                 with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;'):
                     # Card 1: Active Employees
-                    with ui.card().classes('p-4 stat-card').style('border-left: 4px solid #C9A227;'):
+                    with ui.card().classes('p-4 stat-card').style(f'border-left: 4px solid {PTO_GOLD};'):
                         with ui.row().classes('items-center gap-3'):
                             ui.icon('people', size='lg', color='primary')
                             with ui.column().classes('gap-0'):
@@ -217,7 +217,7 @@ def admin_system_page():
                                 ui.button('Sync Holidays', icon='sync', on_click=lambda: tabs.set_value(data_tab)).props('outline color=primary').classes('flex-1')
 
                 # Navigation Hub
-                with ui.card().classes('w-full p-4'):
+                with ui.card().classes('w-full p-4 shadow-md'):
                     with ui.row().classes('items-center justify-between mb-4'):
                         ui.label('Administration Hub').classes('text-lg font-semibold')
                         ui.label(f'Last refreshed: {page_load_time.strftime("%I:%M %p")}').classes('text-xs opacity-50')
@@ -233,9 +233,9 @@ def admin_system_page():
                             ('verified', 'Policy Reference', 'Formulas & business rules', '/admin/policy'),
                         ]
                         for icon, title, desc, url in nav_items:
-                            with ui.card().classes('w-full p-3 cursor-pointer nav-hub-card').on('click', lambda u=url: ui.navigate.to(u)):
+                            with ui.card().classes('w-full p-3 cursor-pointer nav-hub-card shadow-md hover:shadow-xl transition-all').on('click', lambda u=url: ui.navigate.to(u)):
                                 with ui.row().classes('w-full items-center gap-3'):
-                                    ui.icon(icon, size='md').style('color: #C9A227;')
+                                    ui.icon(icon, size='md').style(f'color: {PTO_GOLD};')
                                     with ui.column().classes('flex-1 gap-0'):
                                         ui.label(title).classes('font-semibold')
                                         ui.label(desc).classes('text-xs opacity-60')
@@ -257,14 +257,14 @@ def admin_system_page():
                                 ui.icon('info', size='xs').classes('opacity-40')
                                 ui.label('PTO Central v1.0').classes('text-xs opacity-40')
                         # Refresh button
-                        ui.button('Refresh Dashboard', icon='refresh', on_click=lambda: ui.navigate.to('/admin/system')).props('flat dense size=sm').style('color: #C9A227 !important;')
+                        ui.button('Refresh Dashboard', icon='refresh', on_click=lambda: ui.navigate.to('/admin/system')).props('flat dense size=sm').style(f'color: {PTO_GOLD} !important;')
 
             # ========== DATA TAB (Database + EOY + Market Calendar) ==========
             with ui.tab_panel(data_tab):
                 db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0  # MB
 
                 # Database Status Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('storage', size='sm', color='blue')
                         ui.label('Database Status').classes('text-lg font-semibold')
@@ -303,7 +303,7 @@ def admin_system_page():
                             ui.label(str(db_path.parent)).classes('font-mono text-xs opacity-70 truncate').tooltip(str(db_path.parent))
 
                 # Backup Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('backup', size='sm', color='green')
                         ui.label('Backup Management').classes('text-lg font-semibold')
@@ -360,7 +360,7 @@ def admin_system_page():
                     ui.button('Create Backup Now', icon='backup', on_click=run_backup).props('color=primary')
 
                 # Existing Backups Card
-                with ui.card().classes('w-full p-4'):
+                with ui.card().classes('w-full p-4 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-4'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('folder_open', size='sm', color='amber')
@@ -484,7 +484,7 @@ def admin_system_page():
                     refresh_backups()
 
                 # Data Integrity Check Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('verified', size='sm', color='teal')
                         ui.label('Data Integrity Check').classes('text-lg font-semibold')
@@ -610,7 +610,7 @@ def admin_system_page():
                             ui.button('Run Integrity Check', icon='play_arrow', on_click=run_integrity_check).props('color=teal')
 
                 # Market Calendar Sync Card with Visual Feedback
-                with ui.card().classes('w-full p-4 mt-4'):
+                with ui.card().classes('w-full p-4 mt-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-2'):
                         ui.icon('event', size='sm', color='purple')
                         ui.label('Market Calendar Sync').classes('text-lg font-semibold')
@@ -961,7 +961,7 @@ def admin_system_page():
                 email_configured = bool(smtp_host)
 
                 # Status Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('email', size='sm', color='blue')
                         ui.label('Email Service Status').classes('text-lg font-semibold')
@@ -989,7 +989,7 @@ def admin_system_page():
                                     ui.label('Configure SMTP settings to enable email notifications').classes('text-sm opacity-70')
 
                 # Configuration Details Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('settings', size='sm', color='gray')
                         ui.label('SMTP Configuration').classes('text-lg font-semibold')
@@ -1027,7 +1027,7 @@ def admin_system_page():
                             ui.label(smtp_from or 'Not set').classes(f'font-mono text-sm {"opacity-50" if not smtp_from else ""}')
 
                 # Email Template Preview Card - Embedded directly
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('preview', size='sm', color='purple')
                         ui.label('Email Template Preview').classes('text-lg font-semibold')
@@ -1124,7 +1124,7 @@ def admin_system_page():
                             <p style="margin-bottom: 25px;">A new time off request requires your review.</p>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
                                 <table style="width: 100%; color: #e5e7eb;">
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{sample_employee}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #f59e0b;">{days_display}</td></tr>
@@ -1139,7 +1139,7 @@ def admin_system_page():
                             <p style="margin-bottom: 25px;">An employee has <span style="color: #ef4444; font-weight: 600;">cancelled</span> their previously approved time off.</p>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
                                 <table style="width: 100%; color: #e5e7eb;">
-                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td></tr>
+                                    <tr><td style="padding: 8px 0; color: #9ca3af;">Employee:</td><td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{sample_employee}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Type:</td><td style="padding: 8px 0; font-weight: 600;">{pto_icon} {sample_pto_type}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Dates:</td><td style="padding: 8px 0; font-weight: 600;">{date_range}</td></tr>
                                     <tr><td style="padding: 8px 0; color: #9ca3af;">Total Days:</td><td style="padding: 8px 0; font-weight: 600; color: #ef4444;">{days_display}</td></tr>
@@ -1165,16 +1165,16 @@ def admin_system_page():
                             return _get_email_template(title="Request Submitted", title_color="#f59e0b", content=content, footer_text="You will receive another email once your request has been reviewed.")
 
                         elif email_type == 'report':
-                            content = """
+                            content = f"""
                             <p style="font-size: 16px; margin-bottom: 20px; color: #e5e7eb;">Please find the report below:</p>
-                            <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid #C9A227; margin-bottom: 20px;">
+                            <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid {PTO_GOLD}; margin-bottom: 20px;">
                                 <p style="margin: 0; color: #e5e7eb; font-style: italic;">Here is the monthly PTO summary you requested.</p>
                             </div>
                             <div style="background-color: #374151; padding: 20px; border-radius: 8px; margin-top: 20px;">
                                 <p style="color: #e5e7eb; margin: 0;">Sample report content would appear here...</p>
                             </div>
                             """
-                            return _get_email_template(title="Report", title_color="#C9A227", content=content)
+                            return _get_email_template(title="Report", title_color=PTO_GOLD, content=content)
                         return ""
 
                     def render_email_preview():
@@ -1197,7 +1197,7 @@ def admin_system_page():
                                     render_email_preview()
                                 return handler
 
-                            colors = {'submitted': '#f59e0b', 'approved': '#22c55e', 'denied': '#ef4444', 'pending': '#f59e0b', 'cancelled': '#ef4444', 'chicago': '#a855f7', 'report': '#C9A227'}
+                            colors = {'submitted': '#f59e0b', 'approved': '#22c55e', 'denied': '#ef4444', 'pending': '#f59e0b', 'cancelled': '#ef4444', 'chicago': '#a855f7', 'report': PTO_GOLD}
                             color = colors.get(key, '#6b7280')
                             ui.button(label, on_click=make_preview_handler()).props('outline').classes('flex-1').style(f'border-color: {color}; color: {color}; font-size: 11px; padding: 8px 4px; font-weight: 600;')
 
@@ -1205,7 +1205,7 @@ def admin_system_page():
                     render_email_preview()
 
                 # Test Email Card - Moved to bottom
-                with ui.card().classes('w-full p-4'):
+                with ui.card().classes('w-full p-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('send', size='sm', color='green')
                         ui.label('Test Email').classes('text-lg font-semibold')
@@ -1256,7 +1256,7 @@ def admin_system_page():
                 log_state = {'current_log': 'main', 'current_content': '', 'audit_filter': 'all', 'filter_select': None}
 
                 # Log Files Overview Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('description', size='sm', color='blue')
                         ui.label('Log Files').classes('text-lg font-semibold')
@@ -1354,7 +1354,7 @@ def admin_system_page():
                     refresh_log_cards()
 
                 # Log Viewer Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('w-full justify-between items-center mb-4'):
                         with ui.row().classes('items-center gap-2'):
                             ui.icon('terminal', size='sm', color='gray')
@@ -1667,7 +1667,7 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                     ui.icon('settings', size='md', color='primary')
                     ui.label('System Settings').classes('text-lg font-semibold')
 
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('security', size='sm', color='blue')
                         ui.label('Security Settings').classes('text-lg font-semibold')
@@ -1797,7 +1797,7 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                                 )
 
                 # Environment Variables Card
-                with ui.card().classes('w-full p-4 mb-4'):
+                with ui.card().classes('w-full p-4 mb-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('settings_applications', size='sm', color='amber')
                         ui.label('Environment Configuration').classes('text-lg font-semibold')
@@ -1838,7 +1838,7 @@ Keep it concise and actionable. Use bullet points. If the log shows normal opera
                                     ui.icon('check_circle' if is_set else 'cancel', color='green' if is_set else 'gray', size='xs')
 
                 # System Information Card
-                with ui.card().classes('w-full p-4'):
+                with ui.card().classes('w-full p-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('computer', size='sm', color='gray')
                         ui.label('System Information').classes('text-lg font-semibold')

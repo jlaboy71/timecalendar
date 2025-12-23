@@ -7,7 +7,7 @@ from src.services.export_service import ExportService
 from datetime import date, timedelta
 import base64
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog, PTO_GOLD
 from nicegui_app.components.charts import (
     monthly_trend_chart,
     department_utilization_bars,
@@ -23,7 +23,7 @@ def show_help_tip(title: str, message: str):
             ui.label(title).classes('text-lg font-bold')
         ui.label(message).classes('text-sm opacity-80')
         with ui.row().classes('w-full justify-end mt-4'):
-            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+            ui.button('OK', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -299,7 +299,7 @@ def analytics_page():
             # KPI cards - full width, equal spacing edge to edge
             with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-4 gap-4'):
                 # Total Requests Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('How many time-off requests were submitted this year')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('description', size='lg', color='blue')
@@ -307,7 +307,7 @@ def analytics_page():
                         ui.label('Total Requests').classes('text-sm opacity-70')
 
                 # Approved Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Requests that managers said "yes" to')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('check_circle', size='lg', color='green')
@@ -315,7 +315,7 @@ def analytics_page():
                         ui.label('Approved').classes('text-sm opacity-70')
 
                 # Pending Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Requests waiting for a manager to approve or deny')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('pending', size='lg', color='amber')
@@ -323,7 +323,7 @@ def analytics_page():
                         ui.label('Pending').classes('text-sm opacity-70')
 
                 # Denied Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Requests that managers said "no" to')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('cancel', size='lg', color='red')
@@ -333,7 +333,7 @@ def analytics_page():
             # ===== ROW 2: Overview Cards (Second Row) =====
             with ui.element('div').classes('w-full grid grid-cols-2 md:grid-cols-4 gap-4 mt-4'):
                 # Days Taken Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Total PTO days used by all employees combined')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('event_available', size='lg', color='purple')
@@ -341,7 +341,7 @@ def analytics_page():
                         ui.label('Days Taken').classes('text-sm opacity-70')
 
                 # Avg Per Employee Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('On average, how many days each person has taken off')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('person', size='lg', color='cyan')
@@ -349,7 +349,7 @@ def analytics_page():
                         ui.label('Avg Days/Employee').classes('text-sm opacity-70')
 
                 # Active Employees Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Number of employees currently working at the company')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('groups', size='lg', color='indigo')
@@ -357,7 +357,7 @@ def analytics_page():
                         ui.label('Active Employees').classes('text-sm opacity-70')
 
                 # Approval Rate Card
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     ui.tooltip('Percentage of requests that get approved (higher is better for employees)')
                     with ui.column().classes('items-center w-full'):
                         ui.icon('verified', size='lg', color='teal')
@@ -367,7 +367,7 @@ def analytics_page():
             # ===== ROW 3: Attendance Heatmap & Leave Type Breakdown =====
             with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-5 gap-4 mt-4'):
                 # Attendance Heatmap - with modern multi-view toggle
-                with ui.card().classes('lg:col-span-3 p-4'):
+                with ui.card().classes('lg:col-span-3 p-4 shadow-md'):
                     # View state - grid is default, also store data in state for closure
                     heatmap_state = {
                         'current': 'grid',
@@ -574,7 +574,7 @@ def analytics_page():
                     render_heatmap_view()
 
                 # Leave Type Breakdown - Modern multi-view
-                with ui.card().classes('lg:col-span-2 p-4'):
+                with ui.card().classes('lg:col-span-2 p-4 shadow-md'):
                     # View state - donut is default
                     leave_view_state = {'current': 'donut'}  # 'donut', 'bars'
 
@@ -760,7 +760,7 @@ def analytics_page():
             # ===== ROW 4: Optimal Meeting Dates & Utilization =====
             with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4'):
                 # Optimal Meeting Dates - with view toggle
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     # View state
                     meeting_view_state = {'current': 'calendar'}  # 'calendar', 'list', 'timeline'
 
@@ -946,7 +946,7 @@ def analytics_page():
                     render_meeting_view()
 
                 # PTO Utilization - with view toggle
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     # View state - donut is default
                     util_view_state = {'current': 'donut'}  # 'donut', 'gauge', 'breakdown'
 
@@ -1139,7 +1139,7 @@ def analytics_page():
             import calendar
 
             # ===== ROW 1: Monthly PTO by Type =====
-            with ui.card().classes('w-full p-4'):
+            with ui.card().classes('w-full p-4 shadow-md'):
                 # Header
                 with ui.row().classes('items-center justify-between w-full mb-4'):
                     with ui.row().classes('items-center gap-2'):
@@ -1320,7 +1320,7 @@ def analytics_page():
             # ===== ROW 2: Day of Week Pattern & Department Utilization =====
             with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-2 gap-4'):
                 # Day of Week Pattern
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     # View state - horizontal is default
                     dow_view_state = {'current': 'horizontal'}
 
@@ -1444,7 +1444,7 @@ def analytics_page():
                     render_dow_view()
 
                 # Department Utilization
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     # View state - donut is default
                     dept_view_state = {'current': 'donut'}
 
@@ -1605,7 +1605,7 @@ def analytics_page():
                     render_dept_view()
 
             # ===== ROW 3: Department Comparison Table =====
-            with ui.card().classes('w-full p-4'):
+            with ui.card().classes('w-full p-4 shadow-md'):
                 with ui.row().classes('items-center justify-between w-full mb-4'):
                     with ui.row().classes('items-center gap-2'):
                         ui.icon('compare', color='blue')
@@ -1633,7 +1633,7 @@ def analytics_page():
                     ui.label('No department data available').classes('opacity-50')
 
             # ===== ROW 4: Top PTO Users =====
-            with ui.card().classes('w-full p-4'):
+            with ui.card().classes('w-full p-4 shadow-md'):
                 with ui.row().classes('items-center justify-between w-full mb-4'):
                     with ui.row().classes('items-center gap-2'):
                         ui.icon('emoji_events', color='amber')
@@ -1671,7 +1671,7 @@ def analytics_page():
         def render_insights_tab(analytics, year, dept_filter, db, is_manager_only, manager_department_id):
             """Render the insights tab with recommendations and risks."""
             # ===== Recommendations =====
-            with ui.card().classes('w-full p-4'):
+            with ui.card().classes('w-full p-4 shadow-md'):
                 with ui.row().classes('items-center gap-2 mb-4'):
                     ui.icon('lightbulb', color='amber')
                     ui.label('Recommendations').classes('text-lg font-semibold')
@@ -1732,7 +1732,7 @@ def analytics_page():
 
             with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4'):
                 # Carryover Risk Gauge - Custom SVG
-                with ui.card().classes('p-4'):
+                with ui.card().classes('p-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-2'):
                         ui.icon('warning', color='red')
                         ui.label('Carryover Risk').classes('text-lg font-semibold')
@@ -1789,7 +1789,7 @@ def analytics_page():
                         ui.label(risk_label).classes('text-sm mt-2').style(f'color: {gauge_color}')
 
                 # Carryover Risk Table
-                with ui.card().classes('lg:col-span-2 p-4'):
+                with ui.card().classes('lg:col-span-2 p-4 shadow-md'):
                     with ui.row().classes('items-center gap-2 mb-4'):
                         ui.icon('people', color='red')
                         ui.label('Employees at Carryover Risk').classes('text-lg font-semibold')
@@ -1815,7 +1815,7 @@ def analytics_page():
                             ui.label('No employees at carryover risk').classes('text-green-600')
 
             # ===== Coverage Forecast Chart =====
-            with ui.card().classes('w-full p-4'):
+            with ui.card().classes('w-full p-4 shadow-md'):
                 with ui.row().classes('items-center gap-2 mb-4'):
                     ui.icon('timeline', color='blue')
                     ui.label('Coverage Forecast (Next 30 Days)').classes('text-lg font-semibold')

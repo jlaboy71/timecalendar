@@ -8,7 +8,7 @@ from src.database import get_db
 from src.config import config
 from src.logging_config import get_logger
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, PTO_GOLD
 from src.services.handbook_revision_service import HandbookRevisionService
 from src.services.handbook_analysis_service import HandbookAnalysisService, POLICY_TYPES
 from src.services.policy_change_service import PolicyChangeService
@@ -17,9 +17,6 @@ from src.models.policy_change_log import PolicyChangeLog
 from nicegui_app.static.handbook_content import HANDBOOK_CONTENT
 
 logger = get_logger(__name__)
-
-# PTO Central Brand Colors
-PTO_GOLD = '#C9A227'
 
 # Upload directory for handbooks
 UPLOAD_DIR = 'uploads/handbooks'
@@ -85,7 +82,7 @@ def render_stats_bar():
         latest_handbook = handbook_service.get_active_revision()
         all_versions = policy_service.get_handbook_versions()
 
-        with ui.card().classes('w-full mb-6 p-4').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full mb-6 p-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('w-full justify-around items-center'):
                 # Current Version
                 with ui.column().classes('items-center'):
@@ -175,7 +172,7 @@ def render_current_version_panel(current_user):
         content_display = {'element': None}
 
         # Header card with version info
-        with ui.card().classes('w-full p-4 mb-4'):
+        with ui.card().classes('w-full p-4 mb-4 shadow-md'):
             with ui.row().classes('justify-between items-center'):
                 with ui.column():
                     ui.label(version_label).classes('text-lg font-bold')
@@ -191,7 +188,7 @@ def render_current_version_panel(current_user):
         # Main content area with sidebar navigation - equal heights, no scrolling
         with ui.row().classes('w-full gap-4 items-start'):
             # Left sidebar - Table of Contents (NO scroll - all sections visible)
-            with ui.card().classes('p-4').style('width: 260px; min-width: 260px;'):
+            with ui.card().classes('p-4 shadow-md').style('width: 260px; min-width: 260px;'):
                 ui.label('Table of Contents').classes('text-lg font-bold mb-3')
 
                 # Search input
@@ -348,13 +345,13 @@ def update_content_display(section: dict, content_display: dict):
 
     with content_display['element']:
         # Header with Brand Gold accent
-        with ui.card().classes('w-full mb-4 p-4').style(f'border-left: 4px solid {PTO_GOLD}; background: rgba(201,162,39,0.1);'):
+        with ui.card().classes('w-full mb-4 p-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD}; background: rgba(201,162,39,0.1);'):
             with ui.row().classes('items-center gap-3'):
                 ui.icon(icon_name, size='lg').style(f'color: {PTO_GOLD};')
                 ui.label(section['title']).classes('text-xl font-bold').style(f'color: {PTO_GOLD};')
 
         # Content area - NO height constraint, shows full content
-        with ui.card().classes('w-full p-4'):
+        with ui.card().classes('w-full p-4 shadow-md'):
             ui.markdown(section['content']).classes('text-sm handbook-content')
 
         # Footer with section info
@@ -369,7 +366,7 @@ def render_upload_analyze_panel(current_user):
     analysis_container = {'element': None}
     current_upload = {'data': None}
 
-    with ui.card().classes('w-full mb-6').style(f'border-left: 4px solid {PTO_GOLD};'):
+    with ui.card().classes('w-full mb-6 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
         with ui.card_section().classes('p-6'):
             with ui.row().classes('items-center gap-3 mb-4'):
                 ui.icon('smart_toy', size='2rem', color='primary')
@@ -494,7 +491,7 @@ def render_analysis_results(container, upload: HandbookUpload, changes: list, us
                     ui.button('Cancel', on_click=lambda: ui.navigate.to('/admin/handbook')).props('flat')
 
         # Main analysis results
-        with ui.card().classes('w-full p-6').style('border-left: 4px solid #22c55e;'):
+        with ui.card().classes('w-full p-6 shadow-md').style('border-left: 4px solid #22c55e;'):
             # Header
             with ui.row().classes('items-center justify-between mb-6'):
                 with ui.row().classes('items-center gap-3'):
@@ -625,7 +622,7 @@ def render_policy_changes_panel(current_user):
         policy_service = PolicyChangeService(db)
         active_changes = policy_service.get_active_changes()
 
-        with ui.card().classes('w-full p-6 mb-6').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-6 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-3 mb-4'):
                 ui.icon('visibility', size='2rem', color='primary')
                 ui.label('Active Policy Change Indicators').classes('text-xl font-bold')
@@ -700,7 +697,7 @@ def render_version_history_panel(current_user):
         # Get handbook revisions (content versions)
         content_revisions = handbook_service.get_all_revisions()
 
-        with ui.card().classes('w-full p-6 mb-6').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-6 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-3 mb-4'):
                 ui.icon('history', size='2rem', color='primary')
                 ui.label('Version History').classes('text-xl font-bold')

@@ -31,6 +31,43 @@ def render_content():
 render_content()
 ```
 
+## Brand Color Policy - ENFORCED
+**CRITICAL**: All PTO Central brand colors must be imported from `nicegui_app/components/theme.py`.
+
+### Brand Constants
+```python
+from nicegui_app.components.theme import PTO_GOLD, PTO_GRAY, PTO_BLUE
+
+# PTO_GOLD = '#C9A227'  - Primary accent (buttons, highlights)
+# PTO_GRAY = '#5a6a72'  - Headers, navigation
+# PTO_BLUE = '#2196F3'  - Interactive elements
+```
+
+### DO NOT Hardcode Brand Hex Values
+```python
+# BAD - Hardcoded hex value
+ui.button('OK').style('background-color: #C9A227 !important;')
+
+# GOOD - Use theme constant
+ui.button('OK').style(f'background-color: {PTO_GOLD} !important;')
+```
+
+### CSS f-strings Require Double Braces
+```python
+# BAD - Will cause syntax error
+ui.add_head_html(f'<style>.active { color: {PTO_GOLD}; }</style>')
+
+# GOOD - Escaped braces for CSS
+ui.add_head_html(f'<style>.active {{ color: {PTO_GOLD}; }}</style>')
+```
+
+### Enforcement
+Run `python scripts/check_brand_colors.py` to detect violations.
+
+### Exceptions
+- `theme.py` is the source of truth (contains the definitions)
+- Semantic status colors (green/red/amber) are NOT brand colors
+
 ## Service Layer Pattern
 - Services receive `db: Session` in constructor
 - Use SQLAlchemy `select()` for queries

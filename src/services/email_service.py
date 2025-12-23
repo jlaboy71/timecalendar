@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from datetime import date
+from nicegui_app.components.theme import PTO_GOLD
 
 logger = logging.getLogger(__name__)
 
@@ -401,7 +402,7 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
-                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{employee_name}</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{employee_name}</td>
                 </tr>
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
@@ -456,7 +457,7 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
-                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{employee_name}</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{employee_name}</td>
                 </tr>
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
@@ -520,7 +521,7 @@ class EmailService:
             message_html = ""
             if message:
                 message_html = f"""
-                <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid #C9A227; margin-bottom: 20px;">
+                <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid {PTO_GOLD}; margin-bottom: 20px;">
                     <p style="margin: 0; color: #e5e7eb; font-style: italic;">{message}</p>
                 </div>
                 """
@@ -532,7 +533,7 @@ class EmailService:
 
             body_html = _get_email_template(
                 title="Report",
-                title_color="#C9A227",
+                title_color=PTO_GOLD,
                 content=content
             )
 
@@ -567,7 +568,7 @@ class EmailService:
 
                 full_html = _get_email_template(
                     title="Report",
-                    title_color="#C9A227",
+                    title_color=PTO_GOLD,
                     content=content_with_report
                 )
                 msg = MIMEMultipart('alternative')
@@ -610,7 +611,7 @@ class EmailService:
             <table style="width: 100%; color: #e5e7eb;">
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">From:</td>
-                    <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{requester_name}</td>
+                    <td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{requester_name}</td>
                 </tr>
                 <tr>
                     <td style="padding: 8px 0; color: #9ca3af;">Swap Date:</td>

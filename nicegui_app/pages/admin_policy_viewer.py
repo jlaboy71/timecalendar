@@ -1,7 +1,7 @@
 """Policy & Formula Reference Viewer for System Administration."""
 from nicegui import ui, app
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, create_help_button, show_help_dialog
+from nicegui_app.components.theme import apply_dark_mode, create_help_button, show_help_dialog, PTO_GOLD, PTO_GRAY
 from src.services.policy_engine import PolicyEngine, PolicySection, PolicyHelp
 
 
@@ -10,28 +10,28 @@ def admin_policy_viewer_page():
     apply_dark_mode()
 
     # Add custom CSS for the policy viewer
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
-        .policy-section {
+        .policy-section {{
             transition: all 0.2s ease;
-        }
-        .policy-section:hover {
-            border-color: #C9A227 !important;
-        }
-        .formula-box {
+        }}
+        .policy-section:hover {{
+            border-color: {PTO_GOLD} !important;
+        }}
+        .formula-box {{
             font-family: 'JetBrains Mono', monospace;
             background: rgba(0, 0, 0, 0.3);
-            border-left: 3px solid #C9A227;
+            border-left: 3px solid {PTO_GOLD};
             padding: 12px 16px;
             border-radius: 6px;
             margin: 8px 0;
-        }
-        .policy-table {
+        }}
+        .policy-table {{
             width: 100%;
             border-collapse: collapse;
-        }
-        .policy-table th {
-            background: linear-gradient(135deg, #5a6a72 0%, #4a5a62 100%);
+        }}
+        .policy-table th {{
+            background: linear-gradient(135deg, {PTO_GRAY} 0%, #4a5a62 100%);
             color: white;
             padding: 12px;
             text-align: left;
@@ -39,48 +39,48 @@ def admin_policy_viewer_page():
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
-        }
-        .policy-table td {
+        }}
+        .policy-table td {{
             padding: 10px 12px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .policy-table tbody tr:hover {
+        }}
+        .policy-table tbody tr:hover {{
             background: rgba(201, 162, 39, 0.1);
-        }
-        .flow-step {
+        }}
+        .flow-step {{
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 8px 0;
-        }
-        .flow-step-dot {
+        }}
+        .flow-step-dot {{
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: #C9A227;
+            background: {PTO_GOLD};
             flex-shrink: 0;
-        }
-        .flow-step-line {
+        }}
+        .flow-step-line {{
             width: 2px;
             height: 30px;
             background: rgba(201, 162, 39, 0.3);
             margin-left: 5px;
-        }
-        .rule-item {
+        }}
+        .rule-item {{
             display: flex;
             align-items: flex-start;
             gap: 8px;
             padding: 6px 0;
-        }
-        .rule-check {
+        }}
+        .rule-check {{
             color: #22c55e;
             flex-shrink: 0;
-        }
-        .section-header {
-            border-bottom: 2px solid #C9A227;
+        }}
+        .section-header {{
+            border-bottom: 2px solid {PTO_GOLD};
             padding-bottom: 8px;
             margin-bottom: 16px;
-        }
+        }}
     </style>
     ''')
 
@@ -103,7 +103,7 @@ def admin_policy_viewer_page():
             ui.label('Comprehensive reference for all PTO policies, formulas, and business rules.').classes('text-sm opacity-70')
 
         # Quick actions bar
-        with ui.card().classes('w-full p-3 mb-4').style('background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid #C9A227;'):
+        with ui.card().classes('w-full p-3 mb-4').style(f'background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid {PTO_GOLD};'):
             with ui.row().classes('w-full items-center justify-between'):
                 with ui.row().classes('items-center gap-2'):
                     ui.icon('verified', color='amber')

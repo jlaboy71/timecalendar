@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_info_dialog, show_success_dialog, PTO_GOLD, PTO_GRAY
 from src.services.notification_service import NotificationService
 
 
@@ -53,7 +53,7 @@ def manager_settings_page():
     def show_pto_notification_help():
         with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 550px;'):
             with ui.row().classes('items-center gap-2 mb-4'):
-                ui.icon('help_outline').style('color: #C9A227')
+                ui.icon('help_outline').style(f'color: {PTO_GOLD}')
                 ui.label('Team PTO Request Notifications').classes('text-lg font-bold')
 
             ui.markdown('''
@@ -76,7 +76,7 @@ This controls how you're notified when **any team member submits a PTO request**
     def show_auto_notify_report_help():
         with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px; max-width: 550px;'):
             with ui.row().classes('items-center gap-2 mb-4'):
-                ui.icon('help_outline').style('color: #C9A227')
+                ui.icon('help_outline').style(f'color: {PTO_GOLD}')
                 ui.label('Trusted Employee Auto-Approve Reports').classes('text-lg font-bold')
 
             ui.markdown('''
@@ -105,10 +105,10 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
         page_header(title='MANAGER SETTINGS', show_back=True)
 
         # Team PTO Request Notifications Card
-        with ui.card().classes('w-full p-6 mb-4'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md'):
             with ui.row().classes('w-full items-center justify-between mb-2'):
                 with ui.row().classes('items-center gap-3'):
-                    ui.icon('notifications', size='md').style('color: #c9a227')
+                    ui.icon('notifications', size='md').style(f'color: {PTO_GOLD}')
                     ui.label('Team PTO Request Notifications').classes('text-xl font-semibold')
                 ui.button(icon='help_outline', on_click=show_pto_notification_help).props('flat round size=sm').tooltip('What is this?')
 
@@ -140,7 +140,7 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
 
                 if freq in ['daily', 'weekly', 'biweekly', 'monthly']:
                     with time_prefs_container:
-                        with ui.card().classes('w-full p-4 mb-4').style('border-left: 4px solid #c9a227'):
+                        with ui.card().classes('w-full p-4 mb-4').style(f'border-left: 4px solid {PTO_GOLD}'):
                             ui.label('Delivery Schedule').classes('font-semibold mb-3')
 
                             with ui.row().classes('w-full gap-4'):
@@ -218,7 +218,7 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
                 save_notification_btn = ui.button('Save Preferences', icon='save', on_click=save_notification_prefs).props('color=primary')
 
         # Trusted Employee Auto-Approve Reports Card
-        with ui.card().classes('w-full p-6 mb-4'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md'):
             with ui.row().classes('w-full items-center justify-between mb-2'):
                 with ui.row().classes('items-center gap-3'):
                     ui.icon('verified_user', size='md').style('color: #22c55e')
@@ -265,9 +265,9 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
                 save_auto_notify_btn = ui.button('Save Frequency', icon='save', on_click=save_auto_notify_prefs).props('color=primary')
 
         # Digest Queue Info Card
-        with ui.card().classes('w-full p-6 mb-4'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md'):
             with ui.row().classes('items-center gap-3 mb-4'):
-                ui.icon('pending_actions', size='md').style('color: #5a6a72')
+                ui.icon('pending_actions', size='md').style(f'color: {PTO_GRAY}')
                 ui.label('Pending Notifications').classes('text-lg font-semibold')
 
             # Get pending count
@@ -307,9 +307,9 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
                 ui.label('No pending notifications. All caught up!').classes('text-sm opacity-60')
 
         # On-Demand Report Generation Card
-        with ui.card().classes('w-full p-6 mb-4'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md'):
             with ui.row().classes('items-center gap-3 mb-4'):
-                ui.icon('assessment', size='md').style('color: #c9a227')
+                ui.icon('assessment', size='md').style(f'color: {PTO_GOLD}')
                 ui.label('Generate Report On-Demand').classes('text-lg font-semibold')
 
             ui.label('Preview or download a PTO report for your team without waiting for the scheduled digest.').classes('text-sm opacity-60 mb-4')
@@ -422,7 +422,7 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
                     requests = db.execute(requests_stmt).scalars().all()
 
                     with preview_container:
-                        with ui.card().classes('w-full p-4').style('border: 1px solid #c9a227'):
+                        with ui.card().classes('w-full p-4').style(f'border: 1px solid {PTO_GOLD}'):
                             ui.label(f'Report Preview: {start_date.strftime("%b %d, %Y")} - {end_date.strftime("%b %d, %Y")}').classes('font-semibold mb-3')
 
                             if not requests:
@@ -471,7 +471,7 @@ Click the "View Auto Notify Reports" button below, or access from Admin → Auto
                 download_btn = ui.button('Download Report', icon='download', on_click=download_report).props('color=primary')
 
         # Help Card
-        with ui.card().classes('w-full p-6').style('border-left: 4px solid #5a6a72'):
+        with ui.card().classes('w-full p-6 shadow-md').style(f'border-left: 4px solid {PTO_GRAY}'):
             with ui.row().classes('items-center gap-2 mb-3'):
                 ui.icon('info', size='sm').classes('opacity-60')
                 ui.label('About Notifications').classes('font-semibold')

@@ -3,13 +3,10 @@ from datetime import datetime, date
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog, PTO_GOLD
 from src.services.year_end_service import YearEndService
 from src.services.eoy_report_service import EOYReportService
 from src.services.email_service import email_service
-
-# Brand color
-PTO_GOLD = '#C9A227'
 
 
 def admin_year_end_page():
@@ -30,7 +27,7 @@ def admin_year_end_page():
 
         # ========== WHAT IS YEAR-END PROCESSING? ==========
         with ui.expansion('What is Year-End Processing?', icon='help_outline').classes('w-full mb-4').props('default-opened'):
-            with ui.card().classes('w-full p-4 bg-blue-50 dark:bg-blue-900/20'):
+            with ui.card().classes('w-full p-4 shadow-md bg-blue-50 dark:bg-blue-900/20'):
                 ui.label('Purpose & Overview').classes('text-lg font-bold text-blue-700 dark:text-blue-300 mb-2')
 
                 ui.markdown('''
@@ -114,10 +111,10 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
                 with status_container:
                     # ========== CURRENT YEAR STATUS ==========
-                    with ui.card().classes('w-full p-6'):
+                    with ui.card().classes('w-full p-6 shadow-md'):
                         with ui.row().classes('w-full justify-between items-center mb-4'):
                             with ui.row().classes('items-center gap-2'):
-                                ui.label(f'{current_year} Status').classes('text-xl font-bold').style('color: #C9A227')
+                                ui.label(f'{current_year} Status').classes('text-xl font-bold').style(f'color: {PTO_GOLD}')
                                 ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
                                     f'{current_year} Status',
                                     'This section shows whether year-end processing has completed for the current year. '
@@ -192,10 +189,10 @@ It runs **once per year**, triggered by the first user login after January 1st.
                                 ui.label(str(current_status['holidays_created'])).classes('text-2xl font-bold')
 
                     # ========== NEXT YEAR PREVIEW ==========
-                    with ui.card().classes('w-full p-6'):
+                    with ui.card().classes('w-full p-6 shadow-md'):
                         with ui.row().classes('w-full justify-between items-center mb-4'):
                             with ui.row().classes('items-center gap-2'):
-                                ui.label(f'{next_year} Preview').classes('text-xl font-bold').style('color: #C9A227')
+                                ui.label(f'{next_year} Preview').classes('text-xl font-bold').style(f'color: {PTO_GOLD}')
                                 ui.button(icon='help_outline', on_click=lambda: show_help_dialog(
                                     f'{next_year} Preview',
                                     'This section shows the readiness status for next year\'s processing. '
@@ -316,7 +313,7 @@ It runs **once per year**, triggered by the first user login after January 1st.
         refresh_status()
 
         # ========== EOY ASSESSMENT REPORT SECTION ==========
-        with ui.card().classes('w-full p-6 mt-6'):
+        with ui.card().classes('w-full p-6 mt-6 shadow-md'):
             with ui.row().classes('w-full justify-between items-center mb-4'):
                 with ui.row().classes('items-center gap-2'):
                     ui.icon('assessment', size='md').style(f'color: {PTO_GOLD};')
@@ -358,7 +355,7 @@ It runs **once per year**, triggered by the first user login after January 1st.
 
                         # Executive Summary
                         summary = report['executive_summary']
-                        with ui.card().classes('w-full p-4 mb-4').style('background-color: #1f2937; border-left: 4px solid #C9A227;'):
+                        with ui.card().classes('w-full p-4 mb-4').style(f'background-color: #1f2937; border-left: 4px solid {PTO_GOLD};'):
                             ui.label('Executive Summary').classes('text-lg font-bold mb-3').style(f'color: {PTO_GOLD};')
 
                             with ui.row().classes('gap-4 flex-wrap mb-4'):

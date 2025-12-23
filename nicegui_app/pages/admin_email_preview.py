@@ -1,6 +1,7 @@
 """Email template preview page for admins."""
 from nicegui import ui, app
 from nicegui_app.components.header import page_header, go_back
+from nicegui_app.components.theme import PTO_GOLD
 from src.services.email_service import _get_email_template, _get_pto_type_icon, _format_date_range_with_days
 from datetime import date, timedelta
 
@@ -154,7 +155,7 @@ def email_preview_page():
                 <table style="width: 100%; color: #e5e7eb;">
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
-                        <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td>
+                        <td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{sample_employee}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
@@ -187,7 +188,7 @@ def email_preview_page():
                 <table style="width: 100%; color: #e5e7eb;">
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Employee:</td>
-                        <td style="padding: 8px 0; font-weight: 600; color: #C9A227;">{sample_employee}</td>
+                        <td style="padding: 8px 0; font-weight: 600; color: {PTO_GOLD};">{sample_employee}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 0; color: #9ca3af;">Type:</td>
@@ -214,7 +215,7 @@ def email_preview_page():
         elif email_type == 'report':
             content = f"""
             <p style="font-size: 16px; margin-bottom: 20px; color: #e5e7eb;">Please find the report below:</p>
-            <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid #C9A227; margin-bottom: 20px;">
+            <div style="background-color: #374151; padding: 15px; border-radius: 8px; border-left: 4px solid {PTO_GOLD}; margin-bottom: 20px;">
                 <p style="margin: 0; color: #e5e7eb; font-style: italic;">Here is the monthly PTO summary you requested.</p>
             </div>
             <div style="background-color: #374151; padding: 20px; border-radius: 8px; margin-top: 20px;">
@@ -223,7 +224,7 @@ def email_preview_page():
             """
             return _get_email_template(
                 title="Report",
-                title_color="#C9A227",
+                title_color=PTO_GOLD,
                 content=content
             )
 
@@ -259,7 +260,7 @@ def email_preview_page():
                 'denied': '#ef4444',
                 'pending': '#f59e0b',
                 'cancelled': '#ef4444',
-                'report': '#C9A227'
+                'report': PTO_GOLD
             }
             color = colors.get(key, '#6b7280')
             ui.button(
@@ -271,4 +272,4 @@ def email_preview_page():
     render_preview()
 
     # Back button - gold theme color
-    ui.button('Back', on_click=go_back).props('outline').classes('mt-4').style('border-color: #C9A227 !important; color: #C9A227 !important;')
+    ui.button('Back', on_click=go_back).props('outline').classes('mt-4').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;')

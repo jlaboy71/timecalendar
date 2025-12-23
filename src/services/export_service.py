@@ -13,6 +13,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from nicegui_app.components.theme import PTO_GRAY
 
 
 class ExportService:
@@ -201,7 +202,7 @@ class ExportService:
             parent=styles['Title'],
             fontSize=16,
             spaceAfter=6,
-            textColor=colors.HexColor('#5A6A72')
+            textColor=colors.HexColor(PTO_GRAY)
         )
         subtitle_style = ParagraphStyle(
             'Subtitle',
@@ -325,7 +326,7 @@ class ExportService:
 
                 pdf_table = Table(table_data, colWidths=col_widths)
                 pdf_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#5A6A72')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(PTO_GRAY)),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),

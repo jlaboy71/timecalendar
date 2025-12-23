@@ -9,7 +9,7 @@ from src.database import get_db
 from datetime import datetime, date
 from decimal import Decimal
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog, PTO_GOLD
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 from nicegui_app.components.policy_change_indicator import policy_change_badge, policy_change_tooltip
 from src.services.policy_change_service import PolicyChangeService
@@ -24,7 +24,7 @@ def show_help_tip(title: str, message: str):
             ui.label(title).classes('text-lg font-bold')
         ui.label(message).classes('text-sm opacity-80')
         with ui.row().classes('w-full justify-end mt-4'):
-            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+            ui.button('OK', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -98,10 +98,10 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
         ui.label(f'Your Chicago leave automatically rolls over to {next_year}').classes('opacity-70 mb-6')
 
         # Info banner
-        with ui.card().classes('w-full mb-6').style('background: rgba(201, 162, 39, 0.1); border: 1px solid #C9A227;'):
+        with ui.card().classes('w-full mb-6 shadow-md').style(f'background: rgba(201, 162, 39, 0.1); border: 1px solid {PTO_GOLD};'):
             with ui.card_section().classes('p-4'):
                 with ui.row().classes('items-center gap-3'):
-                    ui.icon('location_city', size='lg').style('color: #C9A227;')
+                    ui.icon('location_city', size='lg').style(f'color: {PTO_GOLD};')
                     with ui.column().classes('gap-1'):
                         ui.label('Chicago Employee').classes('font-bold')
                         ui.label('Per Chicago ordinance, your leave balances roll over automatically on January 1st.').classes('text-sm opacity-80')
@@ -114,7 +114,7 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
             rollover_display, rollover_tooltip = format_days_hours(will_rollover)
             max_days = max_carryover // 8
 
-            with ui.card().classes('w-full').style(f'border-left: 4px solid {color};'):
+            with ui.card().classes('w-full shadow-md').style(f'border-left: 4px solid {color};'):
                 with ui.card_section().classes('p-4'):
                     with ui.row().classes('w-full items-start justify-between gap-6'):
                         # LEFT SIDE: Icon, Title, Badge/Description
@@ -166,7 +166,7 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
             ui.label('Your leave balances will automatically roll over on January 1st. No action required.').classes('text-sm')
 
         # Back button
-        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style('border-color: #C9A227 !important; color: #C9A227 !important;')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;')
 
 
 def _render_standard_carryover_view(db, user, current_user, balance, current_year, next_year, accrual_service, policy_change_service):
@@ -221,10 +221,10 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
         has_pending = pending_hours > 0
 
         if sick_unused > 0 and sick_leave_type and carryover_amount > 0 and not has_pending:
-            with ui.card().classes('w-full mb-6').style('border-left: 4px solid #C9A227;'):
+            with ui.card().classes('w-full mb-6 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
                 with ui.card_section().classes('p-6'):
                     with ui.row().classes('items-center gap-3 mb-6'):
-                        ui.icon('sync', size='2rem').style('color: #C9A227;')
+                        ui.icon('sync', size='2rem').style(f'color: {PTO_GOLD};')
                         ui.label('Carryover Summary').classes('text-xl font-bold')
 
                     with ui.column().classes('gap-4 w-full'):
@@ -346,14 +346,14 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
                 f'Request Carryover ({carryover_amount:.0f} hrs)',
                 icon='check_circle',
                 on_click=submit_carryover
-            ).classes('w-full text-lg py-4').style('background-color: #C9A227 !important; color: white !important;')
+            ).classes('w-full text-lg py-4').style(f'background-color: {PTO_GOLD} !important; color: white !important;')
 
             with ui.row().classes('items-start gap-2 mt-4 opacity-60'):
                 ui.icon('info', size='sm')
                 ui.label('Your sick time will automatically carry over on January 1st once approved.').classes('text-sm')
 
         elif has_pending:
-            with ui.card().classes('w-full mb-4').style('border-left: 4px solid #f59e0b;'):
+            with ui.card().classes('w-full mb-4 shadow-md').style('border-left: 4px solid #f59e0b;'):
                 with ui.card_section().classes('p-6'):
                     with ui.row().classes('items-center gap-3'):
                         ui.icon('schedule', size='2rem', color='orange')
@@ -363,7 +363,7 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
                             ui.label('Please wait for manager approval or cancel the existing request.').classes('text-sm opacity-60')
 
         elif sick_unused > 0 and carryover_amount <= 0:
-            with ui.card().classes('w-full mb-4').style('border-left: 4px solid #f59e0b;'):
+            with ui.card().classes('w-full mb-4 shadow-md').style('border-left: 4px solid #f59e0b;'):
                 with ui.card_section().classes('p-6'):
                     with ui.row().classes('items-center gap-3'):
                         ui.icon('warning', size='2rem', color='amber')
@@ -373,7 +373,7 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
                             ui.label(f'Policy maximum is {max_carryover:.0f} hrs - no additional carryover allowed.').classes('text-sm opacity-60')
 
         else:
-            with ui.card().classes('w-full mb-4'):
+            with ui.card().classes('w-full mb-4 shadow-md'):
                 with ui.card_section().classes('p-6 text-center'):
                     ui.icon('sentiment_satisfied', size='3rem').classes('opacity-30 mb-4')
                     ui.label('No Sick Time to Carry Over').classes('text-lg font-medium opacity-70')
@@ -388,7 +388,7 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
                 status_icon = {'approved': 'check_circle', 'denied': 'cancel', 'pending': 'schedule'}.get(req.status, 'help')
                 status_color = {'approved': 'green', 'denied': 'red', 'pending': 'orange'}.get(req.status, 'gray')
 
-                with ui.card().classes('w-full mb-2'):
+                with ui.card().classes('w-full mb-2 shadow-md'):
                     with ui.card_section().classes('p-4'):
                         with ui.row().classes('w-full justify-between items-center'):
                             with ui.row().classes('items-center gap-3'):
@@ -407,4 +407,4 @@ def _render_standard_carryover_view(db, user, current_user, balance, current_yea
                         if req.status == 'denied' and req.manager_notes:
                             ui.label(f'Reason: {req.manager_notes}').classes('text-sm text-red-500 mt-2')
 
-        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style('border-color: #C9A227 !important; color: #C9A227 !important;')
+        ui.button('Back', icon='arrow_back', on_click=go_back).props('outline').classes('mt-6').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;')

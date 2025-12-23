@@ -39,7 +39,7 @@ from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
 from nicegui_app.pages.testing_console import testing_console_page
 from nicegui_app.pages.wfh_swap import wfh_swap_page
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, PTO_GOLD, PTO_GRAY
 from src.services.session_manager import require_auth
 from src.services.email_service import email_service
 
@@ -104,15 +104,15 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             )
 
             # Return user-friendly error page
-            error_html = """
+            error_html = f"""
             <!DOCTYPE html>
             <html>
             <head><title>Error - PTO Central</title></head>
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                <h1 style="color: #5a6a72;">Something went wrong</h1>
+                <h1 style="color: {PTO_GRAY};">Something went wrong</h1>
                 <p>We encountered an unexpected error processing your request.</p>
                 <p>Our team has been notified and is working to fix the issue.</p>
-                <p><a href="/dashboard" style="color: #c9a227;">Return to Dashboard</a></p>
+                <p><a href="/dashboard" style="color: {PTO_GOLD};">Return to Dashboard</a></p>
             </body>
             </html>
             """
@@ -586,14 +586,14 @@ def export_team_pto_report(
             <html>
             <head><title>Team PTO Report</title></head>
             <body style="font-family: Arial, sans-serif; padding: 20px;">
-                <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+                <div style="background-color: {PTO_GRAY}; color: white; padding: 20px; text-align: center;">
                     <h1 style="margin: 0;">Team PTO Report</h1>
                 </div>
                 <div style="padding: 20px;">
                     <p><strong>Period:</strong> {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}</p>
                     <p><strong>Total Requests:</strong> {len(requests)}</p>
                     <table style="border-collapse: collapse; width: 100%; margin-top: 15px;">
-                        <tr style="background-color: #c9a227; color: white;">
+                        <tr style="background-color: {PTO_GOLD}; color: white;">
                             <th style="padding: 10px; text-align: left;">Employee</th>
                             <th style="padding: 10px; text-align: left;">Type</th>
                             <th style="padding: 10px; text-align: left;">Start</th>
@@ -630,7 +630,7 @@ def export_team_pto_report(
             <p><strong>Period:</strong> {start_date.strftime('%B %d, %Y')} - {end_date.strftime('%B %d, %Y')}</p>
             <p><strong>Total Requests:</strong> {len(requests)}</p>
             <table style="border-collapse: collapse; width: 100%;">
-                <tr style="background-color: #c9a227; color: white;">
+                <tr style="background-color: {PTO_GOLD}; color: white;">
                     <th style="padding: 8px;">Employee</th>
                     <th style="padding: 8px;">Type</th>
                     <th style="padding: 8px;">Start</th>

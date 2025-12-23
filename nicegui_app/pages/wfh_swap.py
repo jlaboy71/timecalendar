@@ -13,10 +13,7 @@ from src.services.user_service import UserService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog, show_warning_dialog, show_info_dialog
-
-# Brand color
-PTO_GOLD = '#C9A227'
+from nicegui_app.components.theme import apply_dark_mode, show_error_dialog, show_success_dialog, show_warning_dialog, show_info_dialog, PTO_GOLD
 
 # Day configuration with colors matching dashboard theme
 WEEKDAYS = [
@@ -55,43 +52,43 @@ def wfh_swap_page():
     apply_dark_mode()
 
     # Add custom styles
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
-        @keyframes fade-in-up {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .days-row {
+        @keyframes fade-in-up {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .days-row {{
             display: flex !important;
             align-items: stretch !important;
-        }
-        .day-column {
+        }}
+        .day-column {{
             transition: all 0.2s ease;
             min-height: 180px;
             display: flex;
             flex-direction: column;
-        }
-        .day-column:hover {
+        }}
+        .day-column:hover {{
             transform: translateY(-2px);
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-        }
-        .day-column.my-day {
-            box-shadow: 0 0 0 2px #C9A227 !important;
-        }
-        .employee-item {
+        }}
+        .day-column.my-day {{
+            box-shadow: 0 0 0 2px {PTO_GOLD} !important;
+        }}
+        .employee-item {{
             transition: all 0.15s ease;
             cursor: pointer;
             padding: 6px 8px;
             border-radius: 4px;
             margin: 1px 0;
-        }
-        .employee-item:hover {
+        }}
+        .employee-item:hover {{
             background-color: rgba(255, 255, 255, 0.1) !important;
             padding-left: 12px;
-        }
-        .swap-dialog {
+        }}
+        .swap-dialog {{
             animation: fade-in-up 0.2s ease-out;
-        }
+        }}
     </style>
     ''')
 

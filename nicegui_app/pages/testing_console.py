@@ -7,6 +7,7 @@ Access: Admin and SuperAdmin roles only
 """
 
 from nicegui import ui, app
+from nicegui_app.components.theme import PTO_GOLD, PTO_GRAY
 from datetime import datetime
 from typing import Optional, Dict, Any
 import random
@@ -81,12 +82,11 @@ def get_sample_path(voice: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PTO CENTRAL BRAND COLORS
+# PTO CENTRAL BRAND COLORS - Imported from theme.py
 # ═══════════════════════════════════════════════════════════════════════════
 
-PTO_GOLD = '#c9a227'
-PTO_GRAY = '#5a6a72'
-PTO_DARK = '#1a1a2e'
+# PTO_GOLD and PTO_GRAY imported from nicegui_app.components.theme
+PTO_DARK = '#1a1a2e'  # Non-brand dark background
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -173,108 +173,108 @@ def create_testing_console_page():
     # ═══════════════════════════════════════════════════════════════════════
     # PIPELINE ANIMATION STYLES
     # ═══════════════════════════════════════════════════════════════════════
-    ui.add_head_html('''
+    ui.add_head_html(f'''
     <style>
         /* Pipeline stage animations */
-        @keyframes pipeline-pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.15); opacity: 0.8; }
-        }
-        @keyframes pipeline-glow {
-            0%, 100% { box-shadow: 0 0 5px rgba(201, 162, 39, 0.3); }
-            50% { box-shadow: 0 0 20px rgba(201, 162, 39, 0.8), 0 0 40px rgba(201, 162, 39, 0.4); }
-        }
-        @keyframes pipeline-flow {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 200% 50%; }
-        }
-        @keyframes pipeline-spark {
-            0%, 100% { opacity: 0; transform: scale(0.5) translateY(0); }
-            50% { opacity: 1; transform: scale(1) translateY(-10px); }
-        }
-        @keyframes stage-complete {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.3); }
-            100% { transform: scale(1); }
-        }
-        @keyframes connector-flow {
-            0% { background-position: 0% 0%; }
-            100% { background-position: 200% 0%; }
-        }
-        @keyframes icon-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
+        @keyframes pipeline-pulse {{
+            0%, 100% {{ transform: scale(1); opacity: 1; }}
+            50% {{ transform: scale(1.15); opacity: 0.8; }}
+        }}
+        @keyframes pipeline-glow {{
+            0%, 100% {{ box-shadow: 0 0 5px rgba(201, 162, 39, 0.3); }}
+            50% {{ box-shadow: 0 0 20px rgba(201, 162, 39, 0.8), 0 0 40px rgba(201, 162, 39, 0.4); }}
+        }}
+        @keyframes pipeline-flow {{
+            0% {{ background-position: 0% 50%; }}
+            100% {{ background-position: 200% 50%; }}
+        }}
+        @keyframes pipeline-spark {{
+            0%, 100% {{ opacity: 0; transform: scale(0.5) translateY(0); }}
+            50% {{ opacity: 1; transform: scale(1) translateY(-10px); }}
+        }}
+        @keyframes stage-complete {{
+            0% {{ transform: scale(1); }}
+            50% {{ transform: scale(1.3); }}
+            100% {{ transform: scale(1); }}
+        }}
+        @keyframes connector-flow {{
+            0% {{ background-position: 0% 0%; }}
+            100% {{ background-position: 200% 0%; }}
+        }}
+        @keyframes icon-spin {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(360deg); }}
+        }}
 
-        .pipeline-stage {
+        .pipeline-stage {{
             transition: all 0.3s ease;
             position: relative;
-        }
-        .pipeline-stage.idle {
+        }}
+        .pipeline-stage.idle {{
             opacity: 0.4;
-        }
-        .pipeline-stage.active {
+        }}
+        .pipeline-stage.active {{
             animation: pipeline-pulse 1s ease-in-out infinite, pipeline-glow 1.5s ease-in-out infinite;
-        }
-        .pipeline-stage.complete {
+        }}
+        .pipeline-stage.complete {{
             opacity: 1;
-        }
-        .pipeline-stage.complete .stage-icon {
+        }}
+        .pipeline-stage.complete .stage-icon {{
             animation: stage-complete 0.5s ease-out;
-        }
+        }}
 
-        .pipeline-connector {
+        .pipeline-connector {{
             height: 4px;
             background: linear-gradient(90deg, #374151, #374151);
             transition: all 0.3s ease;
-        }
-        .pipeline-connector.active {
-            background: linear-gradient(90deg, #C9A227, #f59e0b, #C9A227);
+        }}
+        .pipeline-connector.active {{
+            background: linear-gradient(90deg, {PTO_GOLD}, #f59e0b, {PTO_GOLD});
             background-size: 200% 100%;
             animation: connector-flow 1s linear infinite;
-        }
-        .pipeline-connector.complete {
+        }}
+        .pipeline-connector.complete {{
             background: #22c55e;
-        }
+        }}
 
-        .stage-spark {
+        .stage-spark {{
             position: absolute;
             top: -8px;
             left: 50%;
             transform: translateX(-50%);
             width: 8px;
             height: 8px;
-            background: #C9A227;
+            background: {PTO_GOLD};
             border-radius: 50%;
             animation: pipeline-spark 1s ease-in-out infinite;
-        }
+        }}
 
-        .icon-spinning {
+        .icon-spinning {{
             animation: icon-spin 1s linear infinite;
-        }
+        }}
 
         /* Failed state animations */
-        @keyframes stage-shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
-            20%, 40%, 60%, 80% { transform: translateX(3px); }
-        }
-        @keyframes failed-glow {
-            0%, 100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.3); }
-            50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.8), 0 0 30px rgba(239, 68, 68, 0.4); }
-        }
-        .pipeline-stage.failed {
+        @keyframes stage-shake {{
+            0%, 100% {{ transform: translateX(0); }}
+            10%, 30%, 50%, 70%, 90% {{ transform: translateX(-3px); }}
+            20%, 40%, 60%, 80% {{ transform: translateX(3px); }}
+        }}
+        @keyframes failed-glow {{
+            0%, 100% {{ box-shadow: 0 0 5px rgba(239, 68, 68, 0.3); }}
+            50% {{ box-shadow: 0 0 15px rgba(239, 68, 68, 0.8), 0 0 30px rgba(239, 68, 68, 0.4); }}
+        }}
+        .pipeline-stage.failed {{
             opacity: 1;
             animation: stage-shake 0.5s ease-in-out, failed-glow 1.5s ease-in-out infinite;
-        }
-        .pipeline-stage.failed .stage-icon {
+        }}
+        .pipeline-stage.failed .stage-icon {{
             color: #ef4444 !important;
-        }
-        .pipeline-connector.failed {
+        }}
+        .pipeline-connector.failed {{
             background: linear-gradient(90deg, #ef4444, #dc2626, #ef4444);
             background-size: 200% 100%;
             animation: connector-flow 1s linear infinite;
-        }
+        }}
     </style>
     ''')
 

@@ -23,6 +23,7 @@ from src.models.pto_balance import PTOBalance
 from src.models.pto_request import PTORequest
 from src.models.carryover_request import CarryoverRequest
 from src.models.department import Department
+from nicegui_app.components.theme import PTO_GOLD
 from src.models.year_end_status import YearEndStatus
 from src.services.year_end_service import YearEndService
 
@@ -548,15 +549,15 @@ class EOYReportService:
 
         html = f'''
         <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #C9A227, #d4a84b); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="background: linear-gradient(135deg, {PTO_GOLD}, #d4a84b); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h1 style="color: white; margin: 0;">PTO Central - End of Year Assessment Report</h1>
                 <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">{meta['year']} | {meta['report_type']}</p>
                 <p style="color: rgba(255,255,255,0.7); margin: 5px 0 0 0; font-size: 12px;">Generated: {meta['generated_at_formatted']}</p>
             </div>
 
             <!-- Executive Summary -->
-            <div style="background: #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #C9A227;">
-                <h2 style="color: #C9A227; margin-top: 0;">Executive Summary</h2>
+            <div style="background: #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid {PTO_GOLD};">
+                <h2 style="color: {PTO_GOLD}; margin-top: 0;">Executive Summary</h2>
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                     <div style="background: #374151; padding: 15px; border-radius: 8px; text-align: center; min-width: 120px;">
                         <div style="font-size: 36px; font-weight: bold; color: #22c55e;">{summary['health_score']}</div>

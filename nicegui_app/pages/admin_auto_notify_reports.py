@@ -1,7 +1,7 @@
 """Auto Notify Reports page for viewing trusted employee auto-approve reports."""
 from nicegui import ui, app
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_success_dialog, show_warning_dialog, show_error_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_success_dialog, show_warning_dialog, show_error_dialog, PTO_GOLD
 from src.services.report_storage_service import ReportStorageService
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
@@ -86,7 +86,7 @@ def auto_notify_reports_page():
 
             with report_container:
                 if not filter_state['department']:
-                    with ui.card().classes('w-full p-8 text-center'):
+                    with ui.card().classes('w-full p-8 text-center shadow-md'):
                         ui.icon('folder_off', size='4rem').classes('opacity-30 mb-4')
                         ui.label('No reports available').classes('text-xl opacity-60')
                         ui.label('Reports will appear here when trusted employees submit auto-approved time off.').classes('text-sm opacity-40')
@@ -111,7 +111,7 @@ def auto_notify_reports_page():
                     )
 
                 if not all_reports:
-                    with ui.card().classes('w-full p-8 text-center'):
+                    with ui.card().classes('w-full p-8 text-center shadow-md'):
                         ui.icon('description', size='4rem').classes('opacity-30 mb-4')
                         ui.label('No reports found').classes('text-xl opacity-60')
                         filter_text = f"for {filter_state['department']}"
@@ -129,7 +129,7 @@ def auto_notify_reports_page():
                     all_reports = [r for r in all_reports if r['frequency'] == filter_state['frequency']]
 
                 if not all_reports:
-                    with ui.card().classes('w-full p-8 text-center'):
+                    with ui.card().classes('w-full p-8 text-center shadow-md'):
                         ui.icon('description', size='4rem').classes('opacity-30 mb-4')
                         ui.label('No reports found').classes('text-xl opacity-60')
                         ui.label('Try adjusting your filters').classes('text-sm opacity-40')
@@ -148,7 +148,7 @@ def auto_notify_reports_page():
                     if month_key != current_month_key:
                         current_month_key = month_key
                         month_name = date(report['year'], report['month'], 1).strftime('%B %Y')
-                        ui.label(month_name).classes('text-lg font-semibold mt-4 mb-2').style('color: #C9A227')
+                        ui.label(month_name).classes('text-lg font-semibold mt-4 mb-2').style(f'color: {PTO_GOLD}')
 
                     # Report card with day names
                     create_report_card(report, filter_state['department'])
@@ -184,7 +184,7 @@ def auto_notify_reports_page():
             except Exception:
                 display_with_days = display_date
 
-            with ui.card().classes('w-full p-4').style(f'border-left: 4px solid {color}'):
+            with ui.card().classes('w-full p-4 shadow-md').style(f'border-left: 4px solid {color}'):
                 with ui.row().classes('w-full justify-between items-center'):
                     # Left side - Report info
                     with ui.row().classes('items-center gap-4'):
@@ -232,9 +232,9 @@ def auto_notify_reports_page():
 
             with ui.dialog() as dialog, ui.card().classes('w-full p-0').style('width: 95vw; max-width: 1100px;'):
                 # Header
-                with ui.row().classes('w-full justify-between items-center p-4').style('background-color: #1f2937; border-bottom: 3px solid #C9A227;'):
+                with ui.row().classes('w-full justify-between items-center p-4').style(f'background-color: #1f2937; border-bottom: 3px solid {PTO_GOLD};'):
                     with ui.row().classes('items-center gap-2'):
-                        ui.icon('description').style('color: #C9A227')
+                        ui.icon('description').style(f'color: {PTO_GOLD}')
                         ui.label(f'{report["frequency"].title()} Report - {report["display_date"]}').classes('text-lg font-bold')
                     ui.button(icon='close', on_click=dialog.close).props('flat round color=white')
 
@@ -264,9 +264,9 @@ def auto_notify_reports_page():
             # Create a print-friendly dialog
             with ui.dialog() as dialog, ui.card().classes('w-full p-0').style('width: 95vw; max-width: 1100px;'):
                 # Header with print button
-                with ui.row().classes('w-full justify-between items-center p-4 no-print').style('background-color: #1f2937; border-bottom: 3px solid #C9A227;'):
+                with ui.row().classes('w-full justify-between items-center p-4 no-print').style(f'background-color: #1f2937; border-bottom: 3px solid {PTO_GOLD};'):
                     with ui.row().classes('items-center gap-2'):
-                        ui.icon('print').style('color: #C9A227')
+                        ui.icon('print').style(f'color: {PTO_GOLD}')
                         ui.label('Print Preview').classes('text-lg font-bold')
                     with ui.row().classes('gap-2'):
                         ui.button('Print', icon='print', on_click=lambda: ui.run_javascript('window.print()')).props('color=primary')
@@ -282,7 +282,7 @@ def auto_notify_reports_page():
             """Show dialog to email the report."""
             with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 450px;'):
                 with ui.row().classes('items-center gap-2 mb-4'):
-                    ui.icon('email').style('color: #C9A227')
+                    ui.icon('email').style(f'color: {PTO_GOLD}')
                     ui.label('Email Report').classes('text-lg font-bold')
 
                 ui.label(f'{report["frequency"].title()} Report - {report["display_date"]}').classes('text-sm opacity-70 mb-4')
@@ -371,18 +371,18 @@ def auto_notify_reports_page():
             """Show help tips dialog."""
             with ui.dialog() as dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 500px; max-width: 600px;'):
                 with ui.row().classes('items-center gap-2 mb-4'):
-                    ui.icon('help_outline').style('color: #C9A227')
+                    ui.icon('help_outline').style(f'color: {PTO_GOLD}')
                     ui.label('Auto Notify Reports Help').classes('text-lg font-bold')
 
                 with ui.column().classes('gap-4'):
                     # What are these reports
                     with ui.card().classes('w-full p-3').style('background-color: #374151;'):
-                        ui.label('What are Auto Notify Reports?').classes('font-semibold mb-2').style('color: #C9A227')
+                        ui.label('What are Auto Notify Reports?').classes('font-semibold mb-2').style(f'color: {PTO_GOLD}')
                         ui.label('These reports summarize time off requests that were automatically approved for trusted employees. Managers receive notifications about these auto-approvals to maintain visibility.').classes('text-sm opacity-80')
 
                     # Report frequencies
                     with ui.card().classes('w-full p-3').style('background-color: #374151;'):
-                        ui.label('Report Frequencies').classes('font-semibold mb-2').style('color: #C9A227')
+                        ui.label('Report Frequencies').classes('font-semibold mb-2').style(f'color: {PTO_GOLD}')
                         with ui.column().classes('gap-1'):
                             with ui.row().classes('items-center gap-2'):
                                 ui.badge('Weekly', color='blue').props('outline')
@@ -396,7 +396,7 @@ def auto_notify_reports_page():
 
                     # Actions
                     with ui.card().classes('w-full p-3').style('background-color: #374151;'):
-                        ui.label('Available Actions').classes('font-semibold mb-2').style('color: #C9A227')
+                        ui.label('Available Actions').classes('font-semibold mb-2').style(f'color: {PTO_GOLD}')
                         with ui.column().classes('gap-1'):
                             with ui.row().classes('items-center gap-2'):
                                 ui.icon('visibility', size='sm')
@@ -413,7 +413,7 @@ def auto_notify_reports_page():
 
                     # Filters tip
                     with ui.card().classes('w-full p-3').style('background-color: #374151;'):
-                        ui.label('Filtering Reports').classes('font-semibold mb-2').style('color: #C9A227')
+                        ui.label('Filtering Reports').classes('font-semibold mb-2').style(f'color: {PTO_GOLD}')
                         ui.label('Use "Recent" to view only the current and previous month. Select a specific month to see all reports from that period.').classes('text-sm opacity-80')
 
                 with ui.row().classes('w-full justify-end mt-4'):
@@ -446,7 +446,7 @@ def auto_notify_reports_page():
                     # Show department name for managers/admins
                     with ui.column().classes('gap-0'):
                         ui.label('Department').classes('text-xs opacity-60')
-                        ui.label(filter_state['department'] or 'Not assigned').classes('font-semibold').style('color: #C9A227')
+                        ui.label(filter_state['department'] or 'Not assigned').classes('font-semibold').style(f'color: {PTO_GOLD}')
 
                 # Year dropdown
                 year_options = {y: str(y) for y in range(current_year, current_year - 3, -1)}

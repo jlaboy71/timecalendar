@@ -1,5 +1,53 @@
-"""Theme utilities for the NiceGUI app."""
+"""
+Theme utilities for the NiceGUI app.
+
+BRAND COLOR POLICY
+==================
+This file is the SINGLE SOURCE OF TRUTH for all PTO Central brand colors.
+
+ENFORCEMENT RULES:
+1. NEVER hardcode brand hex values (#C9A227, #5a6a72, #2196F3) anywhere in the codebase
+2. ALWAYS import and use the constants: PTO_GOLD, PTO_GRAY, PTO_BLUE
+3. For CSS in f-strings, use: f'color: {PTO_GOLD};'
+4. For HTML templates, import constants and embed with f-strings
+5. Semantic colors (green for success, red for error) are NOT brand colors - keep those as-is
+
+IMPORT PATTERN:
+    from nicegui_app.components.theme import PTO_GOLD, PTO_GRAY, PTO_BLUE
+
+CONVERTING HARDCODED HEX:
+    Before: .style('color: #C9A227;')
+    After:  .style(f'color: {PTO_GOLD};')
+
+    Before: background-color: #5a6a72
+    After:  background-color: {PTO_GRAY}  (in f-string)
+
+CSS f-string GOTCHA:
+    When converting CSS blocks to f-strings, use double braces for literal braces:
+    Before: @keyframes pulse { 0% { opacity: 1; } }
+    After:  @keyframes pulse {{ 0% {{ opacity: 1; }} }}  (in f-string)
+"""
 from nicegui import ui, app
+
+# =============================================================================
+# PTO CENTRAL BRAND COLORS - Single Source of Truth
+# =============================================================================
+# DO NOT add hardcoded hex values elsewhere in the codebase.
+# Always import and use these constants.
+# =============================================================================
+BRAND_COLORS = {
+    'gold': '#C9A227',      # Primary accent - buttons, highlights, important actions
+    'gray': '#5a6a72',      # Navigation/headers - professional gray
+    'blue': '#2196F3',      # UI interactive elements - links, secondary buttons
+    'dark_bg': '#1E2328',   # Dark mode background
+    'light_bg': '#E8E6E1',  # Light mode background (warm gray)
+    'dark_card': '#1f2937', # Dark mode card/dialog background
+}
+
+# Shorthand aliases for common use - ALWAYS use these, never hardcode hex values
+PTO_GOLD = BRAND_COLORS['gold']
+PTO_GRAY = BRAND_COLORS['gray']
+PTO_BLUE = BRAND_COLORS['blue']
 
 # Mobile responsive CSS injection
 # REVERT INSTRUCTIONS: If mobile CSS causes issues, remove this import and the
@@ -296,12 +344,13 @@ def apply_dark_mode():
     inject_professional_fonts()
     inject_global_styles()
 
-    # PTO Central Brand Colors
-    PTO_GOLD = '#c9a227'
-    PTO_GRAY = '#5a6a72'
-
-    # Set Quasar primary color to PTO Gold
-    ui.colors(primary=PTO_GOLD)
+    # Apply PTO Central Brand Colors to Quasar theme
+    # Colors defined at module level: PTO_GOLD, PTO_GRAY, PTO_BLUE
+    ui.colors(
+        primary=PTO_GOLD,      # Gold - main brand accent
+        secondary=PTO_GRAY,    # Gray - navigation/headers
+        accent=PTO_BLUE        # Blue - interactive elements
+    )
 
     # Add custom background colors for light and dark modes
     # NiceGUI/Quasar uses body--light and body--dark classes
@@ -546,7 +595,7 @@ def show_validation_dialog(title: str, message: str, icon: str = 'info', icon_co
         with ui.column().classes('p-4 gap-3'):
             ui.label(message).classes('text-base whitespace-pre-line')
             with ui.row().classes('w-full justify-end mt-2'):
-                ui.button('OK', on_click=handle_close).style('background-color: #C9A227 !important; color: white !important;')
+                ui.button('OK', on_click=handle_close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -579,13 +628,13 @@ def show_success_dialog(title: str, message: str, on_close=None):
             on_close()
 
     with ui.dialog() as dialog, ui.card().classes('p-0 max-w-sm'):
-        with ui.row().classes('w-full p-4 text-white items-center').style('background-color: #C9A227'):
+        with ui.row().classes('w-full p-4 text-white items-center').style(f'background-color: {PTO_GOLD}'):
             ui.icon('check_circle', size='md').classes('mr-2')
             ui.label(title).classes('text-lg font-bold')
         with ui.column().classes('p-4 gap-3'):
             ui.label(message).classes('text-base whitespace-pre-line')
             with ui.row().classes('w-full justify-end mt-2'):
-                ui.button('OK', on_click=handle_close).style('background-color: #C9A227 !important; color: white !important;')
+                ui.button('OK', on_click=handle_close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -602,7 +651,7 @@ def show_help_dialog(title: str, message: str):
             ui.label(title).classes('text-lg font-bold')
         ui.html(f'<div style="color: #e5e7eb; font-size: 14px; line-height: 1.6;">{message}</div>', sanitize=False)
         with ui.row().classes('w-full justify-end mt-4'):
-            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+            ui.button('OK', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 

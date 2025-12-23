@@ -13,6 +13,7 @@ from src.models.manager_notification_preference import ManagerNotificationPrefer
 from src.models.pending_notification import PendingNotification
 from src.services.email_service import EmailService
 from src.services.export_service import ExportService
+from nicegui_app.components.theme import PTO_GOLD, PTO_GRAY
 
 logger = logging.getLogger(__name__)
 
@@ -331,14 +332,14 @@ class NotificationService:
             <title>PTO Digest - {datetime.now().strftime('%Y-%m-%d')}</title>
         </head>
         <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <div style="background-color: #5a6a72; color: white; padding: 20px; text-align: center;">
+            <div style="background-color: {PTO_GRAY}; color: white; padding: 20px; text-align: center;">
                 <h1 style="margin: 0;">PTO Request Digest</h1>
             </div>
             <div style="padding: 20px;">
                 <p>Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
                 <p>You have <strong>{len(requests)}</strong> PTO request(s) to review:</p>
                 <table style="border-collapse: collapse; width: 100%; margin-top: 15px;">
-                    <tr style="background-color: #c9a227; color: white;">
+                    <tr style="background-color: {PTO_GOLD}; color: white;">
                         <th style="padding: 10px; text-align: left;">Employee</th>
                         <th style="padding: 10px; text-align: left;">Type</th>
                         <th style="padding: 10px; text-align: left;">Start Date</th>

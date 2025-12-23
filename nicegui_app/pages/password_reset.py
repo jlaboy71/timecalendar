@@ -6,7 +6,7 @@ from src.services.password_reset_service import PasswordResetService
 from src.services.audit_service import AuditService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, PTO_GRAY
 
 
 def password_reset_request_page():
@@ -19,7 +19,7 @@ def password_reset_request_page():
             # Logo and title
             with ui.column().classes('w-full items-center mb-6'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 80px; width: auto; margin-bottom: 16px;')
-                ui.label('PASSWORD RESET').classes('text-xl font-bold text-center').style('color: #5a6a72;')
+                ui.label('PASSWORD RESET').classes('text-xl font-bold text-center').style(f'color: {PTO_GRAY};')
 
             ui.label('Enter your username or email address to request a password reset.').classes('text-sm text-center mb-4 opacity-70')
 
@@ -96,7 +96,7 @@ def password_reset_page(token: str):
             # Logo and title
             with ui.column().classes('w-full items-center mb-6'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 80px; width: auto; margin-bottom: 16px;')
-                ui.label('SET NEW PASSWORD').classes('text-xl font-bold text-center').style('color: #5a6a72;')
+                ui.label('SET NEW PASSWORD').classes('text-xl font-bold text-center').style(f'color: {PTO_GRAY};')
 
             # Validate token first
             db = next(get_db())

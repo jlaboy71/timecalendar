@@ -12,6 +12,7 @@ from io import BytesIO
 from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from nicegui_app.components.theme import PTO_GOLD, PTO_GRAY
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,10 @@ if _logo_path.exists():
 class ReportService:
     """Service for generating formatted reports."""
 
-    # Company branding - brand colors from logo
+    # Company branding - brand colors from centralized theme
     COMPANY_NAME = "Haventech Solutions"
-    PTO_GOLD = "#C5A951"  # Gold/olive color from logo
-    PTO_GRAY = "#5A6A72"  # Dark gray/slate from logo text
+    PTO_GOLD = PTO_GOLD  # Reference module-level import from theme.py
+    PTO_GRAY = PTO_GRAY  # Reference module-level import from theme.py
     LOGO_BASE64 = _LOGO_BASE64
 
     def __init__(self, db: Session):
