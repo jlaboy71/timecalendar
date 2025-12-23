@@ -320,6 +320,46 @@ class TestHolidayToolFix:
             assert "market" in holiday, "Holiday missing 'market' field"
 
 
+class TestValidateRequestFix:
+    """Test the validate_request fix (rejection_reason attribute)."""
+
+    def test_validate_request_returns_result(self):
+        """validate_request should return a valid result dict."""
+        from mcp.pto_central_mcp import validate_request
+
+        # Use a future date to test validation
+        result = validate_request(
+            employee_id=1,
+            pto_type="vacation",
+            start_date="2025-06-01",
+            end_date="2025-06-05"
+        )
+
+        assert isinstance(result, dict), "validate_request should return a dict"
+        assert "valid" in result or "error" in result, "Result should have valid or error key"
+        assert "hours" in result, "Result should have hours"
+        assert "working_days" in result, "Result should have working_days"
+
+    def test_validate_request_no_attribute_error(self):
+        """validate_request should not raise AttributeError for rejection_reason."""
+        from mcp.pto_central_mcp import validate_request
+
+        # Test with an invalid past date to trigger rejection path
+        try:
+            result = validate_request(
+                employee_id=1,
+                pto_type="vacation",
+                start_date="2020-01-01",  # Far past date
+                end_date="2020-01-05"
+            )
+            # Should return error gracefully, not raise exception
+            assert isinstance(result, dict)
+            if not result.get("valid"):
+                assert "error" in result, "Invalid request should have error message"
+        except AttributeError as e:
+            pytest.fail(f"AttributeError raised: {e}")
+
+
 # Run tests if executed directly
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
