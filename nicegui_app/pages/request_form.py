@@ -5,6 +5,7 @@ from src.services.balance_service import BalanceService
 from src.services.user_service import UserService
 from src.services.audit_service import AuditService
 from src.services.email_service import email_service
+from src.services.policy_engine import HARD_CAP_TYPES
 from src.database import get_db
 from src.models.leave_type import LeaveType
 from src.models.pto_request import PTORequest
@@ -15,7 +16,7 @@ from decimal import Decimal
 from nicegui_app.components.header import page_header, go_back
 from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
 from nicegui_app.components.formatting import fmt_days, format_days_hours
-from src.utils.working_days import is_weekend, is_working_day, get_holidays_in_range
+from src.utils.working_days import is_weekend, is_working_day, get_holidays_in_range, count_working_days
 
 
 def show_help_tip(title: str, message: str):
@@ -28,45 +29,6 @@ def show_help_tip(title: str, message: str):
         with ui.row().classes('w-full justify-end mt-4'):
             ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
     dialog.open()
-
-
-def count_business_days(start_date, end_date):
-    """Count business days (Mon-Fri) between two dates, inclusive, excluding holidays.
-
-    Args:
-        start_date: Start date
-        end_date: End date
-
-    Returns:
-        Number of business days (weekdays only, excluding market holidays)
-    """
-    if start_date > end_date:
-        return 0
-
-    # Get holidays in the date range (only full closure days, not early close)
-    holiday_dates = set()
-    try:
-        db = next(get_db())
-        holidays = db.query(MarketHoliday.holiday_date).filter(
-            MarketHoliday.holiday_date >= start_date,
-            MarketHoliday.holiday_date <= end_date,
-            ~MarketHoliday.name.contains('Early Close')  # Exclude early close days
-        ).distinct().all()
-        holiday_dates = {h.holiday_date for h in holidays}
-        db.close()
-    except Exception:
-        pass  # If we can't get holidays, just count business days
-
-    business_days = 0
-    current = start_date
-    while current <= end_date:
-        # weekday(): 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
-        if current.weekday() < 5:  # Monday to Friday
-            # Also check if it's not a holiday
-            if current not in holiday_dates:
-                business_days += 1
-        current += timedelta(days=1)
-    return business_days
 
 
 def request_form_page(preselect_type: str = None):
@@ -107,7 +69,7 @@ def request_form_page(preselect_type: str = None):
             PTORequest.status == 'pending'
         ).all()
 
-        # NOTE: Holiday validation is now done server-side in count_business_days()
+        # NOTE: Holiday validation is now done server-side in count_working_days()
         # Removed client-side JS validation that caused iOS Safari blank screen
 
         # Get manager info from department
@@ -805,7 +767,7 @@ def request_form_page(preselect_type: str = None):
 
                     # Wrap calendar in relative container for icon overlay
                     # NOTE: Removed complex inline :options JS that caused iOS Safari blank screen
-                    # Weekend/holiday exclusion is handled server-side in count_business_days()
+                    # Weekend/holiday exclusion is handled server-side in count_working_days()
                     with ui.element('div').classes('relative w-full'):
                         range_calendar = ui.date(
                             value=initial_value,
@@ -845,7 +807,7 @@ def request_form_page(preselect_type: str = None):
                     if state['is_half_day']:
                         total_days = 0.5
                     else:
-                        total_days = count_business_days(state['start_date'], state['end_date'])
+                        total_days = count_working_days(state['start_date'], state['end_date'])
                     hours_requested = total_days * 8
 
                     is_wfh = pto_type.value == 'work_from_home'
@@ -979,7 +941,7 @@ def request_form_page(preselect_type: str = None):
                 if state['is_half_day']:
                     total_days = 0.5
                 else:
-                    total_days = count_business_days(state['start_date'], state['end_date'])
+                    total_days = count_working_days(state['start_date'], state['end_date'])
                 hours_requested = total_days * 8
                 is_wfh = pto_type.value == 'work_from_home'
                 _, _, _, available, balance_allocated, _ = get_balance_for_type(pto_type.value)
@@ -1050,14 +1012,9 @@ def request_form_page(preselect_type: str = None):
                                         ui.label(f'All days will be deducted from your {state["start_date"].year} balance. Consider submitting separate requests for each year.').classes('text-sm opacity-70')
 
                         # Warning for exceeding available balance
-                        # HARD CAP TYPES: These types have fixed annual allocations and CANNOT be overdrafted
-                        # - sick: 5 days/year (40 hours) - hard cap, no manager override
-                        # - personal: 2 days/year (16 hours) - hard cap, no manager override
-                        # - chicago_leave: Chicago Paid Leave ordinance requires accrual-based usage
-                        # SOFT CAP TYPES: These allow overdraft with manager approval
-                        # - vacation: Manager can approve requests exceeding balance
-                        hard_cap_types = ['chicago_leave', 'sick', 'personal']
-                        should_block = pto_type.value in hard_cap_types
+                        # HARD_CAP_TYPES (from PolicyEngine): Fixed allocations, NO overdraft allowed
+                        # SOFT_CAP_TYPES: Allow overdraft with manager approval (vacation)
+                        should_block = pto_type.value in HARD_CAP_TYPES
 
                         if hours_requested > available:
                             if should_block:
@@ -1099,7 +1056,7 @@ def request_form_page(preselect_type: str = None):
                             MarketHoliday.holiday_date >= state['start_date'],
                             MarketHoliday.holiday_date <= state['end_date'],
                             MarketHoliday.market == 'Federal',
-                            ~MarketHoliday.name.contains('Early Close')  # Same filter as count_business_days
+                            ~MarketHoliday.name.contains('Early Close')  # Same filter as count_working_days
                         ).all()
                         db_check.close()
 
@@ -1272,7 +1229,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 if half_day:
                     days_requested = 0.5
                 else:
-                    days_requested = count_business_days(start_date, end_date)
+                    days_requested = count_working_days(start_date, end_date)
                 hours_requested = days_requested * 8
 
                 if hours_requested > vacation_available:
@@ -1326,7 +1283,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
                 if half_day:
                     total_days = 0.5
                 else:
-                    total_days = count_business_days(start_date, end_date)
+                    total_days = count_working_days(start_date, end_date)
                 hours_requested = total_days * 8
 
                 if hours_requested > chicago_available:
@@ -1374,7 +1331,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
             submit_btn.props(remove='loading disabled')
         return
 
-    # NOTE: Holiday handling is done via count_business_days() which excludes
+    # NOTE: Holiday handling is done via count_working_days() which excludes
     # holidays from the day count. The inline banner in update_warning() informs
     # users which holidays are excluded. No blocking modal needed - Policy A.
     # See: docs/bugs/BUG-HOLIDAY-MODAL-LOOP.md
@@ -1416,7 +1373,7 @@ def submit_request(user_id, pto_type, start_date, end_date, half_day, descriptio
         policy = accrual_service.get_policy_for_employee(employee, pto_type.upper())
 
         # Calculate business days only (Mon-Fri)
-        total_days = count_business_days(start_date, end_date)
+        total_days = count_working_days(start_date, end_date)
         if half_day:
             total_days = 0.5
         elif total_days == 0:

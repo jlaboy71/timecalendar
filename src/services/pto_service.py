@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 TRUSTED_AUTO_APPROVE_TYPES = {'vacation', 'sick', 'personal'}
 
 # PTO types that ALWAYS require manager approval regardless of trust status
-ALWAYS_REQUIRES_APPROVAL = {'bereavement', 'fmla', 'jury_duty', 'voting', 'military', 'wfh'}
+# NOTE: Must match PolicyEngine.ALWAYS_REQUIRES_APPROVAL
+ALWAYS_REQUIRES_APPROVAL = {'bereavement', 'fmla', 'jury_duty', 'voting', 'military', 'wfh', 'chicago_leave'}
 
 
 class PTOService:
