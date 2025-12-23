@@ -42,7 +42,8 @@ CONFIRMATION_TOKEN_EXPIRY_SECONDS = 300  # 5 minutes
 VALID_CONFIRMATION_ACTIONS = frozenset({
     "submit_pto_request",
     "cancel_pto_request",
-    "approve_pto_request"
+    "approve_pto_request",
+    "deny_pto_request"
 })
 
 logger = logging.getLogger(__name__)
@@ -544,14 +545,14 @@ def get_holidays(year: Optional[int] = None) -> List[Dict[str, Any]]:
     db = next(get_db())
     try:
         stmt = select(MarketHoliday).where(
-            extract('year', MarketHoliday.date) == year
-        ).order_by(MarketHoliday.date)
+            extract('year', MarketHoliday.holiday_date) == year
+        ).order_by(MarketHoliday.holiday_date)
 
         holidays = db.execute(stmt).scalars().all()
 
         result = [
             {
-                "date": h.date.isoformat(),
+                "date": h.holiday_date.isoformat(),
                 "name": h.name,
                 "market": h.market
             }
@@ -1075,6 +1076,435 @@ def submit_pto_request(
         db.close()
 
 
+@rate_limit("cancel_pto_request")
+def cancel_pto_request(
+    request_id: int,
+    user_id: int,
+    cancellation_reason: str = "",
+    confirmation_token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Cancel a pending or approved PTO request.
+
+    REQUIRES confirmation_token from prior confirm_action call.
+    This ensures human-in-the-loop approval before any write operation.
+
+    Cancellation Rules:
+    - Employees can cancel their own pending requests
+    - Managers can cancel any pending request in their team
+    - Admins/Superadmins can cancel any request
+
+    Args:
+        request_id: The PTO request ID to cancel
+        user_id: The user requesting the cancellation
+        cancellation_reason: Optional reason for cancellation
+        confirmation_token: REQUIRED - Token from confirm_action call
+
+    Returns:
+        dict with success status and cancellation details
+    """
+    # ═══════════════════════════════════════════════════════════════════
+    # SAFETY GATE CHECK - THIS MUST BE THE FIRST VALIDATION
+    # ═══════════════════════════════════════════════════════════════════
+    if not _validate_confirmation_token(confirmation_token, "cancel_pto_request"):
+        return {
+            "success": False,
+            "error": "Invalid or expired confirmation token. Call confirm_action first.",
+            "action_required": "confirm_action",
+            "hint": "You must call confirm_action to get a token before cancelling a PTO request."
+        }
+    # ═══════════════════════════════════════════════════════════════════
+
+    from src.database import get_db
+    from src.services.pto_service import PTOService
+    from src.services.user_service import UserService
+    from src.services.audit_service import AuditService
+
+    db = next(get_db())
+    try:
+        pto_service = PTOService(db)
+        user_service = UserService(db)
+
+        # Get the request
+        request = pto_service.get_request(request_id)
+        if not request:
+            return {
+                "success": False,
+                "error": f"Request #{request_id} not found"
+            }
+
+        # Get canceller info
+        canceller = user_service.get_user(user_id)
+        if not canceller:
+            return {
+                "success": False,
+                "error": f"User #{user_id} not found"
+            }
+
+        # Check cancellation permission
+        canceller_role = canceller.role.value if hasattr(canceller.role, 'value') else str(canceller.role)
+        is_own_request = request.user_id == user_id
+        is_manager_or_higher = canceller_role in ["manager", "admin", "superadmin"]
+
+        if not is_own_request and not is_manager_or_higher:
+            return {
+                "success": False,
+                "error": "You can only cancel your own requests, or be a manager/admin to cancel others."
+            }
+
+        # Check request is cancellable
+        request_status = request.status.value if hasattr(request.status, 'value') else str(request.status)
+        if request_status not in ["pending", "approved"]:
+            return {
+                "success": False,
+                "error": f"Cannot cancel request with status: {request_status}"
+            }
+
+        # Get requestor info for audit
+        requestor = user_service.get_user(request.user_id)
+        requestor_name = requestor.username if requestor else f"User #{request.user_id}"
+
+        # Cancel the request
+        reason = f"[AI-Assisted] {cancellation_reason}" if cancellation_reason else "[AI-Assisted Cancellation]"
+        pto_service.cancel_request(request_id, cancelled_by_id=user_id, reason=reason)
+
+        # Audit log
+        AuditService.log(
+            db=db,
+            action="mcp_cancel_pto_request",
+            user_id=user_id,
+            username=canceller.username,
+            details=json.dumps({
+                "request_id": request_id,
+                "employee_id": request.user_id,
+                "employee_name": requestor_name,
+                "cancelled_by_self": is_own_request,
+                "previous_status": request_status,
+                "reason": cancellation_reason,
+                "submitted_via": "MCP_SAFETY_GATE"
+            })
+        )
+
+        logger.info(
+            f"MCP: PTO request {request_id} cancelled by {canceller.username}. "
+            f"Employee: {requestor_name}, Was: {request_status}"
+        )
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "previous_status": request_status,
+            "new_status": "cancelled",
+            "cancelled_by": canceller.username,
+            "employee": requestor_name,
+            "message": f"PTO request #{request_id} has been cancelled."
+        }
+
+    except ValueError as e:
+        logger.warning(f"MCP cancel_pto_request error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    except Exception as e:
+        logger.error(f"MCP cancel_pto_request unexpected error: {e}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}"
+        }
+    finally:
+        db.close()
+
+
+@rate_limit("approve_pto_request")
+def approve_pto_request(
+    request_id: int,
+    approver_id: int,
+    approval_notes: str = "",
+    confirmation_token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Approve a pending PTO request (manager/admin action).
+
+    REQUIRES confirmation_token from prior confirm_action call.
+    This ensures human-in-the-loop approval before any write operation.
+
+    Permission Requirements:
+    - Managers can approve requests from their team
+    - Admins/Superadmins can approve any request
+
+    Args:
+        request_id: The PTO request ID to approve
+        approver_id: The manager/admin approving the request
+        approval_notes: Optional notes for the approval
+        confirmation_token: REQUIRED - Token from confirm_action call
+
+    Returns:
+        dict with success status and approval details
+    """
+    # ═══════════════════════════════════════════════════════════════════
+    # SAFETY GATE CHECK - THIS MUST BE THE FIRST VALIDATION
+    # ═══════════════════════════════════════════════════════════════════
+    if not _validate_confirmation_token(confirmation_token, "approve_pto_request"):
+        return {
+            "success": False,
+            "error": "Invalid or expired confirmation token. Call confirm_action first.",
+            "action_required": "confirm_action",
+            "hint": "You must call confirm_action to get a token before approving a PTO request."
+        }
+    # ═══════════════════════════════════════════════════════════════════
+
+    from src.database import get_db
+    from src.services.pto_service import PTOService
+    from src.services.user_service import UserService
+    from src.services.audit_service import AuditService
+
+    db = next(get_db())
+    try:
+        pto_service = PTOService(db)
+        user_service = UserService(db)
+
+        # Get the request
+        request = pto_service.get_request(request_id)
+        if not request:
+            return {
+                "success": False,
+                "error": f"Request #{request_id} not found"
+            }
+
+        # Get approver info
+        approver = user_service.get_user(approver_id)
+        if not approver:
+            return {
+                "success": False,
+                "error": f"Approver #{approver_id} not found"
+            }
+
+        # Check approver has permission
+        approver_role = approver.role.value if hasattr(approver.role, 'value') else str(approver.role)
+        if approver_role not in ["manager", "admin", "superadmin"]:
+            return {
+                "success": False,
+                "error": "Insufficient permissions. Only managers, admins, or superadmins can approve requests."
+            }
+
+        # Check request is pending
+        request_status = request.status.value if hasattr(request.status, 'value') else str(request.status)
+        if request_status != "pending":
+            return {
+                "success": False,
+                "error": f"Cannot approve request with status: {request_status}"
+            }
+
+        # Get requestor info
+        requestor = user_service.get_user(request.user_id)
+        requestor_name = requestor.username if requestor else f"User #{request.user_id}"
+
+        # Approve the request
+        notes = f"[AI-Assisted] {approval_notes}" if approval_notes else "[AI-Assisted Approval]"
+        pto_service.approve_request(request_id, approved_by_id=approver_id, notes=notes)
+
+        # Audit log
+        AuditService.log(
+            db=db,
+            action="mcp_approve_pto_request",
+            user_id=approver_id,
+            username=approver.username,
+            details=json.dumps({
+                "request_id": request_id,
+                "employee_id": request.user_id,
+                "employee_name": requestor_name,
+                "pto_type": request.pto_type,
+                "start_date": str(request.start_date),
+                "end_date": str(request.end_date),
+                "notes": approval_notes,
+                "submitted_via": "MCP_SAFETY_GATE"
+            })
+        )
+
+        logger.info(
+            f"MCP: PTO request {request_id} approved by {approver.username}. "
+            f"Employee: {requestor_name}"
+        )
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "previous_status": "pending",
+            "new_status": "approved",
+            "approved_by": approver.username,
+            "employee": requestor_name,
+            "pto_type": request.pto_type,
+            "start_date": str(request.start_date),
+            "end_date": str(request.end_date),
+            "message": f"PTO request #{request_id} has been approved."
+        }
+
+    except ValueError as e:
+        logger.warning(f"MCP approve_pto_request error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    except Exception as e:
+        logger.error(f"MCP approve_pto_request unexpected error: {e}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}"
+        }
+    finally:
+        db.close()
+
+
+@rate_limit("deny_pto_request")
+def deny_pto_request(
+    request_id: int,
+    denier_id: int,
+    denial_reason: str,
+    confirmation_token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Deny a pending PTO request (manager/admin action).
+
+    REQUIRES confirmation_token from prior confirm_action call.
+    This ensures human-in-the-loop approval before any write operation.
+
+    A denial_reason is REQUIRED - employees deserve to know why their
+    request was denied.
+
+    Permission Requirements:
+    - Managers can deny requests from their team
+    - Admins/Superadmins can deny any request
+
+    Args:
+        request_id: The PTO request ID to deny
+        denier_id: The manager/admin denying the request
+        denial_reason: REQUIRED explanation for the denial
+        confirmation_token: REQUIRED - Token from confirm_action call
+
+    Returns:
+        dict with success status and denial details
+    """
+    # ═══════════════════════════════════════════════════════════════════
+    # SAFETY GATE CHECK - THIS MUST BE THE FIRST VALIDATION
+    # ═══════════════════════════════════════════════════════════════════
+    if not _validate_confirmation_token(confirmation_token, "deny_pto_request"):
+        return {
+            "success": False,
+            "error": "Invalid or expired confirmation token. Call confirm_action first.",
+            "action_required": "confirm_action",
+            "hint": "You must call confirm_action to get a token before denying a PTO request."
+        }
+    # ═══════════════════════════════════════════════════════════════════
+
+    # Require denial reason
+    if not denial_reason or len(denial_reason.strip()) < 5:
+        return {
+            "success": False,
+            "error": "A meaningful denial reason is required (at least 5 characters). "
+                     "Employees deserve to know why their request was denied."
+        }
+
+    from src.database import get_db
+    from src.services.pto_service import PTOService
+    from src.services.user_service import UserService
+    from src.services.audit_service import AuditService
+
+    db = next(get_db())
+    try:
+        pto_service = PTOService(db)
+        user_service = UserService(db)
+
+        # Get the request
+        request = pto_service.get_request(request_id)
+        if not request:
+            return {
+                "success": False,
+                "error": f"Request #{request_id} not found"
+            }
+
+        # Get denier info
+        denier = user_service.get_user(denier_id)
+        if not denier:
+            return {
+                "success": False,
+                "error": f"Denier #{denier_id} not found"
+            }
+
+        # Check denier has permission
+        denier_role = denier.role.value if hasattr(denier.role, 'value') else str(denier.role)
+        if denier_role not in ["manager", "admin", "superadmin"]:
+            return {
+                "success": False,
+                "error": "Insufficient permissions. Only managers, admins, or superadmins can deny requests."
+            }
+
+        # Check request is pending
+        request_status = request.status.value if hasattr(request.status, 'value') else str(request.status)
+        if request_status != "pending":
+            return {
+                "success": False,
+                "error": f"Cannot deny request with status: {request_status}"
+            }
+
+        # Get requestor info
+        requestor = user_service.get_user(request.user_id)
+        requestor_name = requestor.username if requestor else f"User #{request.user_id}"
+
+        # Deny the request
+        full_reason = f"[AI-Assisted] {denial_reason}"
+        pto_service.deny_request(request_id, denied_by_id=denier_id, reason=full_reason)
+
+        # Audit log
+        AuditService.log(
+            db=db,
+            action="mcp_deny_pto_request",
+            user_id=denier_id,
+            username=denier.username,
+            details=json.dumps({
+                "request_id": request_id,
+                "employee_id": request.user_id,
+                "employee_name": requestor_name,
+                "pto_type": request.pto_type,
+                "start_date": str(request.start_date),
+                "end_date": str(request.end_date),
+                "denial_reason": denial_reason,
+                "submitted_via": "MCP_SAFETY_GATE"
+            })
+        )
+
+        logger.info(
+            f"MCP: PTO request {request_id} denied by {denier.username}. "
+            f"Employee: {requestor_name}, Reason: {denial_reason[:50]}..."
+        )
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "previous_status": "pending",
+            "new_status": "denied",
+            "denied_by": denier.username,
+            "employee": requestor_name,
+            "reason": denial_reason,
+            "message": f"PTO request #{request_id} has been denied."
+        }
+
+    except ValueError as e:
+        logger.warning(f"MCP deny_pto_request error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    except Exception as e:
+        logger.error(f"MCP deny_pto_request unexpected error: {e}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}"
+        }
+    finally:
+        db.close()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PHASE 6: DOCTRINE QUERY TOOLS - System Self-Knowledge
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1227,6 +1657,27 @@ MCP_TOOLS = {
     "submit_pto_request": {
         "handler": submit_pto_request,
         "description": "Submit PTO request (requires confirmation_token from confirm_action)",
+        "phase": "5.0",
+        "enabled": True,
+        "requires_confirmation": True
+    },
+    "cancel_pto_request": {
+        "handler": cancel_pto_request,
+        "description": "Cancel PTO request (requires confirmation_token from confirm_action)",
+        "phase": "5.0",
+        "enabled": True,
+        "requires_confirmation": True
+    },
+    "approve_pto_request": {
+        "handler": approve_pto_request,
+        "description": "Approve pending PTO request (requires confirmation_token from confirm_action)",
+        "phase": "5.0",
+        "enabled": True,
+        "requires_confirmation": True
+    },
+    "deny_pto_request": {
+        "handler": deny_pto_request,
+        "description": "Deny pending PTO request with reason (requires confirmation_token from confirm_action)",
         "phase": "5.0",
         "enabled": True,
         "requires_confirmation": True

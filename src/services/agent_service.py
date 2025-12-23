@@ -196,7 +196,10 @@ class PTOAgent:
             get_usage_patterns,
             validate_request,
             confirm_action,
-            submit_pto_request
+            submit_pto_request,
+            cancel_pto_request,
+            approve_pto_request,
+            deny_pto_request
         )
         # Import RAG query tool from Inspector
         from mcp.mcp_server import query_rag_corpus
@@ -222,7 +225,10 @@ class PTOAgent:
 
             # Safety Gate + Write
             "confirm_action": confirm_action,
-            "submit_pto_request": submit_pto_request
+            "submit_pto_request": submit_pto_request,
+            "cancel_pto_request": cancel_pto_request,
+            "approve_pto_request": approve_pto_request,
+            "deny_pto_request": deny_pto_request
         }
 
         if tool_name in tool_map:
@@ -713,15 +719,42 @@ Be efficient. Managers are busy. Give clear, actionable recommendations.
             },
             {
                 "name": "confirm_action",
-                "description": "Request manager confirmation before approving",
+                "description": "Request manager confirmation before approving or denying",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "action_type": {"type": "string", "enum": ["approve_pto_request"]},
+                        "action_type": {"type": "string", "enum": ["approve_pto_request", "deny_pto_request"]},
                         "action_summary": {"type": "string"},
                         "user_id": {"type": "integer"}
                     },
                     "required": ["action_type", "action_summary", "user_id"]
+                }
+            },
+            {
+                "name": "approve_pto_request",
+                "description": "Approve a pending PTO request. REQUIRES confirmation_token from confirm_action.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "integer", "description": "The PTO request ID to approve"},
+                        "approver_id": {"type": "integer", "description": "The manager/admin approving"},
+                        "confirmation_token": {"type": "string", "description": "Token from confirm_action"}
+                    },
+                    "required": ["request_id", "approver_id", "confirmation_token"]
+                }
+            },
+            {
+                "name": "deny_pto_request",
+                "description": "Deny a pending PTO request. REQUIRES confirmation_token and denial_reason.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "integer", "description": "The PTO request ID to deny"},
+                        "denier_id": {"type": "integer", "description": "The manager/admin denying"},
+                        "denial_reason": {"type": "string", "description": "REQUIRED reason for denial"},
+                        "confirmation_token": {"type": "string", "description": "Token from confirm_action"}
+                    },
+                    "required": ["request_id", "denier_id", "denial_reason", "confirmation_token"]
                 }
             }
         ]

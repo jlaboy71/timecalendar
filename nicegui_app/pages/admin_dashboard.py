@@ -42,6 +42,14 @@ def admin_dashboard_page():
                     ui.label('Review and approve employee carryover requests').classes('text-gray-600 text-center')
                     ui.button('Go to Approvals', on_click=lambda: ui.navigate.to('/manager/carryover'), color='primary')
 
+            # PTO Assist card - AI scheduling assistant
+            with ui.card().classes('p-6 cursor-pointer shadow-md hover:shadow-xl transition-all border-2').style(f'border-color: {PTO_GOLD};'):
+                with ui.column().classes('items-center gap-4'):
+                    ui.icon('smart_toy', size='3rem').style(f'color: {PTO_GOLD};')
+                    ui.label('PTO Assist').classes('text-xl font-semibold')
+                    ui.label('AI-powered scheduling assistant for PTO planning').classes('text-gray-600 text-center')
+                    ui.button('Launch Assistant', on_click=lambda: ui.navigate.to('/assistant')).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
+
         # Second row - Super Admin only (flex-wrap for mobile responsive)
         if user_role == 'superadmin':
             with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap stagger-children'):
