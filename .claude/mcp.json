@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "PTO Central MCP Server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for PTO Central AI agent integration",
+  "governance": "task/MCPRAGv2.md",
+
+  "security": {
+    "localhost_only": true,
+    "rate_limiting": {
+      "enabled": true,
+      "max_calls_per_minute": 30,
+      "window_seconds": 60
+    },
+    "audit_logging": true,
+    "write_confirmation_required": true
+  },
+
+  "phases": {
+    "4.1": {
+      "name": "Read-Only Tools",
+      "status": "enabled",
+      "tools": [
+        "get_employee_balance",
+        "get_employee_requests",
+        "get_pending_approvals",
+        "get_team_calendar",
+        "get_holidays"
+      ]
+    },
+    "4.2": {
+      "name": "Analysis Tools",
+      "status": "enabled",
+      "tools": [
+        "check_team_coverage",
+        "get_usage_patterns"
+      ]
+    },
+    "4.3": {
+      "name": "Write Tools",
+      "status": "partial",
+      "notes": "validate_request enabled, submit_request disabled",
+      "tools": [
+        "validate_request",
+        "submit_request"
+      ]
+    }
+  },
+
+  "tools": {
+    "get_employee_balance": {
+      "description": "Get PTO balance for an employee",
+      "phase": "4.1",
+      "enabled": true,
+      "parameters": {
+        "employee_id": {"type": "integer", "required": true},
+        "year": {"type": "integer", "required": false}
+      }
+    },
+    "get_employee_requests": {
+      "description": "Get PTO requests for an employee",
+      "phase": "4.1",
+      "enabled": true,
+      "parameters": {
+        "employee_id": {"type": "integer", "required": true},
+        "status": {"type": "string", "required": false, "enum": ["pending", "approved", "denied", "cancelled"]},
+        "year": {"type": "integer", "required": false}
+      }
+    },
+    "get_pending_approvals": {
+      "description": "Get pending PTO requests for a manager's team",
+      "phase": "4.1",
+      "enabled": true,
+      "parameters": {
+        "manager_id": {"type": "integer", "required": true}
+      }
+    },
+    "get_team_calendar": {
+      "description": "Get approved time-off events for a manager's team",
+      "phase": "4.1",
+      "enabled": true,
+      "parameters": {
+        "manager_id": {"type": "integer", "required": true},
+        "start_date": {"type": "string", "format": "date", "required": true},
+        "end_date": {"type": "string", "format": "date", "required": true}
+      }
+    },
+    "get_holidays": {
+      "description": "Get market holidays for a year",
+      "phase": "4.1",
+      "enabled": true,
+      "parameters": {
+        "year": {"type": "integer", "required": false}
+      }
+    },
+    "check_team_coverage": {
+      "description": "Check team coverage for a date range, identifying critical and warning days",
+      "phase": "4.2",
+      "enabled": true,
+      "parameters": {
+        "manager_id": {"type": "integer", "required": true},
+        "start_date": {"type": "string", "format": "date", "required": true},
+        "end_date": {"type": "string", "format": "date", "required": true}
+      }
+    },
+    "get_usage_patterns": {
+      "description": "Analyze PTO usage patterns by employee, team, or department",
+      "phase": "4.2",
+      "enabled": true,
+      "parameters": {
+        "scope": {"type": "string", "required": true, "enum": ["employee", "team", "department"]},
+        "scope_id": {"type": "integer", "required": true},
+        "year": {"type": "integer", "required": false}
+      }
+    },
+    "validate_request": {
+      "description": "Validate a PTO request before submission (dry-run, no changes)",
+      "phase": "4.3",
+      "enabled": true,
+      "parameters": {
+        "employee_id": {"type": "integer", "required": true},
+        "pto_type": {"type": "string", "required": true},
+        "start_date": {"type": "string", "format": "date", "required": true},
+        "end_date": {"type": "string", "format": "date", "required": true}
+      }
+    },
+    "submit_request": {
+      "description": "Submit a PTO request (requires user confirmation)",
+      "phase": "4.3",
+      "enabled": false,
+      "requires_confirmation": true,
+      "parameters": {
+        "employee_id": {"type": "integer", "required": true},
+        "pto_type": {"type": "string", "required": true},
+        "start_date": {"type": "string", "format": "date", "required": true},
+        "end_date": {"type": "string", "format": "date", "required": true},
+        "notes": {"type": "string", "required": false},
+        "confirmation_token": {"type": "string", "required": true}
+      }
+    }
+  }
+}
