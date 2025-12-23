@@ -20,6 +20,8 @@ The swap page displays five day columns - Monday through Friday. Each column sho
 - **Colored dot**: The employee is available to swap
 - **Swap icon**: The employee already has a swap this week (matching colors indicate swap partners)
 - **Your entry**: Appears dimmed/disabled - you can't swap with yourself
+- **Greyed out column**: Federal holiday - office is closed, swaps not available
+- **Orange clock icon**: Early Close day (half-day) - swaps are still allowed
 
 ## Step 3: Select a Teammate
 

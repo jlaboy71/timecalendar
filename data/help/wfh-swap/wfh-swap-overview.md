@@ -20,6 +20,16 @@ The WFH Day Swap feature allows employees to exchange their designated Work From
 - The swap date must be a **weekday** (Monday-Friday)
 - The swap date must be **in the future**
 
+### Holiday Restrictions
+- **Federal holidays are blocked** - You cannot swap on days when the office is closed (New Year's, Memorial Day, Thanksgiving, Christmas, etc.)
+- **Early Close days are allowed** - Half-days like Christmas Eve are still working days, so swaps are permitted
+- The calendar will show holidays greyed out and unavailable for swapping
+
+### Eligibility Requirements
+- You must be **WFH swap eligible** (set by your administrator)
+- Your teammate must also be WFH swap eligible
+- Both users must have an active account
+
 ### Matching Requirements
 - The swap date must be the **target teammate's WFH day**
 - Both you and your teammate must have designated WFH days set up

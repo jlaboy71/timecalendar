@@ -38,11 +38,22 @@ Welcome to PTO Central! This is your complete system for managing paid time off 
 
 ## Leave Types Available
 
-- **Vacation** - Annual vacation time (balance tracked)
-- **Sick Leave** - Sick time allocation (balance tracked)
-- **Personal Days** - Personal time off (balance tracked)
-- **Work From Home (WFH)** - Remote work days (no balance deduction)
-- **Other** - Additional leave types as configured
+### Balance-Tracked Leave (Accruing)
+- **Vacation** - Annual vacation time based on tenure (10-20 days/year)
+- **Sick Leave** - 5 days/year, auto-carryover up to 10 days
+- **Personal Days** - 2 days/year, use-it-or-lose-it (no carryover)
+- **Chicago Paid Leave** - For Chicago employees only, per city ordinance (auto-carryover up to 16 hours)
+
+### Non-Balance Leave (No Balance Deduction)
+- **Work From Home (WFH)** - Remote work days
+- **Bereavement** - Family loss (5 days immediate family, 3 days extended)
+- **FMLA** - Family and Medical Leave Act (up to 12 weeks unpaid, job-protected)
+- **Jury Duty** - Paid time for jury service
+- **Voting** - Up to 2 hours if needed
+- **Military** - Per USERRA requirements
+
+### WFH Day Swap
+Employees can swap their designated WFH days with teammates through the peer-to-peer swap system (no manager approval required).
 
 ## Quick Start Checklist
 

@@ -1,8 +1,8 @@
 # PTO Central - RAG Source Manifest
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 2025-12-22
-**Status:** Phase 3 - RAG Preparation
+**Status:** Phase 5 - Ready for RAG Indexing
 **Reference:** task/MCPRAGv2.md Section 9
 
 ---
@@ -43,13 +43,14 @@
 | `data/help/getting-started/first-login.md` | Login process | Single chunk |
 | `data/help/getting-started/dashboard.md` | Dashboard navigation | Section-based |
 
-### PTO Requests (4 documents)
+### PTO Requests (5 documents)
 | File | Topic | Chunk Strategy |
 |------|-------|----------------|
 | `data/help/pto-requests/submit-request.md` | Creating requests | Step-based |
 | `data/help/pto-requests/view-requests.md` | Viewing history | Single chunk |
 | `data/help/pto-requests/view-balance.md` | Balance checking | Single chunk |
 | `data/help/pto-requests/cancel-request.md` | Cancellation | Single chunk |
+| `data/help/pto-requests/chicago-paid-leave.md` | Chicago Leave (city ordinance) | Section-based |
 
 ### Calendar (4 documents)
 | File | Topic | Chunk Strategy |
@@ -238,14 +239,14 @@ Before indexing, verify each source:
 
 | Metric | Count |
 |--------|-------|
-| Total help documents | 35 |
+| Total help documents | 36 |
 | Total policy documents | 3 |
 | Scenario transcripts/timelines | 5 |
 | **Scenarios covered** | **18** |
-| Estimated chunks (help) | ~80 |
+| Estimated chunks (help) | ~85 |
 | Estimated chunks (policy) | ~25 |
 | Estimated chunks (scenarios) | ~150 (18 scenarios × ~8 steps avg) |
-| **Total estimated chunks** | **~255** |
+| **Total estimated chunks** | **~260** |
 
 ---
 
