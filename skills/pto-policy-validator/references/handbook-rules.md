@@ -270,32 +270,3 @@ For any given week being viewed:
 `src/services/wfh_swap_service.py` - All validation in `create_swap_request()`
 `nicegui_app/pages/wfh_swap.py` - UI rendering and display logic
 `src/services/audit_service.py` - Audit logging with swap_date parameter
-
-## MANDATORY: Calendar Date Verification
-
-**CRITICAL RULE FOR AI AGENTS**: Never state what day of the week a date falls on without verification.
-
-AI/LLM systems cannot reliably calculate day-of-week for dates (e.g., "December 30, 2025 is Monday" is WRONG - it's Tuesday).
-
-### Required Tool Usage
-Any agent or skill dealing with calendar dates MUST:
-1. Use `get_calendar_info(date_str)` from `mcp/pto_central_mcp.py`
-2. NEVER guess or assume day-of-week
-3. Always verify before making scheduling recommendations
-
-### Tool Details
-```
-get_calendar_info("2025-12-30")
-Returns: {
-  "date": "2025-12-30",
-  "day_of_week": "Tuesday",
-  "is_weekend": false,
-  "is_weekday": true,
-  "surrounding_dates": [...]
-}
-```
-
-### Code Location
-- Tool: `mcp/pto_central_mcp.py` - `get_calendar_info()`
-- Agent: `src/services/agent_service.py` - SmartSchedulerAgent has this tool
-- System prompt includes mandatory verification instruction

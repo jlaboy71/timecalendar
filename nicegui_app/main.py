@@ -38,6 +38,7 @@ from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
 from nicegui_app.pages.testing_console import testing_console_page
 from nicegui_app.pages.wfh_swap import wfh_swap_page
+from nicegui_app.pages.assistant import assistant_page
 from nicegui_app.logo import LOGO_DATA_URL
 from nicegui_app.components.theme import apply_dark_mode, PTO_GOLD, PTO_GRAY
 from src.services.session_manager import require_auth
@@ -224,6 +225,13 @@ def wfh_swap():
     if not require_auth():
         return
     wfh_swap_page()
+
+@ui.page('/assistant')
+def assistant():
+    """Smart Scheduler Assistant - AI-powered PTO planning interface."""
+    if not require_auth():
+        return
+    assistant_page()
 
 @ui.page('/manager/carryover')
 def manager_carryover():

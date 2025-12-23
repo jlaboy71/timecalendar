@@ -1,7 +1,35 @@
 # PTO Central - Project Status & Remaining Tasks
 
 **Last Updated**: December 2024
-**Overall Status**: ~95% Complete
+**Overall Status**: ~98% Complete
+
+---
+
+## COMPLETED TASK: Phase 5 - MCP Ignition & Agent Activation
+
+**Date Completed**: December 23, 2025
+**Reference**: `task/PHASE5_IGNITION_MCP_WRITE_ACCESS.md`
+
+### Summary
+Phase 5 complete. MCP Write Access enabled with Safety Gate. Smart Scheduler Agent operational with RAG Knowledge.
+
+### Components Delivered
+| Component | Status | Implementation |
+|-----------|--------|----------------|
+| MCP Write Tools | ✅ Complete | `mcp/pto_central_mcp.py` |
+| Safety Gate (confirm_action) | ✅ Complete | Token-based human-in-the-loop |
+| SmartSchedulerAgent | ✅ Complete | `src/services/agent_service.py` |
+| RAG Knowledge Base | ✅ Complete | `data/rag_index.json` (381 chunks) |
+| Assistant UI | ✅ Complete | `nicegui_app/pages/assistant.py` |
+| Calendar Date Verification | ✅ Complete | `get_calendar_info()` tool |
+| Policy Knowledge Rules | ✅ Complete | System prompt with RAG enforcement |
+
+### Key Features
+- [x] Human-in-the-loop confirmation before any write operation
+- [x] RAG corpus with policy documents boosted for accurate answers
+- [x] Calendar verification tool to prevent date hallucination
+- [x] Bottom-positioned confirmation dialog popup
+- [x] Critical Knowledge Rules enforcing RAG searches for policy questions
 
 ---
 

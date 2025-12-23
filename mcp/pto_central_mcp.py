@@ -18,6 +18,7 @@ Tool Phases:
 
 import json
 import logging
+import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,21 @@ import time
 _rate_limits: Dict[str, List[float]] = {}
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX_CALLS = 30  # max calls per window
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: SAFETY GATE - Human-in-the-Loop Confirmation System
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Pending confirmation tokens (in production, use Redis or database)
+_pending_confirmations: Dict[str, Dict[str, Any]] = {}
+CONFIRMATION_TOKEN_EXPIRY_SECONDS = 300  # 5 minutes
+
+# Valid action types that can be confirmed
+VALID_CONFIRMATION_ACTIONS = frozenset({
+    "submit_pto_request",
+    "cancel_pto_request",
+    "approve_pto_request"
+})
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +56,71 @@ class RateLimitError(Exception):
 class ConfirmationRequiredError(Exception):
     """Raised when write operation requires confirmation."""
     pass
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SAFETY GATE HELPER FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _validate_confirmation_token(token: Optional[str], action_type: str) -> bool:
+    """
+    Validate a confirmation token for a write operation.
+
+    This is the critical security gate that ensures:
+    1. A token was provided (not None or empty)
+    2. The token exists in our pending confirmations
+    3. The token has not expired (5-minute window)
+    4. The token matches the requested action type
+    5. The token is consumed (single-use)
+
+    Args:
+        token: The confirmation token to validate
+        action_type: The action type being performed (must match token's action)
+
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    # Check token provided
+    if not token:
+        logger.warning(f"Safety Gate BLOCKED: No confirmation token for {action_type}")
+        return False
+
+    # Check token exists
+    if token not in _pending_confirmations:
+        logger.warning(f"Safety Gate BLOCKED: Unknown token for {action_type}")
+        return False
+
+    conf = _pending_confirmations[token]
+
+    # Check expiry
+    if time.time() > conf["expires"]:
+        logger.warning(f"Safety Gate BLOCKED: Expired token for {action_type}")
+        del _pending_confirmations[token]
+        return False
+
+    # Check action type matches
+    if conf["action_type"] != action_type:
+        logger.warning(
+            f"Safety Gate BLOCKED: Token action mismatch. "
+            f"Expected {action_type}, got {conf['action_type']}"
+        )
+        return False
+
+    # Token is single-use - consume it
+    logger.info(f"Safety Gate PASSED: Token validated for {action_type}")
+    del _pending_confirmations[token]
+    return True
+
+
+def _cleanup_expired_tokens():
+    """Remove expired tokens from pending confirmations."""
+    now = time.time()
+    expired = [
+        token for token, conf in _pending_confirmations.items()
+        if now > conf["expires"]
+    ]
+    for token in expired:
+        del _pending_confirmations[token]
 
 
 def rate_limit(tool_name: str):
@@ -100,6 +181,87 @@ def json_serializer(obj):
     if isinstance(obj, Decimal):
         return float(obj)
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: CONFIRMATION TOOL (Human-in-the-Loop Gate)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rate_limit("confirm_action")
+def confirm_action(
+    action_type: str,
+    action_summary: str,
+    user_id: int
+) -> Dict[str, Any]:
+    """
+    Request human confirmation before executing a write action.
+
+    This is the REQUIRED first step before any write operation.
+    Returns a confirmation token that expires in 5 minutes.
+
+    The AI assistant should:
+    1. Call this tool with action details
+    2. Present the summary to the user
+    3. Wait for explicit user confirmation
+    4. Use the token in the subsequent write call
+
+    CRITICAL: Without a valid token from this function, ALL write
+    operations will be rejected. This ensures human-in-the-loop control.
+
+    Args:
+        action_type: One of: submit_pto_request, cancel_pto_request, approve_pto_request
+        action_summary: Human-readable summary of what will happen
+        user_id: The user who must confirm
+
+    Returns:
+        dict with confirmation_token and expiry
+    """
+    # Validate action type
+    if action_type not in VALID_CONFIRMATION_ACTIONS:
+        return {
+            "success": False,
+            "error": f"Invalid action type '{action_type}'. Must be one of: {list(VALID_CONFIRMATION_ACTIONS)}"
+        }
+
+    # Cleanup any expired tokens first
+    _cleanup_expired_tokens()
+
+    # Generate secure token
+    token = secrets.token_urlsafe(32)
+    expiry = time.time() + CONFIRMATION_TOKEN_EXPIRY_SECONDS
+
+    # Store the pending confirmation
+    _pending_confirmations[token] = {
+        "action_type": action_type,
+        "user_id": user_id,
+        "summary": action_summary,
+        "expires": expiry,
+        "created": time.time()
+    }
+
+    logger.info(
+        f"Safety Gate: Confirmation requested for {action_type} by user {user_id}. "
+        f"Token expires in {CONFIRMATION_TOKEN_EXPIRY_SECONDS}s"
+    )
+
+    # Audit log the confirmation request
+    audit_log("confirm_action", {
+        "action_type": action_type,
+        "user_id": user_id,
+        "summary": action_summary[:100]
+    }, "token_generated")
+
+    return {
+        "success": True,
+        "confirmation_token": token,
+        "expires_in_seconds": CONFIRMATION_TOKEN_EXPIRY_SECONDS,
+        "action_summary": action_summary,
+        "instruction": (
+            "IMPORTANT: Present this summary to the user. "
+            "Only proceed with the write operation if they explicitly confirm. "
+            "The token expires in 5 minutes and can only be used once."
+        )
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -402,6 +564,57 @@ def get_holidays(year: Optional[int] = None) -> List[Dict[str, Any]]:
         db.close()
 
 
+@rate_limit("get_calendar_info")
+def get_calendar_info(date_str: str) -> Dict[str, Any]:
+    """
+    Get calendar information for a specific date.
+
+    IMPORTANT: Use this tool to verify day-of-week before making date claims.
+    LLMs are prone to calendar hallucinations - always verify dates!
+
+    Args:
+        date_str: Date in YYYY-MM-DD format
+
+    Returns:
+        Dict with day_of_week, is_weekend, is_weekday, and surrounding dates
+    """
+    from datetime import datetime as dt
+
+    try:
+        target_date = dt.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": f"Invalid date format: {date_str}. Use YYYY-MM-DD."}
+
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    day_of_week = target_date.weekday()  # 0=Monday, 6=Sunday
+
+    # Calculate surrounding dates for context
+    dates_context = []
+    for offset in range(-3, 4):  # 3 days before and after
+        d = target_date + timedelta(days=offset)
+        dates_context.append({
+            "date": d.isoformat(),
+            "day_name": day_names[d.weekday()],
+            "is_target": offset == 0
+        })
+
+    result = {
+        "date": target_date.isoformat(),
+        "day_of_week": day_names[day_of_week],
+        "day_number": day_of_week,  # 0=Monday, 6=Sunday
+        "is_weekend": day_of_week >= 5,
+        "is_weekday": day_of_week < 5,
+        "week_number": target_date.isocalendar()[1],
+        "year": target_date.year,
+        "month": target_date.month,
+        "day": target_date.day,
+        "surrounding_dates": dates_context
+    }
+
+    audit_log("get_calendar_info", {"date": date_str}, result["day_of_week"])
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PHASE 4.2: ANALYSIS TOOLS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -682,44 +895,184 @@ def validate_request(
         db.close()
 
 
-# NOTE: submit_request and approve_request are DISABLED by default
-# They require explicit enablement and confirmation flow
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: WRITE TOOLS (Require Safety Gate Confirmation)
+# ═══════════════════════════════════════════════════════════════════════════
 
-def submit_request_with_confirmation(
-    employee_id: int,
+@rate_limit("submit_pto_request")
+def submit_pto_request(
+    user_id: int,
     pto_type: str,
     start_date: str,
     end_date: str,
-    notes: Optional[str] = None,
+    notes: str = "",
     confirmation_token: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Submit a PTO request (requires confirmation).
+    Submit a new PTO request on behalf of a user.
 
-    This tool is DISABLED by default and requires:
-    1. Explicit enablement in MCP config
-    2. A valid confirmation token from the user
+    REQUIRES confirmation_token from prior confirm_action call.
+    This ensures human-in-the-loop approval before any write operation.
+
+    CRITICAL: The first line of this function validates the confirmation token.
+    If validation fails, the request is REJECTED immediately.
 
     Args:
-        employee_id: The employee's user ID
-        pto_type: Type of leave
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
-        notes: Optional notes
-        confirmation_token: Required confirmation token
+        user_id: Employee ID submitting the request
+        pto_type: One of: vacation, sick, personal, chicago_paid_leave, bereavement, jury_duty
+        start_date: Start date (YYYY-MM-DD format)
+        end_date: End date (YYYY-MM-DD format)
+        notes: Optional notes for the request
+        confirmation_token: REQUIRED - Token from confirm_action call
 
     Returns:
-        Submission result or confirmation required error
+        dict with request_id, status, and validation results
     """
-    if not confirmation_token:
-        raise ConfirmationRequiredError(
-            "PTO request submission requires user confirmation. "
-            "Please confirm this action in the UI before proceeding."
+    # ═══════════════════════════════════════════════════════════════════
+    # SAFETY GATE CHECK - THIS MUST BE THE FIRST VALIDATION
+    # ═══════════════════════════════════════════════════════════════════
+    if not _validate_confirmation_token(confirmation_token, "submit_pto_request"):
+        return {
+            "success": False,
+            "error": "Invalid or expired confirmation token. Call confirm_action first.",
+            "action_required": "confirm_action",
+            "hint": "You must call confirm_action to get a token before submitting a PTO request."
+        }
+    # ═══════════════════════════════════════════════════════════════════
+
+    from src.database import get_db
+    from src.services.pto_service import PTOService
+    from src.services.balance_service import BalanceService
+    from src.services.policy_engine import PolicyEngine, HARD_CAP_TYPES
+    from src.services.audit_service import AuditService
+    from src.schemas.pto_schemas import PTORequestCreate
+    from src.utils.working_days import count_working_days
+    from datetime import datetime as dt
+
+    # Parse dates
+    try:
+        start = dt.strptime(start_date, "%Y-%m-%d").date()
+        end = dt.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError as e:
+        return {
+            "success": False,
+            "error": f"Invalid date format. Use YYYY-MM-DD. Details: {str(e)}"
+        }
+
+    db = next(get_db())
+    try:
+        # Pre-validate using PolicyEngine
+        engine = PolicyEngine(db)
+        date_result = engine.validate_request_dates(start, end, pto_type)
+
+        if not date_result.is_valid:
+            return {
+                "success": False,
+                "validation_errors": [date_result.rejection_reason],
+                "suggestions": ["Check the date range and try again"]
+            }
+
+        # Calculate working days and hours
+        working_days = count_working_days(start, end)
+        hours = Decimal(str(working_days * 8))
+
+        # Check balance for hard-cap types
+        balance_service = BalanceService(db)
+        balance = balance_service.get_or_create_balance(user_id, start.year)
+
+        available_map = {
+            "vacation": balance.vacation_available,
+            "sick": balance.sick_available,
+            "personal": balance.personal_available,
+            "chicago_paid_leave": getattr(balance, 'chicago_paid_leave_available', Decimal('0'))
+        }
+        available = float(available_map.get(pto_type.lower(), Decimal('999')))
+
+        if pto_type.lower() in HARD_CAP_TYPES and float(hours) > available:
+            return {
+                "success": False,
+                "validation_errors": [
+                    f"Insufficient {pto_type} balance. "
+                    f"Available: {available}h, Requested: {float(hours)}h"
+                ],
+                "available_balance": available,
+                "requested_hours": float(hours)
+            }
+
+        # Create the request using existing service
+        request_data = PTORequestCreate(
+            user_id=user_id,
+            pto_type=pto_type,
+            start_date=start,
+            end_date=end,
+            total_days=Decimal(str(working_days)),
+            notes=f"[AI-Submitted via MCP] {notes}" if notes else "[AI-Submitted via MCP]"
         )
 
-    # Actual implementation would go here
-    # For Phase 4, this is intentionally disabled
-    return {"error": "Write operations disabled in Phase 4.1-4.2"}
+        pto_service = PTOService(db)
+        request = pto_service.create_request(request_data)
+
+        # Audit log the AI submission
+        AuditService.log(
+            db=db,
+            action="mcp_submit_pto_request",
+            user_id=user_id,
+            username="mcp_agent",
+            details=json.dumps({
+                "request_id": request.id,
+                "pto_type": pto_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "working_days": working_days,
+                "hours": float(hours),
+                "status": request.status,
+                "submitted_via": "MCP_SAFETY_GATE"
+            })
+        )
+
+        logger.info(
+            f"MCP: PTO request {request.id} created for user {user_id}. "
+            f"Type: {pto_type}, Days: {working_days}, Status: {request.status}"
+        )
+
+        # Calculate projected balance after this request
+        projected_balance = available - float(hours)
+
+        return {
+            "success": True,
+            "request_id": request.id,
+            "status": request.status,
+            "pto_type": pto_type,
+            "start_date": start_date,
+            "end_date": end_date,
+            "working_days": working_days,
+            "hours_requested": float(hours),
+            "previous_balance": available,
+            "projected_balance_after": max(0, projected_balance),
+            "requires_approval": request.status == "pending",
+            "message": (
+                f"PTO request submitted successfully. "
+                f"{'Awaiting manager approval.' if request.status == 'pending' else 'Auto-approved.'}"
+            )
+        }
+
+    except ValueError as e:
+        # Business rule violation from PTOService
+        logger.warning(f"MCP submit_pto_request validation error: {e}")
+        return {
+            "success": False,
+            "validation_errors": [str(e)],
+            "suggestions": ["Review the error and adjust your request"]
+        }
+    except Exception as e:
+        logger.error(f"MCP submit_pto_request unexpected error: {e}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}",
+            "hint": "Please try again or contact support"
+        }
+    finally:
+        db.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -773,18 +1126,27 @@ MCP_TOOLS = {
         "enabled": True
     },
 
-    # Phase 4.3: Write tools (disabled by default)
+    # Phase 4.3: Write tools (validation only)
     "validate_request": {
         "handler": validate_request,
         "description": "Validate PTO request (dry-run)",
         "phase": "4.3",
         "enabled": True  # Validation is safe
     },
-    "submit_request": {
-        "handler": submit_request_with_confirmation,
-        "description": "Submit PTO request (requires confirmation)",
-        "phase": "4.3",
-        "enabled": False  # Disabled until Phase 4.3 approval
+
+    # Phase 5: Write tools with Safety Gate
+    "confirm_action": {
+        "handler": confirm_action,
+        "description": "Request human confirmation before write operations (REQUIRED for all writes)",
+        "phase": "5.0",
+        "enabled": True
+    },
+    "submit_pto_request": {
+        "handler": submit_pto_request,
+        "description": "Submit PTO request (requires confirmation_token from confirm_action)",
+        "phase": "5.0",
+        "enabled": True,
+        "requires_confirmation": True
     }
 }
 

@@ -136,8 +136,18 @@ def query_rag_corpus(natural_language_query: str) -> Dict[str, Any]:
 
         # Simple keyword matching (replace with embeddings for production)
         scored_chunks = []
+
+        # Define high-priority source files for policy questions
+        policy_sources = [
+            'business-rules.md',
+            'wfh-swap-rules.md',
+            'formulalogic.md',
+            'protected-logic.md'
+        ]
+
         for chunk in chunks:
             content_lower = chunk['content'].lower()
+            source_file = chunk['metadata'].get('source_file', '')
 
             # Calculate relevance score
             score = 0
@@ -151,9 +161,24 @@ def query_rag_corpus(natural_language_query: str) -> Dict[str, Any]:
                 if len(term) > 2:  # Skip very short terms
                     score += content_lower.count(term)
 
-            # Boost based on category
-            if chunk['metadata'].get('category') == 'policy':
+            # Boost based on category (fix: check for 'Policy' prefix, not exact 'policy')
+            category = chunk['metadata'].get('category', '')
+            if category.startswith('Policy'):
+                score *= 2.0  # Strong boost for policy documents
+
+            # Boost for core policy source files
+            for policy_src in policy_sources:
+                if policy_src in source_file:
+                    score *= 2.5  # Even stronger boost for core handbook rules
+                    break
+
+            # Boost for skills knowledge files (contain structured policy info)
+            if 'skills/' in source_file and '/references/' in source_file:
                 score *= 1.5
+
+            # Penalize scenario transcripts (noisy, not authoritative)
+            if 'scenario' in source_file.lower() or 'transcript' in content_lower[:100]:
+                score *= 0.3
 
             if score > 0:
                 scored_chunks.append({
@@ -423,6 +448,12 @@ def verify_policy_parity(policy_domain: str) -> Dict[str, Any]:
                 "rule_keywords": ["available", "total", "carryover", "used", "pending"],
                 "implementation_keywords": ["vacation_available", "sick_available", "personal_available"],
                 "implementation_file": "src/models/pto_balance.py"
+            },
+            "wfh swap": {
+                "rule_keywords": ["peer-to-peer", "no manager approval", "wfh_swap_eligible", "weekly limit"],
+                "implementation_keywords": ["peer-to-peer", "no manager approval", "wfh_swap_eligible", "one swap per week"],
+                "implementation_file": "src/services/wfh_swap_service.py",
+                "policy_file": ".claude/rules/wfh-swap-rules.md"
             }
         }
 
@@ -449,8 +480,9 @@ def verify_policy_parity(policy_domain: str) -> Dict[str, Any]:
 
         check_config = policy_checks[matched_domain]
 
-        # Read business rules (policy)
-        with open(BUSINESS_RULES_PATH, 'r', encoding='utf-8') as f:
+        # Read policy rules (use custom policy_file if specified, else default)
+        policy_path = PROJECT_ROOT / check_config.get("policy_file", ".claude/rules/business-rules.md")
+        with open(policy_path, 'r', encoding='utf-8') as f:
             rules_content = f.read().lower()
 
         # Read implementation
@@ -499,7 +531,7 @@ def verify_policy_parity(policy_domain: str) -> Dict[str, Any]:
             "policy_domain": matched_domain,
             "explanation": explanation,
             "details": {
-                "policy_file": ".claude/rules/business-rules.md",
+                "policy_file": check_config.get("policy_file", ".claude/rules/business-rules.md"),
                 "implementation_file": check_config["implementation_file"],
                 "rule_coverage": f"{rule_coverage*100:.0f}%",
                 "implementation_coverage": f"{impl_coverage*100:.0f}%",

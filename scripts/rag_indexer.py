@@ -55,12 +55,20 @@ def get_allowed_files(manifest: Dict[str, Any]) -> List[Path]:
         matches = list(PROJECT_ROOT.glob(pattern))
         allowed_files.extend(matches)
 
+    # Skills Knowledge (glob pattern)
+    for pattern in manifest['allow'].get('skills_knowledge', []):
+        matches = list(PROJECT_ROOT.glob(pattern))
+        allowed_files.extend(matches)
+        if matches:
+            print(f"  Skills: {len(matches)} files from {pattern}")
+
     return allowed_files
 
 
 def is_denied(filepath: Path, manifest: Dict[str, Any]) -> bool:
     """Check if a file is in the deny list."""
-    rel_path = str(filepath.relative_to(PROJECT_ROOT))
+    # Normalize to forward slashes for cross-platform pattern matching
+    rel_path = str(filepath.relative_to(PROJECT_ROOT)).replace('\\', '/')
 
     for category, patterns in manifest['deny'].items():
         for pattern in patterns:
@@ -147,22 +155,56 @@ def determine_strategy(filepath: Path, manifest: Dict[str, Any]) -> str:
 
 def create_chunk_metadata(filepath: Path, chunk: Dict[str, Any], manifest: Dict[str, Any]) -> Dict[str, Any]:
     """Create metadata for a chunk."""
-    rel_path = str(filepath.relative_to(PROJECT_ROOT))
+    rel_path = str(filepath.relative_to(PROJECT_ROOT)).replace('\\', '/')
 
-    # Determine category
-    if 'data/help' in rel_path:
-        category = 'help'
+    # Directory-based category mapping
+    HELP_CATEGORY_MAP = {
+        'getting-started': 'Getting Started',
+        'pto-requests': 'PTO Request Guide',
+        'managers': 'Manager Guide',
+        'admin': 'Admin Guide',
+        'calendar': 'Calendar Guide',
+        'technical': 'Technical Docs',
+        'wfh-swap': 'WFH Swap Guide',
+        'carryover': 'Carryover Guide',
+        'reports': 'Reports Guide',
+    }
+
+    # Skills category mapping
+    SKILLS_CATEGORY_MAP = {
+        'pto-central-development': 'PTO Development Skill',
+        'pto-policy-validator': 'Policy Validator Skill',
+        'pto-agent-orchestrator': 'Agent Orchestrator Skill',
+    }
+
+    # Determine category based on path
+    if 'skills/' in rel_path:
+        # Extract skill name from path like "skills/pto-central-development/SKILL.md"
         parts = rel_path.split('/')
-        subcategory = parts[2] if len(parts) > 2 else 'general'
+        if len(parts) >= 2:
+            skill_name = parts[1]  # e.g., "pto-central-development"
+            category = SKILLS_CATEGORY_MAP.get(skill_name, 'Skills Knowledge')
+        else:
+            category = 'Skills Knowledge'
+        subcategory = 'skills'
+    elif 'data/help/' in rel_path:
+        # Extract subdirectory from path like "data/help/getting-started/file.md"
+        parts = rel_path.split('/')
+        if len(parts) >= 3:
+            subdir = parts[2]  # e.g., "getting-started"
+            category = HELP_CATEGORY_MAP.get(subdir, 'General Help')
+        else:
+            category = 'General Help'
+        subcategory = 'help'
     elif '.claude/rules' in rel_path:
-        category = 'policy'
-        subcategory = 'rules'
+        category = 'Policy Rules'
+        subcategory = 'governance'
     elif 'task/' in rel_path:
-        category = 'policy'
-        subcategory = 'formulas'
+        category = 'Policy Formulas'
+        subcategory = 'math'
     else:
-        category = 'unknown'
-        subcategory = 'unknown'
+        category = 'General Help'
+        subcategory = 'other'
 
     # Get topic from filename
     topic = filepath.stem
@@ -217,19 +259,23 @@ def run_indexer():
     print(f"  Found {len(allowed_files)} allowed files")
     print()
 
-    # Validate no denied files
-    print("Validating against DENY list...")
+    # Filter out denied files
+    print("Filtering against DENY list...")
+    filtered_files = []
     denied_count = 0
     for f in allowed_files:
         if is_denied(f, manifest):
-            print(f"  BLOCKED: {f}")
+            print(f"  SKIPPED: {f.name}")
             denied_count += 1
+        else:
+            filtered_files.append(f)
 
     if denied_count > 0:
-        print(f"  ERROR: {denied_count} denied files found in allowed list!")
-        return None
-    print("  OK: No denied files in allowed list")
+        print(f"  Filtered out {denied_count} file(s) matching deny patterns")
+    else:
+        print("  No files matched deny patterns")
     print()
+    allowed_files = filtered_files
 
     # Process files and create chunks
     print("Creating chunks from Safe Corpus...")

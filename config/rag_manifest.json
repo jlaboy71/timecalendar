@@ -8,13 +8,17 @@
   "allow": {
     "policy_core": [
       ".claude/rules/business-rules.md",
-      ".claude/rules/wfh-swap-rules.md"
+      ".claude/rules/wfh-swap-rules.md",
+      ".claude/rules/protected-logic.md"
     ],
     "math_invariants": [
       "task/formulalogic.md"
     ],
     "user_documentation": [
       "data/help/**/*.md"
+    ],
+    "skills_knowledge": [
+      "skills/**/*.md"
     ]
   },
 
@@ -54,6 +58,9 @@
       ".claude/settings*.json",
       "*.log",
       "*.tmp"
+    ],
+    "noisy_content": [
+      "data/help/scenarios/**"
     ]
   },
 
