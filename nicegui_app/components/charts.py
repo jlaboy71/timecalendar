@@ -1,5 +1,5 @@
 """
-Chart components for TJM Time Calendar Analytics Dashboard.
+Chart components for PTO Central Analytics Dashboard.
 Uses Plotly for interactive visualizations integrated with NiceGUI.
 """
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database restore script for TJM Time Calendar.
+Database restore script for PTO Central.
 
 Restores the SQLite database from a backup file.
 
@@ -25,7 +25,7 @@ def get_db_path() -> Path:
     from dotenv import load_dotenv
     load_dotenv()
 
-    db_url = os.getenv('DATABASE_URL', 'sqlite:///tjm_calendar.db')
+    db_url = os.getenv('DATABASE_URL', 'sqlite:///pto_central.db')
 
     if not db_url.startswith('sqlite:///'):
         print("Error: Restore script only supports SQLite databases")
@@ -44,7 +44,7 @@ def get_db_path() -> Path:
 def list_backups(backup_dir: Path):
     """List all available backups."""
     backups = sorted(
-        backup_dir.glob("tjm_calendar_backup_*.db"),
+        backup_dir.glob("pto_central_backup_*.db"),
         key=lambda p: p.stat().st_mtime,
         reverse=True
     )
@@ -84,7 +84,7 @@ def restore_backup(backup_path: Path, db_path: Path, create_safety_backup: bool 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Restore TJM Time Calendar database")
+    parser = argparse.ArgumentParser(description="Restore PTO Central database")
     parser.add_argument(
         'backup_file',
         type=str,

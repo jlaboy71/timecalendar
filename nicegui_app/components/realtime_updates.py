@@ -1,5 +1,5 @@
 """
-Real-time update utilities for TJM Time Calendar.
+Real-time update utilities for PTO Central.
 Provides automatic page refresh when PTO request statuses change.
 """
 from nicegui import ui, app

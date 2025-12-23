@@ -237,7 +237,7 @@ def render_current_version_panel(current_user):
                                 filter_sections(search_input.value)
                             return handler
 
-                        # Tile-style card for each section - TJM Gold accent
+                        # Tile-style card for each section - Brand Gold accent
                         tile_style = f'border: 2px solid {PTO_GOLD}; background: rgba(201,162,39,0.15);' if is_selected else 'border: 1px solid rgba(255,255,255,0.1);'
                         with ui.card().classes('w-full cursor-pointer p-2').style(tile_style).on('click', create_click_handler(section)):
                             with ui.row().classes('items-center gap-2'):
@@ -347,7 +347,7 @@ def update_content_display(section: dict, content_display: dict):
             break
 
     with content_display['element']:
-        # Header with TJM Gold accent
+        # Header with Brand Gold accent
         with ui.card().classes('w-full mb-4 p-4').style(f'border-left: 4px solid {PTO_GOLD}; background: rgba(201,162,39,0.1);'):
             with ui.row().classes('items-center gap-3'):
                 ui.icon(icon_name, size='lg').style(f'color: {PTO_GOLD};')

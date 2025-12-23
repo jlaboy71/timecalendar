@@ -1,7 +1,7 @@
 # Database Schema & Models
 
 ## Database
-- SQLite file: `tjm_calendar.db`
+- SQLite file: `pto_central.db`
 - ORM: SQLAlchemy 2.0
 - Migrations: Alembic
 

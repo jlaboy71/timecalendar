@@ -35,7 +35,7 @@ def login_page(timeout: str = None):
             error_message = ui.label('').classes('text-red-500 text-sm mb-4')
             error_message.set_visibility(False)
 
-            # Login button (TJM Gold gradient)
+            # Login button (Brand Gold gradient)
             login_btn = ui.button('Login', on_click=lambda: authenticate(username_input, password_input, error_message, login_btn)).classes('w-full btn-gold mb-4')
 
             # Support Enter key to submit login form

@@ -907,7 +907,7 @@ def dashboard_page():
                 if recent_requests or team_approved_requests:
                     # Hex colors for inline styling (icon + text)
                     type_hex_colors = {
-                        'all': '#C9A227',  # TJM Gold
+                        'all': '#C9A227',  # Brand Gold
                         'vacation': '#3b82f6',  # Blue
                         'sick': '#22c55e',  # Green
                         'personal': '#a855f7',  # Purple
@@ -1587,7 +1587,7 @@ def show_employee_pto_history(employee_id: int, employee_name: str, default_year
 
         # Create dialog
         with ui.dialog() as history_dialog, ui.card().classes('w-full max-w-4xl p-0'):
-            # Header - using TJM gray for better readability
+            # Header - using brand gray for better readability
             with ui.row().classes('w-full justify-between items-center p-4 text-white').style('background-color: #5a6a72;'):
                 with ui.column().classes('gap-0'):
                     ui.label(employee_name).classes('text-xl font-bold')

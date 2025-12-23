@@ -34,7 +34,7 @@ def admin_year_end_page():
                 ui.label('Purpose & Overview').classes('text-lg font-bold text-blue-700 dark:text-blue-300 mb-2')
 
                 ui.markdown('''
-Year-end processing is an **automatic system** that prepares the TJM Time Calendar for each new calendar year.
+Year-end processing is an **automatic system** that prepares PTO Central for each new calendar year.
 It runs **once per year**, triggered by the first user login after January 1st.
 
 **Why is this needed?**

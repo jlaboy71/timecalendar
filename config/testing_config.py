@@ -65,7 +65,7 @@ class TestingConfig:
 
     base_url: str = field(default_factory=lambda: os.getenv(
         'PTO_BASE_URL',
-        'http://localhost:8080'  # No HTTPS - matches default app config
+        'https://localhost:8080'  # HTTPS enabled - matches app SSL config
     ))
 
     environment: Environment = field(default_factory=lambda: Environment(
@@ -77,13 +77,13 @@ class TestingConfig:
     # ═══════════════════════════════════════════════════════════════════════
 
     test_accounts: Dict[str, TestAccount] = field(default_factory=lambda: {
-        'ptouser': TestAccount(
-            username='ptouser',
+        'ptouser01': TestAccount(
+            username='ptouser01',
             password='2ez4me!!',
             role='employee',
             location='Chicago',
             location_code='CHI',
-            display_name='PTO User',
+            display_name='PTO User 01',
             description='Employee - Submits PTO requests',
             icon='person',
             color='blue'
@@ -109,6 +109,17 @@ class TestingConfig:
             description='Admin - System administration',
             icon='admin_panel_settings',
             color='orange'
+        ),
+        'netadmin': TestAccount(
+            username='netadmin',
+            password='netpass',
+            role='admin',
+            location='Chicago',
+            location_code='CHI',
+            display_name='Network Admin',
+            description='Super Admin - Full system access',
+            icon='security',
+            color='red'
         )
     })
 
@@ -139,20 +150,21 @@ class TestingConfig:
     # ═══════════════════════════════════════════════════════════════════════
 
     browser_type: str = 'chromium'
-    headless: bool = False  # Set True for CI/production
+    headless: bool = True  # Headless for reliable recording (no monitor size limits)
     slow_mo: int = 100  # Milliseconds between actions for visibility
     default_timeout: int = 30000  # 30 seconds
-    viewport_width: int = 1100  # Fits max-w-5xl (1024px) + padding
-    viewport_height: int = 1400  # Extra tall to capture full page content
+    viewport_width: int = 1920  # Full HD width - captures all app content
+    viewport_height: int = 1600  # Very tall to capture headers, dialogs, and full page content
     ignore_https_errors: bool = True  # Required for self-signed localhost certs
+    cursor_animation_enabled: bool = False  # Disable mouse cursor movement animation in recordings
 
     # ═══════════════════════════════════════════════════════════════════════
     # VIDEO SETTINGS
     # ═══════════════════════════════════════════════════════════════════════
 
     video_enabled: bool = True
-    video_width: int = 1100  # Match viewport
-    video_height: int = 1400  # Match viewport
+    video_width: int = 1920  # MUST match viewport_width to avoid letterboxing
+    video_height: int = 1600  # MUST match viewport_height - very tall for headers and dialogs
 
     # ═══════════════════════════════════════════════════════════════════════
     # AUDIO/TTS SETTINGS

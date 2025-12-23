@@ -38,10 +38,38 @@ class VideoEffect(Enum):
 try:
     from moviepy import ImageSequenceClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip
     from moviepy import ImageClip, VideoFileClip, CompositeAudioClip
+    from proglog import ProgressBarLogger
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
     print("Warning: MoviePy not available. Video production disabled.")
+
+
+class CallbackProgressLogger(ProgressBarLogger):
+    """
+    Custom proglog logger that forwards progress to a callback function.
+    This allows MoviePy's encoding progress to be displayed in the GUI.
+    """
+
+    def __init__(self, progress_callback: Optional[Callable[[float, str], None]] = None):
+        super().__init__()
+        self._progress_callback = progress_callback
+        self._last_percent = -1
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        """Called when progress bar updates - this is where we intercept progress"""
+        if attr == 'index' and hasattr(bar, 'total') and bar.total > 0:
+            percent = int((value / bar.total) * 100)
+            if percent != self._last_percent:
+                self._last_percent = percent
+                # Always print to terminal for visibility
+                print(f"\rEncoding: {percent}%", end='', flush=True)
+                # Forward to GUI callback if available
+                if self._progress_callback:
+                    try:
+                        self._progress_callback(percent / 100, f"Encoding: {percent}%")
+                    except Exception as e:
+                        print(f" (GUI update failed: {e})", end='')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1173,7 +1201,7 @@ class VideoProducer:
 
     def _create_title_card_simple(self, title: str, description: str = "", duration: float = 5.0) -> ImageClip:
         """Create a professional title card with PTO Central logo"""
-        width, height = 1280, 720  # Match 720p output
+        width, height = 1280, 1067  # Match 1920x1600 aspect ratio (1.2:1)
 
         img = Image.new('RGB', (width, height), (31, 41, 55))
         draw = ImageDraw.Draw(img)
@@ -1240,7 +1268,7 @@ class VideoProducer:
 
     def _create_outro_card_simple(self, duration: float = 5.0) -> ImageClip:
         """Create a professional outro card with PTO Central logo"""
-        width, height = 1280, 720  # Match 720p output
+        width, height = 1280, 1067  # Match 1920x1600 aspect ratio (1.2:1)
 
         img = Image.new('RGB', (width, height), (31, 41, 55))
         draw = ImageDraw.Draw(img)
@@ -1290,6 +1318,73 @@ class VideoProducer:
 
         return ImageClip(str(temp_path)).with_duration(duration)
 
+    def _draw_cursor_overlay(
+        self,
+        canvas: Image.Image,
+        element_bbox: Dict[str, float],
+        original_width: int,
+        original_height: int,
+        paste_x: int,
+        paste_y: int,
+        new_width: int,
+        new_height: int
+    ) -> Image.Image:
+        """
+        Draw a gold cursor overlay at the center of element_bbox.
+
+        Handles coordinate scaling from original screenshot size to resized/positioned canvas.
+
+        Args:
+            canvas: The PIL Image canvas to draw on
+            element_bbox: Dict with x, y, width, height from timeline
+            original_width: Original screenshot width (usually 1920)
+            original_height: Original screenshot height (usually 1080)
+            paste_x: X offset where screenshot was pasted on canvas
+            paste_y: Y offset where screenshot was pasted on canvas
+            new_width: Width of resized screenshot
+            new_height: Height of resized screenshot
+        """
+        if not element_bbox or element_bbox.get('x') is None:
+            return canvas
+
+        # Calculate scale factors from original to resized
+        scale_x = new_width / original_width
+        scale_y = new_height / original_height
+
+        # Calculate center of element in original coordinates
+        orig_center_x = element_bbox['x'] + element_bbox['width'] / 2
+        orig_center_y = element_bbox['y'] + element_bbox['height'] / 2
+
+        # Scale to resized coordinates and add paste offset
+        cursor_x = int(orig_center_x * scale_x) + paste_x
+        cursor_y = int(orig_center_y * scale_y) + paste_y
+
+        # Draw cursor (gold circle with glow effect)
+        draw = ImageDraw.Draw(canvas, 'RGBA')
+
+        # Cursor size (scaled proportionally)
+        cursor_radius = 15
+        glow_radius = 25
+
+        # Draw outer glow (semi-transparent gold)
+        for r in range(glow_radius, cursor_radius, -2):
+            alpha = int(100 * (glow_radius - r) / (glow_radius - cursor_radius))
+            draw.ellipse(
+                [cursor_x - r, cursor_y - r, cursor_x + r, cursor_y + r],
+                fill=(201, 162, 39, alpha)
+            )
+
+        # Draw main cursor circle (solid gold with white border)
+        draw.ellipse(
+            [cursor_x - cursor_radius, cursor_y - cursor_radius,
+             cursor_x + cursor_radius, cursor_y + cursor_radius],
+            fill=(201, 162, 39, 240),
+            outline=(255, 255, 255, 255),
+            width=3
+        )
+
+        return canvas
+
     def create_slideshow_from_timeline(
         self,
         timeline_path: Path,
@@ -1335,8 +1430,9 @@ class VideoProducer:
         if progress_callback:
             progress_callback(0.05, "Loading timeline...")
 
-        # 720p output for faster encoding
-        target_width, target_height = 1280, 720
+        # Output at 1280x1067 (matches 1920x1600 aspect ratio of 1.2:1)
+        # This avoids letterboxing while keeping reasonable file size
+        target_width, target_height = 1280, 1067
 
         # Build list of slide clips with audio
         slide_clips = []
@@ -1387,13 +1483,35 @@ class VideoProducer:
                 new_height = target_height
                 new_width = int(target_height * img_aspect)
 
+            # Store original dimensions before resize for coordinate scaling
+            original_width = screenshot_img.width
+            original_height = screenshot_img.height
+
             screenshot_img = screenshot_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             # Create canvas and paste centered
-            canvas = Image.new('RGB', (target_width, target_height), (31, 41, 55))
+            canvas = Image.new('RGBA', (target_width, target_height), (31, 41, 55, 255))
             paste_x = (target_width - new_width) // 2
             paste_y = (target_height - new_height) // 2
             canvas.paste(screenshot_img, (paste_x, paste_y))
+
+            # Draw cursor overlay at element_bbox position (syncs cursor with narration topic)
+            element_bbox = step.get('element_bbox')
+            if element_bbox:
+                canvas = self._draw_cursor_overlay(
+                    canvas=canvas,
+                    element_bbox=element_bbox,
+                    original_width=original_width,
+                    original_height=original_height,
+                    paste_x=paste_x,
+                    paste_y=paste_y,
+                    new_width=new_width,
+                    new_height=new_height
+                )
+                print(f"    → Cursor positioned at element ({element_bbox['x']:.0f}, {element_bbox['y']:.0f})")
+
+            # Convert RGBA to RGB for video encoding
+            canvas = canvas.convert('RGB')
 
             # Save processed slide
             slide_path = self.output_dir / f"_slide_{step_num:02d}.png"
@@ -1497,27 +1615,11 @@ class VideoProducer:
         print(f"Exporting to: {output_path}")
         print(f"Total duration: {final_video.duration:.1f}s")
 
-        # Custom progress logger for MoviePy
-        class ProgressLogger:
-            def __init__(self, callback, total_frames):
-                self.callback = callback
-                self.total_frames = total_frames
-                self.last_percent = 0
-
-            def bars_callback(self, bar, attr, value, old_value=None):
-                if attr == 'index' and self.total_frames > 0:
-                    percent = int((value / self.total_frames) * 100)
-                    if percent != self.last_percent:
-                        self.last_percent = percent
-                        if self.callback:
-                            self.callback(percent / 100, f"Encoding: {percent}%")
-                        print(f"\rEncoding: {percent}%", end='', flush=True)
-
-        # Calculate total frames
-        total_frames = int(final_video.duration * 24)  # 24 fps
-
         if progress_callback:
-            progress_callback(0.0, "Starting encoding...")
+            progress_callback(0.60, "Starting encoding...")
+
+        # Use custom progress logger to forward progress to GUI
+        custom_logger = CallbackProgressLogger(progress_callback) if progress_callback else 'bar'
 
         final_video.write_videofile(
             str(output_path),
@@ -1526,8 +1628,8 @@ class VideoProducer:
             audio_codec='aac',
             threads=4,
             preset='ultrafast',  # Fast encoding
-            bitrate='3000k',  # Good quality for 720p
-            logger='bar'  # Show progress bar in terminal
+            bitrate='3500k',  # Good quality for 1280x800
+            logger=custom_logger  # Forward progress to GUI callback
         )
         print()  # New line after encoding
 
@@ -1647,8 +1749,8 @@ class VideoProducer:
             video_with_audio = raw_video
             print("\nNo audio files found - using video only")
 
-        # Output at 720p for fast encoding
-        target_width, target_height = 1280, 720
+        # Output at 1280x1067 (matches 1920x1600 aspect ratio of 1.2:1)
+        target_width, target_height = 1280, 1067
 
         # Calculate scaling to fit target resolution
         scale_x = target_width / raw_video.size[0]
@@ -1722,8 +1824,8 @@ class VideoProducer:
         if progress_callback:
             progress_callback(0.60, "Encoding video (this may take a few minutes)...")
 
-        # Use ultrafast preset for quick encoding at 720p
-        print(f"\nEncoding video... (720p, ultrafast preset)")
+        # Use ultrafast preset for quick encoding
+        print(f"\nEncoding video... (1280x800, ultrafast preset)")
 
         final_video.write_videofile(
             str(output_path),
@@ -1732,7 +1834,7 @@ class VideoProducer:
             audio_codec='aac',
             threads=4,
             preset='ultrafast',  # Fastest encoding
-            bitrate='3000k',  # Good quality for 720p
+            bitrate='3500k',  # Good quality for 1280x800
             logger='bar'  # Always show progress bar in console
         )
 
@@ -1754,7 +1856,7 @@ class VideoProducer:
         print(f"Output: {output_path}")
         print(f"")
         print(f"VIDEO SPECIFICATIONS:")
-        print(f"  Resolution:  {target_width} x {target_height} (HD 720p)")
+        print(f"  Resolution:  {target_width} x {target_height}")
         print(f"  Frame Rate:  24 fps")
         print(f"  Bitrate:     3000 kbps")
         print(f"  Codec:       H.264 (libx264)")

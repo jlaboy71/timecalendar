@@ -418,7 +418,7 @@ def request_form_page(preselect_type: str = None):
                         toggle_btn.text = 'More Leave Types'
                         toggle_btn.props('icon=expand_more')
 
-                # Toggle button - styled with TJM gold accent
+                # Toggle button - styled with brand gold accent
                 with ui.row().classes('w-full justify-center mt-3'):
                     toggle_btn = ui.button(
                         'More Leave Types',

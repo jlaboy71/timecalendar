@@ -70,7 +70,7 @@ def setup_logging():
 
     # File handler (rotating, 5MB max, keep 5 backups)
     file_handler = logging.handlers.RotatingFileHandler(
-        log_dir / 'tjm_calendar.log',
+        log_dir / 'pto_central.log',
         maxBytes=5 * 1024 * 1024,  # 5MB
         backupCount=5,
         encoding='utf-8'
@@ -81,7 +81,7 @@ def setup_logging():
 
     # Error file handler (separate file for errors only)
     error_handler = logging.handlers.RotatingFileHandler(
-        log_dir / 'tjm_calendar_errors.log',
+        log_dir / 'pto_central_errors.log',
         maxBytes=5 * 1024 * 1024,
         backupCount=5,
         encoding='utf-8'

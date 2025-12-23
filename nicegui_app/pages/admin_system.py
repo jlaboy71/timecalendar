@@ -71,14 +71,14 @@ def admin_system_page():
             db_filename = db_url.replace('sqlite:///', '')
             db_path = Path(__file__).parent.parent.parent / db_filename
         else:
-            db_path = Path(__file__).parent.parent.parent / 'tjm_calendar.db'
+            db_path = Path(__file__).parent.parent.parent / 'pto_central.db'
         db_exists = db_path.exists()
         db_size = db_path.stat().st_size / (1024 * 1024) if db_exists else 0
 
         smtp_configured = os.getenv('SMTP_HOST') is not None
         ai_configured = os.getenv('ANTHROPIC_API_KEY') is not None
         logs_dir = Path(__file__).parent.parent.parent / 'logs'
-        has_errors = (logs_dir / 'tjm_calendar_errors.log').exists() and (logs_dir / 'tjm_calendar_errors.log').stat().st_size > 0
+        has_errors = (logs_dir / 'pto_central_errors.log').exists() and (logs_dir / 'pto_central_errors.log').stat().st_size > 0
 
         with ui.card().classes('w-full p-4 mb-4').style('background: linear-gradient(135deg, #1E2328 0%, #2a3036 100%); border-bottom: 2px solid #C9A227;'):
             with ui.row().classes('w-full items-center justify-between'):
@@ -1248,8 +1248,8 @@ def admin_system_page():
             # ========== SYSTEM TAB (Logs + Settings + Policy) ==========
             with ui.tab_panel(system_tab):
                 # Log file paths (reuse logs_dir from status overview)
-                main_log_path = logs_dir / 'tjm_calendar.log'
-                error_log_path = logs_dir / 'tjm_calendar_errors.log'
+                main_log_path = logs_dir / 'pto_central.log'
+                error_log_path = logs_dir / 'pto_central_errors.log'
 
                 # State for current log and AI analysis
                 # Options: 'main', 'errors', 'audit'

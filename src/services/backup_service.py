@@ -40,7 +40,7 @@ class BackupService:
         from dotenv import load_dotenv
         load_dotenv()
 
-        db_url = os.getenv('DATABASE_URL', 'sqlite:///tjm_calendar.db')
+        db_url = os.getenv('DATABASE_URL', 'sqlite:///pto_central.db')
 
         if not db_url.startswith('sqlite:///'):
             raise ValueError("Backup service only supports SQLite databases")
@@ -68,7 +68,7 @@ class BackupService:
             raise FileNotFoundError(f"Database file not found: {db_path}")
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_name = f"tjm_calendar_backup_{timestamp}.db"
+        backup_name = f"pto_central_backup_{timestamp}.db"
         backup_path = self.backup_dir / backup_name
 
         # Copy the database
@@ -101,7 +101,7 @@ class BackupService:
             List of backup info dictionaries
         """
         backups = sorted(
-            self.backup_dir.glob("tjm_calendar_backup_*.db"),
+            self.backup_dir.glob("pto_central_backup_*.db"),
             key=lambda p: p.stat().st_mtime,
             reverse=True
         )
@@ -217,7 +217,7 @@ class BackupService:
     def _cleanup_old_backups(self):
         """Delete old backups, keeping only the most recent N."""
         backups = sorted(
-            self.backup_dir.glob("tjm_calendar_backup_*.db"),
+            self.backup_dir.glob("pto_central_backup_*.db"),
             key=lambda p: p.stat().st_mtime,
             reverse=True
         )
@@ -270,7 +270,7 @@ class BackupService:
         else:
             # Sync the latest backup
             backups = sorted(
-                self.backup_dir.glob("tjm_calendar_backup_*.db"),
+                self.backup_dir.glob("pto_central_backup_*.db"),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True
             )

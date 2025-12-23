@@ -172,6 +172,8 @@ class PlaywrightEngine:
 
     def _run_in_thread(self, scenario: Scenario, account: TestAccount) -> ScenarioResult:
         """Run the scenario in a separate thread with its own Playwright instance"""
+        print(f"[PLAYWRIGHT] Starting scenario: {scenario.name}")
+        print(f"[PLAYWRIGHT] Account: {account.username}")
         self.config.ensure_directories()
 
         # Initialize result tracking
@@ -184,12 +186,44 @@ class PlaywrightEngine:
         )
 
         try:
+            print("[PLAYWRIGHT] Launching sync_playwright()...")
+            # ════════════════════════════════════════════════════════════════════
+            # DEBUG: Print ALL critical settings at runtime to verify configuration
+            # ════════════════════════════════════════════════════════════════════
+            print(f"\n{'='*60}")
+            print("PLAYWRIGHT CONFIGURATION (RUNTIME VALUES)")
+            print(f"{'='*60}")
+            print(f"  headless:        {self.config.headless}")
+            print(f"  viewport:        {self.config.viewport_width}x{self.config.viewport_height}")
+            print(f"  video_size:      {self.config.video_width}x{self.config.video_height}")
+            print(f"  video_enabled:   {self.config.video_enabled}")
+            print(f"  slow_mo:         {self.config.slow_mo}ms")
+            print(f"  base_url:        {self.config.base_url}")
+            print(f"{'='*60}\n")
+
+            if not self.config.headless:
+                print("⚠️  WARNING: headless=False - video may be clipped by monitor size!")
+                print("    Set headless=True in config/testing_config.py for reliable recording.")
+            # ════════════════════════════════════════════════════════════════════
+
             with sync_playwright() as playwright:
+                print("[PLAYWRIGHT] Playwright context created")
                 self.playwright = playwright
+                print(f"[PLAYWRIGHT] Launching chromium (headless={self.config.headless})...")
+                # CRITICAL: Set window-size to match viewport to prevent clipping
+                # In non-headless mode, the browser window must be at least as large as the viewport
+                # Add extra space for window chrome (title bar, borders) - ~100px typically
+                window_width = self.config.viewport_width + 16  # Side borders
+                window_height = self.config.viewport_height + 100  # Title bar + bottom border
                 self.browser = playwright.chromium.launch(
                     headless=self.config.headless,
-                    slow_mo=self.config.slow_mo
+                    slow_mo=self.config.slow_mo,
+                    args=[
+                        f'--window-size={window_width},{window_height}',
+                        '--window-position=0,0',  # Position at top-left to maximize usable space
+                    ]
                 )
+                print(f"[PLAYWRIGHT] Browser launched with window size {window_width}x{window_height}")
 
                 # Video recording setup
                 video_dir = None
@@ -217,8 +251,10 @@ class PlaywrightEngine:
                     }
 
                 self.context = self.browser.new_context(**context_options)
+                print(f"[PLAYWRIGHT] Context created with options: {context_options}")
                 self.page = self.context.new_page()
                 self.page.set_default_timeout(self.config.default_timeout)
+                print(f"[PLAYWRIGHT] Page created, viewport set to {self.config.viewport_width}x{self.config.viewport_height}")
 
                 # Store cursor script for injection after each navigation
                 self._cursor_script = """
@@ -264,16 +300,19 @@ class PlaywrightEngine:
                     })();
                 """
 
-                # Helper to inject cursor
+                # Helper to inject cursor (only if cursor animation is enabled)
                 def inject_cursor():
+                    if not self.config.cursor_animation_enabled:
+                        return
                     try:
                         self.page.evaluate(self._cursor_script)
                     except Exception as e:
                         print(f"[CURSOR] Injection failed: {e}")
 
-                # Inject on every navigation
-                self.page.on("load", lambda: inject_cursor())
-                self.page.on("domcontentloaded", lambda: inject_cursor())
+                # Inject on every navigation (only if enabled)
+                if self.config.cursor_animation_enabled:
+                    self.page.on("load", lambda: inject_cursor())
+                    self.page.on("domcontentloaded", lambda: inject_cursor())
 
                 # Login
                 login_success = self._login(account)
@@ -281,23 +320,25 @@ class PlaywrightEngine:
                     raise Exception(f"Failed to login as {account.username}")
 
                 # Explicitly inject cursor after login (dashboard is now loaded)
-                time.sleep(1)  # Wait for page to stabilize
-                inject_cursor()
+                if self.config.cursor_animation_enabled:
+                    time.sleep(1)  # Wait for page to stabilize
+                    inject_cursor()
 
-                # Verify cursor was injected
-                cursor_exists = self.page.evaluate("!!document.getElementById('pw-cursor')")
-                print(f"[CURSOR] Injection verified: {cursor_exists}")
+                    # Verify cursor was injected
+                    cursor_exists = self.page.evaluate("!!document.getElementById('pw-cursor')")
+                    print(f"[CURSOR] Injection verified: {cursor_exists}")
 
                 # Activate cursor by moving mouse to center of viewport
                 # This triggers the mousemove listener and makes cursor visible
-                try:
-                    center_x = self.config.viewport_width / 2
-                    center_y = self.config.viewport_height / 2
-                    self.page.mouse.move(center_x, center_y, steps=20)
-                    time.sleep(0.5)  # Let cursor settle
-                    print(f"[CURSOR] Mouse moved to center ({center_x}, {center_y})")
-                except Exception as e:
-                    print(f"[CURSOR] Mouse move failed: {e}")
+                if self.config.cursor_animation_enabled:
+                    try:
+                        center_x = self.config.viewport_width / 2
+                        center_y = self.config.viewport_height / 2
+                        self.page.mouse.move(center_x, center_y, steps=20)
+                        time.sleep(0.5)  # Let cursor settle
+                        print(f"[CURSOR] Mouse moved to center ({center_x}, {center_y})")
+                    except Exception as e:
+                        print(f"[CURSOR] Mouse move failed: {e}")
 
                 # Record scenario start time
                 self._scenario_start_time = time.time()
@@ -327,6 +368,9 @@ class PlaywrightEngine:
                 self.browser.close()
 
         except Exception as e:
+            import traceback
+            error_detail = f"{str(e)}\n{traceback.format_exc()}"
+            print(f"[PLAYWRIGHT ERROR] {error_detail}")
             self._current_result.success = False
             self._current_result.error_message = str(e)
             self._current_result.completed_at = datetime.now()
@@ -341,49 +385,61 @@ class PlaywrightEngine:
         """Log into the application with the given account."""
         try:
             # Navigate to the login page with longer timeout
-            print(f"Navigating to {self.config.base_url}...")
+            print(f"[LOGIN] Navigating to {self.config.base_url}...")
             self.page.goto(self.config.base_url, wait_until='domcontentloaded', timeout=60000)
+            print(f"[LOGIN] Navigation complete, URL: {self.page.url}")
 
             # Wait a moment for NiceGUI to initialize
-            time.sleep(2)
+            print("[LOGIN] Waiting for NiceGUI to initialize...")
+            time.sleep(3)
 
-            # Wait for login form to be visible
-            print("Waiting for login form...")
+            # Wait for login form to be visible - use Quasar input selector
+            # NiceGUI/Quasar inputs have class q-field__native
+            print("[LOGIN] Waiting for login form...")
             self.page.wait_for_selector(
-                'input[type="text"], input[name="username"], input[placeholder*="user" i]',
-                timeout=15000
+                '.q-field__native, input[type="text"], input[aria-label*="user" i]',
+                timeout=20000
             )
+            print("[LOGIN] Login form found")
 
-            # Fill username
-            print(f"Filling username: {account.username}")
-            username_input = self.page.locator(
-                'input[type="text"], input[name="username"], input[placeholder*="user" i]'
-            ).first
+            # Fill username - Quasar inputs are the first q-field__native element
+            print(f"[LOGIN] Filling username: {account.username}")
+            username_input = self.page.locator('.q-field__native').first
             username_input.fill(account.username)
+            print("[LOGIN] Username filled")
 
-            # Fill password
-            print("Filling password...")
-            password_input = self.page.locator('input[type="password"]').first
+            # Fill password - second q-field__native or type=password
+            print("[LOGIN] Filling password...")
+            password_input = self.page.locator('input[type="password"], .q-field__native >> nth=1').first
             password_input.fill(account.password)
+            print("[LOGIN] Password filled")
 
             # Click login button
-            print("Clicking login button...")
+            print("[LOGIN] Clicking login button...")
             login_button = self.page.locator(
-                'button[type="submit"], button:has-text("Login"), button:has-text("Sign In"), button:has-text("Log In")'
+                'button:has-text("Login"), button:has-text("Sign In"), button[type="submit"]'
             ).first
             login_button.click()
+            print("[LOGIN] Login button clicked")
 
             # Wait for navigation to complete
+            print("[LOGIN] Waiting for navigation...")
             self.page.wait_for_load_state('domcontentloaded', timeout=30000)
 
             # Brief wait for any redirects
             time.sleep(2)
-            print("Login completed successfully")
+            print(f"[LOGIN] Login completed successfully, URL: {self.page.url}")
 
             return True
 
         except Exception as e:
-            print(f"Login failed for {account.username}: {e}")
+            print(f"[LOGIN ERROR] Login failed for {account.username}: {e}")
+            # Try to capture current state for debugging
+            try:
+                print(f"[LOGIN ERROR] Current URL: {self.page.url}")
+                print(f"[LOGIN ERROR] Page title: {self.page.title()}")
+            except:
+                pass
             return False
 
     def _execute_step(self, step: ScenarioStep, step_number: int, scenario_id: str) -> StepResult:
@@ -437,19 +493,21 @@ class PlaywrightEngine:
                         self._focus_element(step.selector)
 
                     # Smooth mouse movement to element center (for visible cursor in video)
-                    try:
-                        locator = self.page.locator(step.selector).first
-                        if locator.count() > 0:
-                            bbox = locator.bounding_box()
-                            if bbox:
-                                # Calculate element center
-                                center_x = bbox['x'] + bbox['width'] / 2
-                                center_y = bbox['y'] + bbox['height'] / 2
-                                # Move mouse smoothly to center (50 interpolated steps)
-                                self.page.mouse.move(center_x, center_y, steps=50)
-                                time.sleep(0.3)  # Pause so viewer sees cursor arrive
-                    except Exception:
-                        pass  # Continue even if mouse move fails
+                    if self.config.cursor_animation_enabled:
+                        try:
+                            locator = self.page.locator(step.selector).first
+                            if locator.count() > 0:
+                                bbox = locator.bounding_box()
+                                if bbox:
+                                    # Calculate element center
+                                    center_x = bbox['x'] + bbox['width'] / 2
+                                    center_y = bbox['y'] + bbox['height'] / 2
+                                    # Move mouse smoothly to center (50 interpolated steps)
+                                    self.page.mouse.move(center_x, center_y, steps=50)
+                                    print(f"[CURSOR] → Click target ({center_x:.0f}, {center_y:.0f})")
+                                    time.sleep(0.3)  # Pause so viewer sees cursor arrive
+                        except Exception as e:
+                            print(f"[CURSOR] Mouse move failed: {e}")
 
                     self.page.click(step.selector)
                     time.sleep(1)  # Allow page to update
@@ -474,17 +532,19 @@ class PlaywrightEngine:
                         self._focus_element(step.selector)
 
                     # Smooth mouse movement to input field
-                    try:
-                        locator = self.page.locator(step.selector).first
-                        if locator.count() > 0:
-                            bbox = locator.bounding_box()
-                            if bbox:
-                                center_x = bbox['x'] + bbox['width'] / 2
-                                center_y = bbox['y'] + bbox['height'] / 2
-                                self.page.mouse.move(center_x, center_y, steps=50)
-                                time.sleep(0.3)
-                    except Exception:
-                        pass
+                    if self.config.cursor_animation_enabled:
+                        try:
+                            locator = self.page.locator(step.selector).first
+                            if locator.count() > 0:
+                                bbox = locator.bounding_box()
+                                if bbox:
+                                    center_x = bbox['x'] + bbox['width'] / 2
+                                    center_y = bbox['y'] + bbox['height'] / 2
+                                    self.page.mouse.move(center_x, center_y, steps=50)
+                                    print(f"[CURSOR] → Fill target ({center_x:.0f}, {center_y:.0f})")
+                                    time.sleep(0.3)
+                        except Exception as e:
+                            print(f"[CURSOR] Mouse move failed: {e}")
 
                     self.page.fill(step.selector, step.value)
 
@@ -494,22 +554,30 @@ class PlaywrightEngine:
                         self._focus_element(step.selector)
 
                     # Smooth mouse movement to select field
-                    try:
-                        locator = self.page.locator(step.selector).first
-                        if locator.count() > 0:
-                            bbox = locator.bounding_box()
-                            if bbox:
-                                center_x = bbox['x'] + bbox['width'] / 2
-                                center_y = bbox['y'] + bbox['height'] / 2
-                                self.page.mouse.move(center_x, center_y, steps=50)
-                                time.sleep(0.3)
-                    except Exception:
-                        pass
+                    if self.config.cursor_animation_enabled:
+                        try:
+                            locator = self.page.locator(step.selector).first
+                            if locator.count() > 0:
+                                bbox = locator.bounding_box()
+                                if bbox:
+                                    center_x = bbox['x'] + bbox['width'] / 2
+                                    center_y = bbox['y'] + bbox['height'] / 2
+                                    self.page.mouse.move(center_x, center_y, steps=50)
+                                    print(f"[CURSOR] → Select target ({center_x:.0f}, {center_y:.0f})")
+                                    time.sleep(0.3)
+                        except Exception as e:
+                            print(f"[CURSOR] Mouse move failed: {e}")
 
                     self.page.select_option(step.selector, step.value)
 
             elif step.action == 'wait':
                 time.sleep(step.wait_time)
+
+            elif step.action == 'press_key':
+                # Press a keyboard key (e.g., Escape, Enter, Tab)
+                key = step.value or 'Escape'
+                self.page.keyboard.press(key)
+                time.sleep(0.5)
 
             elif step.action == 'screenshot':
                 # Scroll to element if specified (critical for capturing full page sections)
@@ -1717,8 +1785,8 @@ def get_wfh_swap_scenario() -> Scenario:
                 title="Close Dialog",
                 description="Close the dialog",
                 script="For this demo, we'll close the dialog. In practice, you would click Send Request to submit.",
-                action="click",
-                selector="button:has-text('Cancel')",
+                action="press_key",
+                value="Escape",
                 wait_time=2.0
             ),
             # Step 9: Show incoming requests section

@@ -1362,26 +1362,29 @@ def create_testing_console_page():
                                 ui.button(icon='delete', on_click=delete_current_image).props('flat round').style('color: #ef4444;')
                                 ui.button(icon='close', on_click=lightbox_dlg.close).props('flat round').style('color: white;')
 
-                        # Main image area with navigation
-                        with ui.row().classes('w-full flex-grow items-center justify-center relative').style('min-height: 70vh;'):
-                            # Previous button
+                        # Main image area with navigation and scroll
+                        with ui.row().classes('w-full flex-grow items-center justify-center relative').style('height: calc(100vh - 180px);'):
+                            # Previous button (positioned outside scroll area)
                             def go_prev():
                                 if current['index'] > 0:
                                     current['index'] -= 1
                                     update_lightbox_image()
 
-                            prev_btn = ui.button(icon='chevron_left', on_click=go_prev).props('flat round size=xl').classes('absolute left-4').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
+                            prev_btn = ui.button(icon='chevron_left', on_click=go_prev).props('flat round size=xl').classes('absolute left-4 z-10').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
 
-                            # Main image
-                            lightbox_img = ui.image(f'/static/help/screenshots/{scenario_name}/{images[start_index].name}').classes('max-h-[75vh] max-w-[90vw] rounded-lg shadow-2xl')
+                            # Scrollable image container - allows viewing full image
+                            with ui.scroll_area().classes('w-full h-full').style('max-width: 90vw;'):
+                                with ui.column().classes('w-full items-center justify-start p-4'):
+                                    # Image at full size - scroll to see everything
+                                    lightbox_img = ui.image(f'/static/help/screenshots/{scenario_name}/{images[start_index].name}').classes('max-w-full rounded-lg shadow-2xl').style('object-fit: contain;')
 
-                            # Next button
+                            # Next button (positioned outside scroll area)
                             def go_next():
                                 if current['index'] < len(images) - 1:
                                     current['index'] += 1
                                     update_lightbox_image()
 
-                            next_btn = ui.button(icon='chevron_right', on_click=go_next).props('flat round size=xl').classes('absolute right-4').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
+                            next_btn = ui.button(icon='chevron_right', on_click=go_next).props('flat round size=xl').classes('absolute right-4 z-10').style(f'color: {PTO_GOLD}; background-color: rgba(0,0,0,0.5);')
 
                         def update_lightbox_image():
                             img = images[current['index']]

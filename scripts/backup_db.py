@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database backup script for TJM Time Calendar.
+Database backup script for PTO Central.
 
 Creates timestamped backups of the SQLite database.
 Retains the last N backups and deletes older ones.
@@ -26,7 +26,7 @@ def get_db_path() -> Path:
     from dotenv import load_dotenv
     load_dotenv()
 
-    db_url = os.getenv('DATABASE_URL', 'sqlite:///tjm_calendar.db')
+    db_url = os.getenv('DATABASE_URL', 'sqlite:///pto_central.db')
 
     if not db_url.startswith('sqlite:///'):
         print("Error: Backup script only supports SQLite databases")
@@ -53,7 +53,7 @@ def create_backup(db_path: Path, backup_dir: Path) -> Path:
 
     # Create timestamped backup filename
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f"tjm_calendar_backup_{timestamp}.db"
+    backup_name = f"pto_central_backup_{timestamp}.db"
     backup_path = backup_dir / backup_name
 
     # Copy the database
@@ -66,7 +66,7 @@ def create_backup(db_path: Path, backup_dir: Path) -> Path:
 def cleanup_old_backups(backup_dir: Path, keep: int):
     """Delete old backups, keeping only the most recent N."""
     backups = sorted(
-        backup_dir.glob("tjm_calendar_backup_*.db"),
+        backup_dir.glob("pto_central_backup_*.db"),
         key=lambda p: p.stat().st_mtime,
         reverse=True
     )
@@ -80,7 +80,7 @@ def cleanup_old_backups(backup_dir: Path, keep: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backup TJM Time Calendar database")
+    parser = argparse.ArgumentParser(description="Backup PTO Central database")
     parser.add_argument(
         '--keep', '-k',
         type=int,

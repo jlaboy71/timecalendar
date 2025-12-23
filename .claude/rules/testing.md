@@ -1,5 +1,78 @@
 # Testing Guidelines
 
+## CRITICAL: SSL/HTTPS Configuration Sync (NEVER IGNORE)
+
+**If Playwright scenarios fail with "Failed to login" or `net::ERR_EMPTY_RESPONSE`:**
+
+This means HTTP/HTTPS mismatch. The app runs HTTPS but testing uses HTTP.
+
+**These MUST stay in sync:**
+
+| Component | Location | Check |
+|-----------|----------|-------|
+| SSL Certs | `certs/server.crt` | If exists → App uses HTTPS |
+| Testing Config | `config/testing_config.py` | `base_url` must be `https://` |
+| App Config | `src/config.py` | `ssl_enabled` auto-detects certs |
+
+**Before debugging Playwright login failures:**
+```bash
+# Quick check - if this fails with empty response, it's HTTP/HTTPS mismatch
+curl -k https://localhost:8080  # Should work if SSL enabled
+curl http://localhost:8080      # Will fail if SSL enabled
+```
+
+**Fix:** Update `config/testing_config.py`:
+```python
+base_url = 'https://localhost:8080'  # NOT http://
+```
+
+**Root cause (Dec 2024):** SSL certs were added to `certs/` folder, enabling HTTPS automatically. Testing config was still using HTTP, causing all Playwright scenarios to fail with "empty response".
+
+---
+
+## CRITICAL: Video Recording Clipping Prevention (NEVER REMOVE)
+
+**If recorded videos are clipped/cut off (not showing full app screen):**
+
+This means the browser window is smaller than the viewport, causing content to be clipped.
+
+**THESE MUST BE PRESENT in `services/playwright_engine.py` browser launch:**
+
+```python
+# In playwright.chromium.launch():
+args=[
+    f'--window-size={viewport_width + 16},{viewport_height + 100}',  # REQUIRED
+    '--window-position=0,0',  # Positions window at top-left
+]
+```
+
+**Why this is CRITICAL:**
+- Non-headless browser windows have chrome (title bar, borders) that reduce viewport
+- Without explicit `--window-size`, window defaults to smaller than 1920x1080
+- Playwright's `viewport` setting only sets the content area, not the window size
+- The video recording captures the viewport, which gets compressed/clipped if window is too small
+
+**Configuration checklist (ALL must match):**
+| Setting | Location | Value |
+|---------|----------|-------|
+| headless | `config/testing_config.py` | **True** (REQUIRED for reliable recording) |
+| viewport_width | `config/testing_config.py` | 1920 |
+| viewport_height | `config/testing_config.py` | 1600 (very tall to capture headers, dialogs, and full pages) |
+| video_width | `config/testing_config.py` | 1920 (MUST match viewport) |
+| video_height | `config/testing_config.py` | 1600 (MUST match viewport) |
+| --window-size | `services/playwright_engine.py` | 1936,1700 (viewport + chrome, calculated automatically) |
+| output resolution | `services/video_producer.py` | 1280x1067 (same 1.2:1 aspect ratio) |
+
+**Why headless=True is REQUIRED:**
+- Non-headless mode is limited by your monitor's physical resolution
+- If monitor is ≤1920x1080 or Windows scaling is >100%, the window can't be full size
+- Headless mode has NO physical constraints - viewport is always exactly 1920x1080
+- You won't see the browser window, but the recording will be perfect
+
+**Root cause (Dec 2024):** Browser launched without `--window-size` arg, and later discovered that even with `--window-size`, non-headless mode is unreliable on monitors smaller than the viewport.
+
+---
+
 ## Test Framework
 - pytest for unit tests
 - Located in `tests/` directory
