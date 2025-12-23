@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "PTO Central RAG Safe Corpus",
+  "version": "1.0.0",
+  "governance": "task/MCPRAGv2.md",
+  "description": "Strict allowlist for RAG indexing. Raw source code is FORBIDDEN.",
+
+  "allow": {
+    "policy_core": [
+      ".claude/rules/business-rules.md",
+      ".claude/rules/wfh-swap-rules.md"
+    ],
+    "math_invariants": [
+      "task/formulalogic.md"
+    ],
+    "user_documentation": [
+      "data/help/**/*.md"
+    ]
+  },
+
+  "deny": {
+    "source_code": [
+      "src/**/*.py",
+      "nicegui_app/**/*.py",
+      "mcp/**/*.py",
+      "scripts/**/*.py",
+      "tests/**/*.py",
+      "alembic/**/*.py",
+      "**/*.py"
+    ],
+    "database": [
+      "*.db",
+      "*.sqlite",
+      "*.sqlite3",
+      "alembic/versions/**"
+    ],
+    "secrets": [
+      ".env",
+      ".env.*",
+      "*credentials*",
+      "*secret*",
+      "*.pem",
+      "*.key",
+      "certs/**"
+    ],
+    "third_party": [
+      "venv/**",
+      "node_modules/**",
+      "__pycache__/**",
+      "*.pyc"
+    ],
+    "internal": [
+      ".git/**",
+      ".claude/settings*.json",
+      "*.log",
+      "*.tmp"
+    ]
+  },
+
+  "validation": {
+    "pre_index_checks": [
+      "verify_no_python_files",
+      "verify_no_database_dumps",
+      "verify_no_secrets",
+      "verify_allowed_paths_exist"
+    ],
+    "content_filters": [
+      "strip_file_paths",
+      "strip_line_numbers",
+      "strip_code_blocks_with_imports"
+    ]
+  },
+
+  "chunking": {
+    "business-rules.md": {
+      "strategy": "rule-based",
+      "split_on": "## ",
+      "overlap_sentences": 1
+    },
+    "wfh-swap-rules.md": {
+      "strategy": "section-based",
+      "split_on": "## ",
+      "overlap_sentences": 1
+    },
+    "formulalogic.md": {
+      "strategy": "formula-based",
+      "preserve_context": true
+    },
+    "data/help/**/*.md": {
+      "strategy": "auto",
+      "max_chunk_size": 1000,
+      "overlap_sentences": 1
+    }
+  },
+
+  "metadata": {
+    "required_fields": [
+      "source_file",
+      "category",
+      "chunk_index",
+      "last_updated"
+    ],
+    "forbidden_fields": [
+      "line_number",
+      "function_name",
+      "class_name",
+      "import_path"
+    ]
+  },
+
+  "audit": {
+    "log_all_ingestions": true,
+    "require_manifest_match": true,
+    "fail_on_denied_path": true
+  }
+}
