@@ -474,7 +474,7 @@ def calendar_page():
                     personal_used = float(balance.personal_used or 0)
                     personal_avail = (personal_total - personal_used) / 8
 
-                    with ui.card().classes('w-full p-4'):
+                    with ui.card().classes('w-full p-4 shadow-md'):
                         with ui.row().classes('w-full items-center gap-4 flex-wrap'):
                             ui.label(f'My {year} Balance').classes('font-bold text-lg')
                             ui.element('div').classes('flex-grow')
@@ -602,7 +602,7 @@ def calendar_page():
         calendar_container = ui.column().classes('w-full print-calendar')
 
         # Legend - Interactive filtering with checkboxes (hidden in print)
-        with ui.card().classes('w-full p-4 mt-2 no-print'):
+        with ui.card().classes('w-full p-4 mt-2 no-print shadow-md'):
             with ui.row().classes('w-full gap-4 flex-wrap items-center'):
                 ui.label('Calendar Legend').classes('font-bold text-lg')
                 ui.element('div').classes('flex-grow')

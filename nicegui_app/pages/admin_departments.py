@@ -14,6 +14,8 @@ from nicegui_app.components.theme import (
     show_help_dialog,
     create_help_button,
     empty_state,
+    PTO_GOLD,
+    PTO_GRAY,
 )
 from src.services.department_service import DepartmentService
 from src.services.user_service import UserService
@@ -21,10 +23,6 @@ from src.services.balance_service import BalanceService
 from src.services.audit_service import AuditService
 from src.models.user import User
 from src.schemas.user_schemas import UserCreate, UserUpdate
-
-# PTO Central Brand Colors
-PTO_GOLD = "#c9a227"
-PTO_GRAY = "#5a6a72"
 
 # Department icon mapping - keywords to Material Icons
 DEPT_ICON_KEYWORDS = {
@@ -174,7 +172,7 @@ def admin_departments_page():
         # ============ STATS ROW (Dashboard Style) ============
         with ui.row().classes('w-full gap-4 mb-6'):
             # Total Departments - clickable
-            with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500 cursor-pointer admin-stat-card').on('click', lambda: show_all_departments_dialog()):
+            with ui.card().classes('flex-1 p-4 border-l-4 border-blue-500 cursor-pointer shadow-md admin-stat-card').on('click', lambda: show_all_departments_dialog()):
                 with ui.row().classes('items-center gap-3'):
                     with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #3b82f6, #1d4ed8);'):
                         ui.icon('business', color='white').classes('text-xl')
@@ -184,7 +182,7 @@ def admin_departments_page():
                 ui.tooltip('Click to view all departments')
 
             # Total Employees - clickable
-            with ui.card().classes('flex-1 p-4 border-l-4 border-green-500 cursor-pointer admin-stat-card').on('click', lambda: show_employee_breakdown_dialog()):
+            with ui.card().classes('flex-1 p-4 border-l-4 border-green-500 cursor-pointer shadow-md admin-stat-card').on('click', lambda: show_employee_breakdown_dialog()):
                 with ui.row().classes('items-center gap-3'):
                     with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style('background: linear-gradient(135deg, #22c55e, #16a34a);'):
                         ui.icon('groups', color='white').classes('text-xl')
@@ -194,7 +192,7 @@ def admin_departments_page():
                 ui.tooltip('Click to view employee distribution')
 
             # Add Department - action card
-            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: open_create_dialog()):
+            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer shadow-md admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: open_create_dialog()):
                 with ui.row().classes('items-center gap-3'):
                     with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {PTO_GOLD}, #b8922a);'):
                         ui.icon('add_business', color='white').classes('text-xl')
@@ -204,7 +202,7 @@ def admin_departments_page():
                 ui.tooltip('Create a new department')
 
             # Add Employee - action card (opens slide-out panel)
-            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: show_add_employee_panel()):
+            with ui.card().classes('flex-1 p-4 border-l-4 cursor-pointer shadow-md admin-stat-card').style(f'border-left-color: {PTO_GOLD};').on('click', lambda: show_add_employee_panel()):
                 with ui.row().classes('items-center gap-3'):
                     with ui.element('div').classes('w-12 h-12 rounded-full flex items-center justify-center').style(f'background: linear-gradient(135deg, {PTO_GOLD}, #b8922a);'):
                         ui.icon('person_add', color='white').classes('text-xl')
@@ -248,7 +246,7 @@ def admin_departments_page():
             # Make a copy for closure
             dept_copy = dict(dept)
 
-            with ui.card().classes('w-full p-4 hover:shadow-lg transition-all').style(f'border-left: 4px solid {border_color};'):
+            with ui.card().classes('w-full p-4 shadow-md hover:shadow-xl transition-all').style(f'border-left: 4px solid {border_color};'):
                 with ui.row().classes('w-full items-center'):
                     # LEFT: Icon + Name and Code
                     with ui.row().classes('items-center gap-3').style('width: 280px; flex-shrink: 0;'):

@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from io import StringIO
 import csv
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, skeleton_table, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog
+from nicegui_app.components.theme import apply_dark_mode, skeleton_table, show_warning_dialog, show_error_dialog, show_success_dialog, show_info_dialog, PTO_GOLD
 from nicegui_app.components.formatting import fmt_days
 from nicegui_app.pages.dashboard import show_pto_detail_dialog
 
@@ -47,7 +47,7 @@ def show_help_tip(title: str, message: str):
             ui.label(title).classes('text-lg font-bold')
         ui.label(message).classes('text-sm opacity-80')
         with ui.row().classes('w-full justify-end mt-4'):
-            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+            ui.button('OK', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -142,7 +142,7 @@ def reports_page():
         page_header(title='REPORTS', show_back=False)
 
         # ===== ACTIONS BAR (Top) =====
-        actions_card = ui.card().classes('w-full mb-4 p-3')
+        actions_card = ui.card().classes('w-full mb-4 p-3 shadow-md')
 
         # ===== REPORT INDICATOR =====
         report_indicator = ui.row().classes('w-full mb-2 items-center gap-2')
@@ -150,7 +150,7 @@ def reports_page():
         # Report type selector (only shown for managers/admins who have multiple report options)
         my_pto_btn = None  # Will be set for managers only
         if is_manager_or_admin:
-            with ui.card().classes('w-full mb-4 p-4'):
+            with ui.card().classes('w-full mb-4 p-4 shadow-md'):
                 with ui.row().classes('w-full gap-6 flex-wrap'):
                     # My PTO section (managers only - admins don't have PTO)
                     if not is_admin_only:
@@ -181,7 +181,7 @@ def reports_page():
                             audit_btn = ui.button('Audit Log', on_click=lambda: switch_report('audit')).props('outline')
 
         # Filters section
-        filters_card = ui.card().classes('w-full mb-4 p-4')
+        filters_card = ui.card().classes('w-full mb-4 p-4 shadow-md')
 
         # Report content area
         report_container = ui.column().classes('w-full')
@@ -470,7 +470,7 @@ def reports_page():
 
                 requests = query.order_by(PTORequest.start_date.desc()).all()
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     ui.label(f'My PTO History - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not requests:
@@ -583,7 +583,7 @@ def reports_page():
                     PTOBalance.year == filter_state['year']
                 ).first()
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     ui.label(f'My Balance Summary - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not balance:
@@ -674,7 +674,7 @@ def reports_page():
 
                 requests = query.order_by(PTORequest.start_date).all()
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     ui.label(f'My Year at a Glance - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not requests:
@@ -795,7 +795,7 @@ def reports_page():
                             ui.button('OK', on_click=dialog.close).props('color=primary')
                     dialog.open()
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     # Title row with inline filters (Year + Other Types)
                     with ui.row().classes('w-full justify-between items-center mb-4 flex-wrap gap-2'):
                         ui.label(f'My PTO Dashboard - {filter_state["year"]}').classes('text-lg font-semibold')
@@ -1008,7 +1008,7 @@ def reports_page():
                                 ui.label(info.get('name', status_code.title())).classes('text-lg font-bold').style(f'color: {info.get("color", "#6b7280")};')
                             ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
                             with ui.row().classes('w-full justify-end mt-4'):
-                                ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                                ui.button('OK', on_click=info_dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                         info_dialog.open()
 
                     # === STATUS TILES (Clickable - filter within selected PTO type) ===
@@ -1117,7 +1117,7 @@ def reports_page():
                                 ui.label(info.get('name', type_code.replace('_', ' ').title())).classes('text-lg font-bold').style(f'color: {style["hex"]};')
                             ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
                             with ui.row().classes('w-full justify-end mt-4'):
-                                ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                                ui.button('OK', on_click=info_dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                         info_dialog.open()
 
                     if not filtered_requests:
@@ -1278,7 +1278,7 @@ def reports_page():
 
                 results = query.order_by(User.last_name, User.first_name).all()
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     # Dynamic title based on filter
                     if selected_employee_name:
                         title = f'{selected_employee_name} Balance Summary - {filter_state["year"]}'
@@ -1554,7 +1554,7 @@ def reports_page():
                     'WORK_FROM_HOME': 0,  # WFH has no balance limit
                 }
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     ui.label(f'Team Usage Report - {filter_state["year"]}').classes('text-lg font-semibold mb-4')
 
                     if not all_results:
@@ -1796,7 +1796,7 @@ def reports_page():
                     if uid:
                         user_options[str(uid)] = uname or f'User #{uid}'
 
-                with ui.card().classes('w-full'):
+                with ui.card().classes('w-full shadow-md'):
                     ui.label('System Audit Log').classes('text-lg font-semibold mb-4')
 
                     # Quick action filter chips

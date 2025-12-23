@@ -6,6 +6,11 @@
   "description": "Strict allowlist for RAG indexing. Raw source code is FORBIDDEN.",
 
   "allow": {
+    "system_knowledge": [
+      "task/system_identity.md",
+      "task/creator_profile.md",
+      "task/knowledge_contract.md"
+    ],
     "policy_core": [
       ".claude/rules/business-rules.md",
       ".claude/rules/wfh-swap-rules.md",
@@ -79,6 +84,24 @@
   },
 
   "chunking": {
+    "system_identity.md": {
+      "strategy": "section-based",
+      "split_on": "## ",
+      "overlap_sentences": 2,
+      "priority": "highest"
+    },
+    "creator_profile.md": {
+      "strategy": "section-based",
+      "split_on": "## ",
+      "overlap_sentences": 1,
+      "priority": "high"
+    },
+    "knowledge_contract.md": {
+      "strategy": "section-based",
+      "split_on": "## ",
+      "overlap_sentences": 2,
+      "priority": "highest"
+    },
     "business-rules.md": {
       "strategy": "rule-based",
       "split_on": "## ",

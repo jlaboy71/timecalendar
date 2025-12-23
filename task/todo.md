@@ -257,6 +257,21 @@ The TJM Time Calendar application is essentially **feature-complete**. All core 
 
 None - Project Complete!
 
+---
+
+## Future Roadmap (Deferred)
+
+These items are planned for future phases but not blocking v2.0 release:
+
+### Manager AI Phase
+- [ ] `approve_pto_request` tool - Allow AI agent to approve requests (with manager confirmation)
+- [ ] `cancel_pto_request` tool - Allow AI agent to cancel requests (with manager confirmation)
+
+### Testing Automation
+- [ ] `pto-testing-automation` skill package - Automated UI testing scenarios
+
+---
+
 ### Configuration (COMPLETE)
 - [x] Configure SMTP settings for email notifications (configured in .env)
 - [x] Database backups configured (dbbackup directory)

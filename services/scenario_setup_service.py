@@ -184,7 +184,7 @@ class ScenarioSetupService:
             status: Request status ('pending', 'approved', 'denied')
             start_offset: Days from today for start date (default 7)
         """
-        username = params.get('employee_username', 'ptouser')
+        username = params.get('employee_username', 'ptouser01')
         pto_type = params.get('pto_type', 'vacation')
         days = params.get('days', 2)
         status = params.get('status', 'pending')
@@ -242,7 +242,7 @@ class ScenarioSetupService:
             hours: Hours requested (default 16)
             status: Request status ('pending', 'approved', 'denied')
         """
-        username = params.get('employee_username', 'ptouser')
+        username = params.get('employee_username', 'ptouser01')
         hours = params.get('hours', 16)
         status = params.get('status', 'pending')
         current_year = date.today().year
@@ -293,7 +293,7 @@ class ScenarioSetupService:
             sick_total: Total sick hours (default 40)
             personal_total: Total personal hours (default 16)
         """
-        username = params.get('employee_username', 'ptouser')
+        username = params.get('employee_username', 'ptouser01')
 
         user = cls._get_user_by_username(db, username)
         if not user:
@@ -355,7 +355,7 @@ class ScenarioSetupService:
 
         # Fallback to default test users (PTO-Department)
         if not usernames:
-            usernames = ['ptouser'][:count]  # Use ptouser for fallback
+            usernames = ['ptouser01'][:count]  # Use ptouser01 for fallback
 
         # Create mix of approved and pending
         pto_types = ['vacation', 'sick', 'personal', 'vacation']

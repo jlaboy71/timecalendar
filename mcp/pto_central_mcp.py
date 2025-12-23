@@ -1076,6 +1076,89 @@ def submit_pto_request(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PHASE 6: DOCTRINE QUERY TOOLS - System Self-Knowledge
+# ═══════════════════════════════════════════════════════════════════════════
+
+def query_system_knowledge(
+    question: str,
+    include_source: bool = True
+) -> Dict[str, Any]:
+    """
+    Query PTO Central's self-knowledge using the System Identity Doctrine.
+
+    Use this for questions about:
+    - What PTO Central is and does
+    - Who created it
+    - System capabilities and limitations
+    - Design decisions and architecture
+    - Prohibited claims (consciousness, etc.)
+
+    Args:
+        question: Natural language question about the system
+        include_source: Whether to include source file references
+
+    Returns:
+        dict with answer, source, and confidence level
+    """
+    from src.services.doctrine_query_service import get_doctrine_service
+
+    service = get_doctrine_service()
+    result = service.query(question)
+
+    if not include_source:
+        result.pop("source_file", None)
+
+    logger.info(f"Doctrine query: '{question[:50]}...' -> {result.get('source', 'unknown')}")
+    return result
+
+
+def validate_ai_response(
+    response_text: str
+) -> Dict[str, Any]:
+    """
+    Validate that an AI-generated response doesn't contain
+    prohibited claims (consciousness, self-awareness, etc.).
+
+    Use this before sending any response that discusses
+    PTO Central's nature or capabilities.
+
+    Args:
+        response_text: The response to validate
+
+    Returns:
+        dict with valid (bool) and any violations found
+    """
+    from src.services.doctrine_query_service import get_doctrine_service
+
+    service = get_doctrine_service()
+    result = service.validate_response(response_text)
+
+    if not result["valid"]:
+        logger.warning(f"AI response validation failed: {result['violations']}")
+
+    return result
+
+
+def get_system_summary() -> Dict[str, Any]:
+    """
+    Get a summary of the PTO Central system.
+
+    Returns key facts about the system including:
+    - System name and version
+    - Creator attribution
+    - Consciousness status (always False)
+    - Doctrine status
+
+    Returns:
+        dict with system summary information
+    """
+    from src.services.doctrine_query_service import get_doctrine_service
+
+    service = get_doctrine_service()
+    return service.get_system_summary()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MCP SERVER DEFINITION
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1147,6 +1230,26 @@ MCP_TOOLS = {
         "phase": "5.0",
         "enabled": True,
         "requires_confirmation": True
+    },
+
+    # Phase 6: Doctrine/Self-Knowledge tools
+    "query_system_knowledge": {
+        "handler": query_system_knowledge,
+        "description": "Query PTO Central's self-knowledge using System Identity Doctrine",
+        "phase": "6.0",
+        "enabled": True
+    },
+    "validate_ai_response": {
+        "handler": validate_ai_response,
+        "description": "Validate AI response doesn't contain prohibited claims",
+        "phase": "6.0",
+        "enabled": True
+    },
+    "get_system_summary": {
+        "handler": get_system_summary,
+        "description": "Get summary of PTO Central system (name, version, creator)",
+        "phase": "6.0",
+        "enabled": True
     }
 }
 

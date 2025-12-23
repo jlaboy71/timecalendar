@@ -14,7 +14,7 @@ from src.models.system_setting import SystemSetting
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, PTO_GOLD
 from nicegui_app.components.formatting import fmt_days, format_days_hours
 from src.utils.working_days import is_weekend, is_working_day, get_holidays_in_range, count_working_days
 
@@ -27,7 +27,7 @@ def show_help_tip(title: str, message: str):
             ui.label(title).classes('text-lg font-bold')
         ui.label(message).classes('text-sm opacity-80')
         with ui.row().classes('w-full justify-end mt-4'):
-            ui.button('OK', on_click=dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+            ui.button('OK', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
     dialog.open()
 
 
@@ -122,7 +122,7 @@ def request_form_page(preselect_type: str = None):
 
         # Show notice if date was pre-filled from calendar
         if prefill_date:
-            with ui.card().classes('w-full mb-4 p-3 border-l-4 border-blue-500'):
+            with ui.card().classes('w-full mb-4 p-3 border-l-4 border-blue-500 shadow-md'):
                 with ui.row().classes('items-center'):
                     ui.icon('event', color='blue').classes('mr-2')
                     ui.label(f'Pre-selected: {prefill_date.strftime("%A, %B %d, %Y")}').classes('text-blue-500')
@@ -153,7 +153,7 @@ def request_form_page(preselect_type: str = None):
         # Half-day container reference for visibility control
         half_day_container = {'ref': None}
 
-        with ui.card().classes('w-full mb-4'):
+        with ui.card().classes('w-full mb-4 shadow-md'):
             with ui.row().classes('items-center mb-3'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">1</span>', sanitize=False)
                 ui.label('Select Leave Type').classes('text-lg font-semibold')
@@ -386,7 +386,7 @@ def request_form_page(preselect_type: str = None):
                         'More Leave Types',
                         icon='expand_more',
                         on_click=toggle_other_types
-                    ).props('outline rounded').style('color: #c9a227; border-color: #c9a227;').classes('text-sm')
+                    ).props('outline rounded').style(f'color: {PTO_GOLD}; border-color: {PTO_GOLD};').classes('text-sm')
 
                 # Container for other leave type cards (hidden by default)
                 other_types_container['ref'] = ui.row().classes('w-full gap-4 mt-4 justify-center flex-wrap')
@@ -561,7 +561,7 @@ def request_form_page(preselect_type: str = None):
                 pass
 
         # ============ STEP 2: DATE SELECTION ============
-        with ui.card().classes('w-full mb-4'):
+        with ui.card().classes('w-full mb-4 shadow-md'):
             with ui.row().classes('items-center mb-3'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">2</span>', sanitize=False)
                 ui.label('Select Date(s)').classes('text-lg font-semibold')
@@ -875,7 +875,7 @@ def request_form_page(preselect_type: str = None):
         # Define which types have private notes (other leave types)
         private_notes_types = ['bereavement', 'fmla', 'jury_duty', 'voting', 'military']
 
-        with ui.card().classes('w-full mb-4 p-3'):
+        with ui.card().classes('w-full mb-4 p-3 shadow-md'):
             with ui.row().classes('items-center mb-2'):
                 ui.html('<span class="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-2">3</span>', sanitize=False)
                 notes_header = ui.label('Notes (optional)').classes('text-lg font-semibold')
@@ -925,7 +925,7 @@ def request_form_page(preselect_type: str = None):
                     privacy_notice_container.set_visibility(True)
 
         # ============ SUBMIT SECTION ============
-        with ui.card().classes('w-full'):
+        with ui.card().classes('w-full shadow-md'):
             # Manager info - who will approve this request
             if manager_name:
                 with ui.row().classes('w-full items-center mb-4 p-3 rounded-lg').style('border: 1px solid rgba(128,128,128,0.3)'):

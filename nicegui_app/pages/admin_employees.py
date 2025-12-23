@@ -5,13 +5,13 @@ from datetime import datetime
 from nicegui import ui, app, context
 from src.database import get_db
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, validate_required, validate_email, validate_min_length, show_warning_dialog, show_error_dialog, show_success_dialog, PTO_GOLD, PTO_GRAY
 from src.services.user_service import UserService
 from src.services.department_service import DepartmentService
 from src.services.audit_service import AuditService
 from src.services.balance_service import BalanceService
 from src.schemas.user_schemas import UserCreate, UserUpdate
-from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color, PTO_GOLD, PTO_GRAY
+from nicegui_app.pages.admin_departments import get_dept_icon, get_dept_color
 
 
 def admin_employees_list_page():
@@ -82,7 +82,7 @@ def admin_employees_list_page():
         ui.button('Add New Employee', icon='person_add', on_click=lambda: ui.navigate.to('/admin/employees/add')).props('color=primary').classes('mb-4')
 
         # Filters card
-        with ui.card().classes('w-full mb-4 p-4'):
+        with ui.card().classes('w-full mb-4 p-4 shadow-md'):
             ui.label('Search & Filter').classes('text-sm font-semibold uppercase opacity-60 mb-3')
 
             with ui.row().classes('w-full gap-4 items-end flex-wrap'):
@@ -266,7 +266,7 @@ def admin_employees_add_page():
         page_header(title='ADD NEW EMPLOYEE', show_back=False)
 
         # Basic Information Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
                 ui.icon('person', size='sm').style(f'color: {PTO_GOLD};')
                 ui.label('Basic Information').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
@@ -300,7 +300,7 @@ def admin_employees_add_page():
             ui.label('Minimum 8 characters with at least one letter and one number').classes('text-xs opacity-60 -mt-1')
 
         # Employment Details Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
                 ui.icon('badge', size='sm').style(f'color: {PTO_GOLD};')
                 ui.label('Employment Details').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
@@ -466,7 +466,7 @@ def admin_employees_add_page():
                         ui.tooltip('Allow employee to swap WFH days with teammates')
 
         # Work Location Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-4'):
                 ui.icon('location_on', size='sm').style(f'color: {PTO_GOLD};')
                 ui.label('Work Location').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
@@ -496,7 +496,7 @@ def admin_employees_add_page():
                 location_state_select.on('update:model-value', lambda e: update_city_options())
 
         # Remote Work Schedule Section
-        with ui.card().classes('w-full p-6 mb-4').style(f'border-left: 4px solid {PTO_GOLD};'):
+        with ui.card().classes('w-full p-6 mb-4 shadow-md').style(f'border-left: 4px solid {PTO_GOLD};'):
             with ui.row().classes('items-center gap-2 mb-2'):
                 ui.icon('home_work', size='sm').style(f'color: {PTO_GOLD};')
                 ui.label('Remote Work Schedule').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
@@ -743,7 +743,7 @@ def admin_employees_edit_page(user_id: int):
             page_header(title='EDIT EMPLOYEE', show_back=False)
 
             with ui.row().classes('w-full gap-4 mb-4'):
-                with ui.card().classes('flex-1 p-4').style('border-left: 4px solid #5a6a72'):
+                with ui.card().classes('flex-1 p-4').style(f'border-left: 4px solid {PTO_GRAY}'):
                     ui.label(f'{user.first_name} {user.last_name}').classes('text-lg font-semibold')
                     ui.label(f'@{user.username} • {user.email}').classes('text-sm opacity-60')
 
@@ -754,8 +754,8 @@ def admin_employees_edit_page(user_id: int):
                         ui.label(dept_name).classes('text-lg font-semibold')
 
             # Basic Information Section
-            with ui.card().classes('w-full p-6 mb-4'):
-                ui.label('Basic Information').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+            with ui.card().classes('w-full p-6 mb-4 shadow-md'):
+                ui.label('Basic Information').classes('text-lg font-semibold mb-4').style(f'color: {PTO_GRAY};')
 
                 with ui.row().classes('w-full gap-4'):
                     first_name_input = ui.input('First Name', value=user.first_name).props('outlined').classes('flex-1')
@@ -789,8 +789,8 @@ def admin_employees_edit_page(user_id: int):
                     ui.label('Leave blank to keep current password').classes('text-xs opacity-60 -mt-1')
 
             # Employment Details Section
-            with ui.card().classes('w-full p-6 mb-4'):
-                ui.label('Employment Details').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+            with ui.card().classes('w-full p-6 mb-4 shadow-md'):
+                ui.label('Employment Details').classes('text-lg font-semibold mb-4').style(f'color: {PTO_GRAY};')
 
                 with ui.row().classes('w-full gap-4 items-end'):
                     with ui.column().classes('flex-1'):
@@ -843,8 +843,8 @@ def admin_employees_edit_page(user_id: int):
             location_state_select = None
             location_city_select = None
             if not is_manager_editing:
-                with ui.card().classes('w-full p-6 mb-4'):
-                    ui.label('Work Location').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+                with ui.card().classes('w-full p-6 mb-4 shadow-md'):
+                    ui.label('Work Location').classes('text-lg font-semibold mb-4').style(f'color: {PTO_GRAY};')
 
                     def get_city_options_for_state(state):
                         if state == 'IL':
@@ -874,8 +874,8 @@ def admin_employees_edit_page(user_id: int):
                         location_state_select.on('update:model-value', lambda e: update_city_options_edit())
 
             # Remote Work Schedule Section
-            with ui.card().classes('w-full p-6 mb-4'):
-                ui.label('Remote Work Schedule').classes('text-lg font-semibold mb-2').style('color: #5a6a72;')
+            with ui.card().classes('w-full p-6 mb-4 shadow-md'):
+                ui.label('Remote Work Schedule').classes('text-lg font-semibold mb-2').style(f'color: {PTO_GRAY};')
                 ui.label('Select the days this employee works remotely').classes('text-sm opacity-60 mb-4')
 
                 with ui.row().classes('w-full gap-6 justify-center'):

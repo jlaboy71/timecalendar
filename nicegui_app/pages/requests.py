@@ -3,7 +3,7 @@ from datetime import date, datetime
 from nicegui import ui, app
 from src.database import get_db
 from nicegui_app.components.header import page_header
-from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog
+from nicegui_app.components.theme import apply_dark_mode, show_warning_dialog, show_error_dialog, show_success_dialog, PTO_GOLD
 from nicegui_app.components.realtime_updates import setup_dashboard_updates
 from src.services.pto_service import PTOService
 from src.services.balance_service import BalanceService
@@ -588,7 +588,7 @@ def requests_page():
                         ui.label(info.get('name', type_code.replace('_', ' ').title())).classes('text-lg font-bold').style(f'color: {info.get("color", "#6b7280")};')
                     ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
                     with ui.row().classes('w-full justify-end mt-4'):
-                        ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                        ui.button('OK', on_click=info_dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                 info_dialog.open()
 
             def show_status_info(status):
@@ -600,7 +600,7 @@ def requests_page():
                         ui.label(info.get('name', status.title())).classes('text-lg font-bold').style(f'color: {info.get("color", "#6b7280")};')
                     ui.label(info.get('description', 'No description available.')).classes('text-sm opacity-80')
                     with ui.row().classes('w-full justify-end mt-4'):
-                        ui.button('OK', on_click=info_dialog.close).style('background-color: #C9A227 !important; color: white !important;')
+                        ui.button('OK', on_click=info_dialog.close).style(f'background-color: {PTO_GOLD} !important; color: white !important;')
                 info_dialog.open()
 
             def render_requests_by_type(requests_to_show, filter_names=None):
@@ -636,7 +636,7 @@ def requests_page():
 
                         elif len(selected_types) > 1:
                             # Multiple types selected but no results
-                            with ui.card().classes('w-full p-8 text-center'):
+                            with ui.card().classes('w-full p-8 text-center shadow-md'):
                                 ui.icon('event_available', size='4rem').classes('opacity-30 mb-4')
                                 type_names = ', '.join([pto_type_info.get(t, {}).get('name', t.title()) for t in selected_types])
                                 ui.label(f'No {type_names} requests').classes('text-xl opacity-60')
@@ -656,12 +656,12 @@ def requests_page():
 
                         else:
                             # Generic empty state
-                            with ui.card().classes('w-full p-8 text-center'):
+                            with ui.card().classes('w-full p-8 text-center shadow-md'):
                                 ui.icon('event_available', size='4rem').classes('opacity-30 mb-4')
                                 label_text = f'No {filter_name.lower()} time off' if filter_name else 'No time off submitted yet'
                                 ui.label(label_text).classes('text-xl opacity-60')
                     else:
-                        with ui.card().classes('w-full'):
+                        with ui.card().classes('w-full shadow-md'):
                             for req in requests_to_show:
                                 # Color code: Vacation=Blue, Sick=Green, Personal=Purple, WFH=Red
                                 type_colors = {'vacation': 'blue', 'sick': 'green', 'personal': 'purple', 'work_from_home': 'red'}
@@ -799,7 +799,7 @@ def requests_page():
                     app.storage.user['requests_view_user_id'] = selected_value
                 ui.navigate.to('/requests')
 
-            with ui.card().classes('w-full mb-4 p-3'):
+            with ui.card().classes('w-full mb-4 p-3 shadow-md'):
                 with ui.row().classes('w-full justify-between items-center'):
                     # Show whose requests we're viewing
                     if view_state['mode'] == 'team' and viewed_user_obj and viewed_user_obj.id != user['id']:

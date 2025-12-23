@@ -6,7 +6,7 @@ from nicegui_app.logo import LOGO_DATA_URL
 from src.database import get_db
 from src.services.audit_service import AuditService
 from src.services.session_manager import SessionManager
-from nicegui_app.components.theme import show_success_dialog
+from nicegui_app.components.theme import show_success_dialog, PTO_GOLD, PTO_GRAY
 
 # Warning threshold in minutes (show warning when this many minutes remain)
 SESSION_WARNING_MINUTES = 5
@@ -51,7 +51,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
     user_last_name = user.get('last_name', '')
     greeting = get_time_based_greeting()
     is_dark = app.storage.user.get('dark_mode', True)  # Default to dark mode
-    greeting_color = '#C9A227' if is_dark else '#5a6a72'
+    greeting_color = PTO_GOLD if is_dark else PTO_GRAY
 
     with ui.row().classes('w-full justify-between items-center mb-6 no-print'):
         # Left side: Logo + Title in a row
@@ -86,7 +86,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
 
             # Row 2: Utility icons + LOGOUT - right aligned
             with ui.row().classes('items-center gap-2'):
-                ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round dense size=sm aria-label="Help Center"').tooltip('Help Center').style('color: #C9A227 !important;')
+                ui.button(icon='help_outline', on_click=lambda: ui.navigate.to('/help')).props('flat round dense size=sm aria-label="Help Center"').tooltip('Help Center').style(f'color: {PTO_GOLD} !important;')
 
                 dark_mode = ui.dark_mode()
                 is_dark = app.storage.user.get('dark_mode', True)
@@ -94,7 +94,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
                     dark_mode.enable()
 
                 initial_icon = 'light_mode' if is_dark else 'dark_mode'
-                dark_toggle_btn = ui.button(icon=initial_icon, on_click=lambda: None).props('flat round dense size=sm aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode').style('color: #C9A227 !important;')
+                dark_toggle_btn = ui.button(icon=initial_icon, on_click=lambda: None).props('flat round dense size=sm aria-label="Toggle Dark Mode"').tooltip('Toggle Dark Mode').style(f'color: {PTO_GOLD} !important;')
 
                 def toggle_dark_mode():
                     is_currently_dark = app.storage.user.get('dark_mode', True)
@@ -110,7 +110,7 @@ def page_header(title: str = None, show_back: bool = True, back_url: str = None)
                 dark_toggle_btn.on('click', toggle_dark_mode)
 
                 # LOGOUT button with gold outline
-                ui.button('LOGOUT', on_click=do_logout).props('outline dense').style('color: #ef4444 !important; border-color: #C9A227 !important; font-weight: 600;')
+                ui.button('LOGOUT', on_click=do_logout).props('outline dense').style(f'color: #ef4444 !important; border-color: {PTO_GOLD} !important; font-weight: 600;')
 
     # Session timeout warning system
     _setup_session_timeout_warning()

@@ -26,6 +26,9 @@ import math
 # Image processing
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+# Testing configuration
+from config.testing_config import TestingConfig
+
 
 class VideoEffect(Enum):
     """Video effect types for training videos"""
@@ -1318,6 +1321,136 @@ class VideoProducer:
 
         return ImageClip(str(temp_path)).with_duration(duration)
 
+    def _is_valid_element_bbox(
+        self,
+        element_bbox: Dict[str, float],
+        original_width: int,
+        original_height: int
+    ) -> bool:
+        """
+        Validate that element_bbox represents a specific UI element, not the whole page.
+
+        Filters out:
+        - None or missing coordinates
+        - Negative coordinates (element scrolled out of view)
+        - Full-page bounding boxes (x=0, y=0, width=screen, height>=screen)
+        - Elements larger than 80% of the screen (likely page containers)
+        """
+        if not element_bbox or element_bbox.get('x') is None:
+            return False
+
+        x = element_bbox.get('x', 0)
+        y = element_bbox.get('y', 0)
+        width = element_bbox.get('width', 0)
+        height = element_bbox.get('height', 0)
+
+        # Filter out negative coordinates (scrolled out of view)
+        if x < 0 or y < 0:
+            return False
+
+        # Filter out zero-size elements
+        if width <= 0 or height <= 0:
+            return False
+
+        # Filter out full-page or near-full-page bounding boxes
+        # If element is >80% of screen dimensions, it's likely a container, not a button
+        if width > original_width * 0.8 and height > original_height * 0.5:
+            return False
+
+        # Filter out elements starting at origin with large dimensions
+        if x == 0 and y == 0 and width > original_width * 0.5:
+            return False
+
+        return True
+
+    def _draw_element_highlight(
+        self,
+        canvas: Image.Image,
+        element_bbox: Dict[str, float],
+        original_width: int,
+        original_height: int,
+        paste_x: int,
+        paste_y: int,
+        new_width: int,
+        new_height: int
+    ) -> Image.Image:
+        """
+        Draw a gold highlight box around element_bbox.
+
+        This replaces the cursor dot with a more visible highlight effect
+        that clearly shows which UI element is being discussed.
+
+        Args:
+            canvas: The PIL Image canvas to draw on
+            element_bbox: Dict with x, y, width, height from timeline
+            original_width: Original screenshot width (usually 1920)
+            original_height: Original screenshot height (usually 1080)
+            paste_x: X offset where screenshot was pasted on canvas
+            paste_y: Y offset where screenshot was pasted on canvas
+            new_width: Width of resized screenshot
+            new_height: Height of resized screenshot
+        """
+        # Validate bbox first
+        if not self._is_valid_element_bbox(element_bbox, original_width, original_height):
+            return canvas
+
+        # Calculate scale factors from original to resized
+        scale_x = new_width / original_width
+        scale_y = new_height / original_height
+
+        # Scale element coordinates
+        x1 = int(element_bbox['x'] * scale_x) + paste_x
+        y1 = int(element_bbox['y'] * scale_y) + paste_y
+        x2 = int((element_bbox['x'] + element_bbox['width']) * scale_x) + paste_x
+        y2 = int((element_bbox['y'] + element_bbox['height']) * scale_y) + paste_y
+
+        # Add padding around the element
+        padding = 8
+        x1 = max(0, x1 - padding)
+        y1 = max(0, y1 - padding)
+        x2 = min(canvas.width, x2 + padding)
+        y2 = min(canvas.height, y2 + padding)
+
+        draw = ImageDraw.Draw(canvas, 'RGBA')
+
+        # Draw outer glow effect (multiple semi-transparent rectangles)
+        for i in range(3, 0, -1):
+            glow_alpha = 40 * (4 - i)
+            draw.rectangle(
+                [x1 - i * 2, y1 - i * 2, x2 + i * 2, y2 + i * 2],
+                outline=(201, 162, 39, glow_alpha),
+                width=2
+            )
+
+        # Draw main highlight border (solid gold)
+        draw.rectangle(
+            [x1, y1, x2, y2],
+            outline=(201, 162, 39, 255),
+            width=3
+        )
+
+        # Draw corner accents for extra visibility
+        corner_length = min(20, (x2 - x1) // 4, (y2 - y1) // 4)
+        corner_color = (255, 255, 255, 200)  # White corners
+
+        # Top-left corner
+        draw.line([(x1, y1), (x1 + corner_length, y1)], fill=corner_color, width=3)
+        draw.line([(x1, y1), (x1, y1 + corner_length)], fill=corner_color, width=3)
+
+        # Top-right corner
+        draw.line([(x2 - corner_length, y1), (x2, y1)], fill=corner_color, width=3)
+        draw.line([(x2, y1), (x2, y1 + corner_length)], fill=corner_color, width=3)
+
+        # Bottom-left corner
+        draw.line([(x1, y2 - corner_length), (x1, y2)], fill=corner_color, width=3)
+        draw.line([(x1, y2), (x1 + corner_length, y2)], fill=corner_color, width=3)
+
+        # Bottom-right corner
+        draw.line([(x2, y2 - corner_length), (x2, y2)], fill=corner_color, width=3)
+        draw.line([(x2 - corner_length, y2), (x2, y2)], fill=corner_color, width=3)
+
+        return canvas
+
     def _draw_cursor_overlay(
         self,
         canvas: Image.Image,
@@ -1331,20 +1464,12 @@ class VideoProducer:
     ) -> Image.Image:
         """
         Draw a gold cursor overlay at the center of element_bbox.
+        DEPRECATED: Use _draw_element_highlight instead for better visibility.
 
         Handles coordinate scaling from original screenshot size to resized/positioned canvas.
-
-        Args:
-            canvas: The PIL Image canvas to draw on
-            element_bbox: Dict with x, y, width, height from timeline
-            original_width: Original screenshot width (usually 1920)
-            original_height: Original screenshot height (usually 1080)
-            paste_x: X offset where screenshot was pasted on canvas
-            paste_y: Y offset where screenshot was pasted on canvas
-            new_width: Width of resized screenshot
-            new_height: Height of resized screenshot
         """
-        if not element_bbox or element_bbox.get('x') is None:
+        # Validate bbox first
+        if not self._is_valid_element_bbox(element_bbox, original_width, original_height):
             return canvas
 
         # Calculate scale factors from original to resized
@@ -1495,20 +1620,8 @@ class VideoProducer:
             paste_y = (target_height - new_height) // 2
             canvas.paste(screenshot_img, (paste_x, paste_y))
 
-            # Draw cursor overlay at element_bbox position (syncs cursor with narration topic)
-            element_bbox = step.get('element_bbox')
-            if element_bbox:
-                canvas = self._draw_cursor_overlay(
-                    canvas=canvas,
-                    element_bbox=element_bbox,
-                    original_width=original_width,
-                    original_height=original_height,
-                    paste_x=paste_x,
-                    paste_y=paste_y,
-                    new_width=new_width,
-                    new_height=new_height
-                )
-                print(f"    → Cursor positioned at element ({element_bbox['x']:.0f}, {element_bbox['y']:.0f})")
+            # NOTE: Cursor/highlight effects disabled - user handles in post-production
+            # element_bbox data is still captured in timeline JSON for post-production use
 
             # Convert RGBA to RGB for video encoding
             canvas = canvas.convert('RGB')

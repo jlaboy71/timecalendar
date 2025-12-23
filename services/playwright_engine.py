@@ -153,7 +153,7 @@ class PlaywrightEngine:
 
     Usage:
         engine = PlaywrightEngine()
-        result = engine.run_scenario_sync(scenario, 'ptouser')
+        result = engine.run_scenario_sync(scenario, 'ptouser01')
     """
 
     def __init__(self, config=None):
@@ -875,7 +875,7 @@ def get_pto_request_scenario() -> Scenario:
         name="Submit PTO Request",
         description="Employee submits a new PTO request through the calendar interface",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "pto", "request", "core-workflow"],
         steps=[
             ScenarioStep(
@@ -984,7 +984,7 @@ def get_manager_approval_scenario() -> Scenario:
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'vacation',
                     'days': 2,
                     'status': 'pending',
@@ -1129,7 +1129,7 @@ def get_calendar_navigation_scenario() -> Scenario:
         name="Calendar Navigation",
         description="Learn how to view, navigate, and understand the PTO calendar",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "calendar", "navigation", "tutorial"],
         steps=[
             ScenarioStep(
@@ -1213,14 +1213,14 @@ def get_filter_requests_scenario() -> Scenario:
         name="Filter PTO Requests",
         description="Learn how to filter and search PTO requests by type, status, and date range",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "filter", "search", "requests"],
         # Setup: Create multiple requests with different types and statuses to demonstrate filtering
         setup_actions=[
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'vacation',
                     'days': 3,
                     'status': 'approved',
@@ -1231,7 +1231,7 @@ def get_filter_requests_scenario() -> Scenario:
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'sick',
                     'days': 1,
                     'status': 'approved',
@@ -1242,7 +1242,7 @@ def get_filter_requests_scenario() -> Scenario:
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'vacation',
                     'days': 2,
                     'status': 'pending',
@@ -1521,7 +1521,7 @@ def get_balance_dashboard_scenario() -> Scenario:
         name="Understanding Your Balances",
         description="Learn how to read and understand your PTO balances on the dashboard",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "dashboard", "balances", "tutorial"],
         steps=[
             ScenarioStep(
@@ -1614,7 +1614,7 @@ def get_wfh_request_scenario() -> Scenario:
         name="Work From Home Request",
         description="Submit a WFH request for special circumstances like train delays or emergencies",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "wfh", "remote", "special-circumstances", "training"],
         steps=[
             ScenarioStep(
@@ -1826,18 +1826,11 @@ def get_wfh_swap_scenario() -> Scenario:
                 },
                 description="Set ptomanager WFH day to Wednesday"
             ),
-            # Create a pending swap request so the user can see incoming requests
-            # Note: days_ahead must be within 2-week window (current week + next week)
-            SetupAction(
-                action_type='create_wfh_swap_request',
-                params={
-                    'requester_username': 'ptomanager',
-                    'target_username': 'ptouser01',
-                    'days_ahead': 5,
-                    'message': 'Hi! I have a doctor appointment on my usual WFH day. Would you be willing to swap with me?'
-                },
-                description="Create sample incoming swap request"
-            )
+            # NOTE: Removed sample incoming swap request (Dec 22, 2025)
+            # The "Proactive Weekly Limit Warning" feature now blocks users who have
+            # pending/accepted swaps from initiating new swaps. For the training video
+            # to demonstrate initiating a swap, the user must start with 0 swaps.
+            # See: nicegui_app/pages/wfh_swap.py - limit_warning_container
         ]
     )
 
@@ -1852,7 +1845,7 @@ def get_leave_type_rules_scenario() -> Scenario:
         name="Leave Type Rules & Policies",
         description="Comprehensive guide to leave types, carryover rules, accrual requirements, and date restrictions",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "rules", "policy", "carryover", "training"],
         steps=[
             ScenarioStep(
@@ -1976,7 +1969,7 @@ def get_manager_carryover_scenario() -> Scenario:
             SetupAction(
                 action_type='create_carryover_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'hours_requested': 24,
                     'status': 'pending'
                 },
@@ -2171,7 +2164,7 @@ def get_manager_backdated_scenario() -> Scenario:
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'sick',
                     'days': 1,
                     'status': 'pending',
@@ -2421,14 +2414,14 @@ def get_employee_cancel_scenario() -> Scenario:
         name="Cancel Pending Request",
         description="Employee cancels their own pending PTO request before approval",
         required_role="employee",
-        default_account="ptouser",
+        default_account="ptouser01",
         tags=["employee", "cancel", "pending", "training"],
         # Setup: Create a pending request for the employee to cancel
         setup_actions=[
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'vacation',
                     'days': 2,
                     'status': 'pending',
@@ -2516,7 +2509,7 @@ def get_manager_deny_scenario() -> Scenario:
             SetupAction(
                 action_type='create_pto_request',
                 params={
-                    'employee_username': 'ptouser',
+                    'employee_username': 'ptouser01',
                     'pto_type': 'vacation',
                     'days': 5,
                     'status': 'pending',

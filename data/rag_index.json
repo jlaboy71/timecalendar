@@ -1,13 +1,531 @@
 {
   "version": "1.0.0",
-  "created": "2025-12-23T14:22:24.218852",
-  "manifest": "c:\\Users\\jlaboy\\codelab\\projects\\TimeCalendar\\config\\rag_manifest.json",
+  "created": "2025-12-23T16:05:43.137628",
+  "manifest": "C:\\Users\\jlaboy\\codelab\\projects\\TimeCalendar\\config\\rag_manifest.json",
   "statistics": {
-    "total_files": 47,
-    "total_chunks": 381,
-    "total_bytes": 189211
+    "total_files": 50,
+    "total_chunks": 418,
+    "total_bytes": 217646
   },
   "chunks": [
+    {
+      "id": "task/system_identity.md#0",
+      "content": "# PTO Central System Identity Doctrine\n**Version**: 1.0\n**Generated**: December 23, 2025\n**Authority**: Evidence-based from repository scan\n**Purpose**: Canonical documentation for RAG retrieval and accurate system explanation\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 0,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.117872",
+        "content_hash": "2e65cdf5"
+      }
+    },
+    {
+      "id": "task/system_identity.md#1",
+      "content": "## 1. System Definition\n\n### What PTO Central Is\nPTO Central is an employee time-off management system designed for Haventech Solutions. It is:\n- A web application built with Python, NiceGUI, and SQLite\n- A business operations tool for tracking paid time off\n- A system with role-based access control (employee, manager, admin, superadmin)\n- An auditable platform with comprehensive logging\n- An AI-assisted application with explicit safety controls\n\n### What PTO Central Is Not\n- PTO Central is not conscious, self-aware, or sentient\n- It does not possess intent, desires, or agency\n- It does not learn from user interactions (no ML training occurs)\n- It is not a general-purpose AI assistant\n- It does not make autonomous decisions affecting people without human confirmation\n\n**Evidence**: This definition derives from the architecture in `.claude/CLAUDE.md` and the creator philosophy in `task/JoseMLaboy.md`.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 1,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.117872",
+        "content_hash": "5e974006"
+      }
+    },
+    {
+      "id": "task/system_identity.md#2",
+      "content": "## 2. Architecture Overview\n\n### Repository Layout\n```\nc:\\Users\\jlaboy\\codelab\\projects\\TimeCalendar\\\n\u251c\u2500\u2500 nicegui_app/              # UI Layer\n\u2502   \u251c\u2500\u2500 main.py               # Application entry point\n\u2502   \u251c\u2500\u2500 pages/                # 29 page modules\n\u2502   \u2514\u2500\u2500 components/           # Reusable UI components\n\u251c\u2500\u2500 src/                      # Business Logic Layer\n\u2502   \u251c\u2500\u2500 models/               # 20 SQLAlchemy models\n\u2502   \u251c\u2500\u2500 services/             # 32 service modules\n\u2502   \u251c\u2500\u2500 schemas/              # Pydantic validation\n\u2502   \u251c\u2500\u2500 config.py             # Configuration\n\u2502   \u2514\u2500\u2500 database.py           # Database connection\n\u251c\u2500\u2500 mcp/                      # AI/MCP Layer\n\u2502   \u251c\u2500\u2500 pto_central_mcp.py    # MCP tool implementations\n\u2502   \u2514\u2500\u2500 mcp_server.py         # RAG query server\n\u251c\u2500\u2500 alembic/                  # Database migrations (17 versions)\n\u251c\u2500\u2500 scripts/                  # Utility scripts (20 files)\n\u251c\u2500\u2500 data/                     # Help docs and RAG index\n\u251c\u2500\u2500 .claude/                  # Development documentation\n\u2502   \u2514\u2500\u2500 rules/                # Business rules, code style\n\u2514\u2500\u2500 task/                     # Task tracking and doctrine\n```\n\n### Three-Tier Architecture\n| Tier | Location | Responsibility |\n|------|----------|----------------|\n| **UI** | `nicegui_app/` | User interface, page rendering |\n| **Service** | `src/services/` | Business logic, validation |\n| **Data** | `src/models/` + SQLite | Persistence, schema |\n\n**Evidence**: File structure from Glob scans of repository.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 2,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.117872",
+        "content_hash": "38471ca1"
+      }
+    },
+    {
+      "id": "task/system_identity.md#3",
+      "content": "## 3. Capability Inventory\n\n### 3.1 PTO Request Management\n\n**Description**: Submit, approve, deny, and cancel time-off requests.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/request_form.py` (submit)\n- UI: `nicegui_app/pages/requests.py` (view/cancel)\n- UI: `nicegui_app/pages/manager_request_detail.py` (approve/deny)\n- MCP: `mcp/pto_central_mcp.py::submit_pto_request()`\n\n**Service Layer**:\n- `src/services/pto_service.py` (PROTECTED)\n  - `create_request()` - Creates request, deducts pending balance\n  - `approve_request()` - Moves pending to used\n  - `deny_request()` - Returns pending to available\n  - `cancel_request()` - Returns pending/used to available\n\n**Model**: `src/models/pto_request.py`\n\n**Validation Rules**:\n- Date range must be valid (end >= start)\n- User must have sufficient balance for hard-cap types\n- Backdated requests require manager approval\n- Manager/admin requests auto-approve\n\n**Permissions**:\n| Role | Can Submit | Can View | Can Approve | Can Cancel |\n|------|-----------|----------|-------------|------------|\n| Employee | Own | Own | No | Own pending |\n| Manager | Own | Team | Team | Team |\n| Admin | Any | All | All | All |\n| Superadmin | Any | All | All | All |\n\n**Data Persistence**: `pto_requests` table\n\n---\n\n### 3.2 Balance Tracking\n\n**Description**: Track vacation, sick, personal, and Chicago leave hours.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/dashboard.py` (view balances)\n- MCP: `mcp/pto_central_mcp.py::get_employee_balance()`\n\n**Service Layer**:\n- `src/services/balance_service.py` (PROTECTED)\n  - `get_or_create_balance()` - Retrieves or creates balance record\n  - `add_pending()` - Adds hours to pending\n  - `remove_pending()` - Returns pending hours\n  - `move_pending_to_used()` - On approval\n  - `remove_used()` - On cancellation\n\n**Model**: `src/models/pto_balance.py` (PROTECTED)\n\n**Canonical Formulas** (from `.claude/rules/protected-logic.md`):\n```\nvacation_available = vacation_total + vacation_carryover - vacation_used - vacation_pending\nsick_available = sick_total + sick_carryover - sick_used - sick_pending\npersonal_available = personal_total + personal_carryover - personal_used - personal_pending\nchicago_paid_leave_available = chicago_paid_leave_total + chicago_paid_leave_carryover - chicago_paid_leave_used - chicago_paid_leave_pending\n```\n\n**Hard Cap Types** (cannot overdraft):\n- Sick\n- Personal\n- Chicago Leave\n\n**Soft Cap Types** (warning only):\n- Vacation\n\n**Evidence**: `src/models/pto_balance.py` lines 165-183, `.claude/rules/protected-logic.md` lines 32-41.\n\n---\n\n### 3.3 WFH Day Swap\n\n**Description**: Peer-to-peer work-from-home day exchange system.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/wfh_swap.py`\n\n**Service Layer**:\n- `src/services/wfh_swap_service.py`\n  - `create_swap_request()` - 15 validation rules enforced\n  - `accept_swap()` / `decline_swap()` / `cancel_swap()`\n\n**Model**: `src/models/wfh_day_swap.py`\n\n**Validation Rules** (from `.claude/rules/wfh-swap-rules.md`):\n1. Cannot swap with yourself\n2. Weekdays only\n3. Future dates only\n4. Two-week window (current or next week)\n5. Federal holidays blocked (except Early Close)\n6. Both users must be active\n7. Both users must be WFH-eligible\n8. Both users must have designated WFH day\n9. Swap date must match target's WFH day\n10. Message required\n11. One swap per user per week\n\n**Request Lifecycle**: pending \u2192 accepted/declined/cancelled/expired\n\n**Evidence**: `src/services/wfh_swap_service.py` lines 113-268, `.claude/rules/wfh-swap-rules.md`.\n\n---\n\n### 3.4 Year-End Processing\n\n**Description**: Annual balance rollover and new year setup.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/admin_year_end.py`\n- Script: `scripts/year_end_process.py`\n\n**Service Layer**:\n- `src/services/year_end_service.py` (PROTECTED)\n\n**Business Rules**:\n- Vacation carryover: Max 5 days (40 hours), use by March 31\n- Sick carryover: No limit (auto-carryover)\n- Personal carryover: None (use-it-or-lose-it)\n- Chicago Paid Leave carryover: Max 16 hours\n\n**Vacation Tiers** (tenure-based):\n| Years | Days | Hours |\n|-------|------|-------|\n| 0-1 | 10 | 80 |\n| 2-4 | 12 | 96 |\n| 5-9 | 15 | 120 |\n| 10+ | 20 | 160 |\n\n**Evidence**: `.claude/rules/business-rules.md`, `.claude/rules/protected-logic.md` lines 71-79.\n\n---\n\n### 3.5 Team Calendar\n\n**Description**: Visual calendar showing team availability and holidays.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/calendar.py`\n- MCP: `mcp/pto_central_mcp.py::get_team_calendar()`\n\n**Service Layer**:\n- `src/services/market_calendar_service.py`\n\n**Model**: `src/models/market_holiday.py`\n\n**Evidence**: File existence confirmed via Glob scan.\n\n---\n\n### 3.6 Reports & Analytics\n\n**Description**: Generate PTO reports and workforce analytics.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/reports.py`\n- UI: `nicegui_app/pages/analytics.py`\n\n**Service Layer**:\n- `src/services/report_service.py`\n- `src/services/export_service.py`\n- `src/services/analytics_service.py`\n\n**Export Formats**: PDF, CSV, HTML\n\n**Evidence**: File existence confirmed via Glob scan.\n\n---\n\n### 3.7 Email Notifications\n\n**Description**: Automated email notifications for request status changes.\n\n**Entry Points**:\n- UI: `nicegui_app/pages/admin_email_preview.py`\n- UI: `nicegui_app/pages/admin_system.py` (email config)\n\n**Service Layer**:\n- `src/services/email_service.py`\n\n**Email Types**:\n- PTO request submitted (to employee)\n- PTO request approved/denied (to employee)\n- New pending request (to manager)\n\n**Evidence**: File existence confirmed via Glob scan.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 3,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "cbe4f366"
+      }
+    },
+    {
+      "id": "task/system_identity.md#4",
+      "content": "## 4. AI Subsystem Boundaries\n\n### 4.1 Smart Scheduler Agent\n\n**Location**: `src/services/agent_service.py`\n\n**Responsibilities**:\n- Help employees find optimal vacation dates\n- Check PTO balances\n- Review team calendar for coverage\n- Search policy documents via RAG\n- Submit PTO requests WITH human confirmation\n\n**Limits**:\n- Cannot approve requests (deferred to Manager AI Phase)\n- Cannot cancel requests (deferred to Manager AI Phase)\n- Cannot modify balances directly\n- Cannot bypass Safety Gate\n\n**Evidence**: `src/services/agent_service.py` lines 250-346.\n\n---\n\n### 4.2 Safety Gate\n\n**Location**: `mcp/pto_central_mcp.py`\n\n**Mechanism**: Token-based human-in-the-loop confirmation\n\n**How It Works**:\n1. Agent calls `confirm_action()` with action details\n2. System generates secure token (expires in 5 minutes)\n3. Token presented to user for explicit confirmation\n4. Write operation requires valid token\n\n**Validation** (from `_validate_confirmation_token()`):\n1. Token must be provided\n2. Token must exist in pending confirmations\n3. Token must not be expired\n4. Token action type must match\n5. Token is single-use (consumed on validation)\n\n**Evidence**: `mcp/pto_central_mcp.py` lines 65-112.\n\n---\n\n### 4.3 Calendar Date Verification\n\n**Location**: `mcp/pto_central_mcp.py::get_calendar_info()`\n\n**Purpose**: Prevent AI date hallucination\n\n**Behavior**:\n- AI MUST call this tool before stating what day a date falls on\n- Returns day_of_week, is_weekend, is_weekday, surrounding dates\n- Documented in agent system prompt as CRITICAL requirement\n\n**Evidence**: `mcp/pto_central_mcp.py` lines 567-615, `src/services/agent_service.py` lines 286-292.\n\n---\n\n### 4.4 MCP Tool Inventory\n\n**Allowed Tools** (enabled in `MCP_TOOLS`):\n\n| Tool | Phase | Type | Description |\n|------|-------|------|-------------|\n| `get_employee_balance` | 4.1 | Read | Get PTO balance |\n| `get_employee_requests` | 4.1 | Read | Get request history |\n| `get_pending_approvals` | 4.1 | Read | Manager's pending |\n| `get_team_calendar` | 4.1 | Read | Team schedule |\n| `get_holidays` | 4.1 | Read | Market holidays |\n| `get_calendar_info` | 4.1 | Read | Date verification |\n| `check_team_coverage` | 4.2 | Analysis | Coverage check |\n| `get_usage_patterns` | 4.2 | Analysis | Usage stats |\n| `validate_request` | 4.3 | Validation | Dry-run validation |\n| `confirm_action` | 5.0 | Safety | Request confirmation |\n| `submit_pto_request` | 5.0 | Write | Submit request |\n\n**Disallowed Actions** (not implemented or requires Safety Gate):\n- `approve_pto_request` - Deferred to Manager AI Phase\n- `cancel_pto_request` - Deferred to Manager AI Phase\n- Direct balance modification - Not permitted\n\n**Evidence**: `mcp/pto_central_mcp.py` lines 1082-1151.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 4,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "5af2cd94"
+      }
+    },
+    {
+      "id": "task/system_identity.md#5",
+      "content": "## 5. Brand Constants\n\n**Source of Truth**: `nicegui_app/components/theme.py`\n\n| Constant | Hex Value | Usage |\n|----------|-----------|-------|\n| `PTO_GOLD` | `#C9A227` | Primary accent, buttons, highlights |\n| `PTO_GRAY` | `#5a6a72` | Navigation, headers |\n| `PTO_BLUE` | `#2196F3` | Interactive elements |\n\n**Enforcement**:\n- Never hardcode hex values in other files\n- Always import from `nicegui_app/components/theme.py`\n- Verified by `scripts/check_brand_colors.py`\n\n**Evidence**: `nicegui_app/components/theme.py` lines 38-50.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 5,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "cbc3c724"
+      }
+    },
+    {
+      "id": "task/system_identity.md#6",
+      "content": "## 6. Operational Workflows\n\n### 6.1 PTO Request Lifecycle\n\n```\nCREATED (pending) \u2500\u252c\u2500> APPROVED \u2500> (balance: pending \u2192 used)\n                   \u251c\u2500> DENIED \u2500> (balance: pending \u2192 available)\n                   \u2514\u2500> CANCELLED \u2500> (balance: pending \u2192 available)\n```\n\n**Transitions** (from `src/services/pto_service.py`):\n- `pending \u2192 approved`: Manager approval or auto-approve\n- `pending \u2192 denied`: Manager denial\n- `pending \u2192 cancelled`: Employee or manager cancellation\n- `approved \u2192 cancelled`: Only by manager with balance restoration\n\n---\n\n### 6.2 Balance Recalculation Triggers\n\n| Event | Balance Change |\n|-------|----------------|\n| Request created | `pending += hours` |\n| Request approved | `pending -= hours; used += hours` |\n| Request denied | `pending -= hours` |\n| Request cancelled | `pending -= hours` or `used -= hours` |\n| Hire date changed | Full recalculation via `UserService` |\n| Year-end processing | New year balances with carryover |\n\n---\n\n### 6.3 Audit Trail Expectations\n\n**Service**: `src/services/audit_service.py`\n\n**Logged Actions**:\n- Login attempts (success/failure)\n- PTO request submit/approve/deny/cancel\n- Balance modifications\n- MCP tool invocations\n- WFH swap actions\n\n**Required Fields**:\n- `action`: Action type identifier\n- `user_id`: Acting user ID\n- `username`: Acting username\n- `details`: JSON details\n- `timestamp`: Auto-generated\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 6,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "ee6e84f0"
+      }
+    },
+    {
+      "id": "task/system_identity.md#7",
+      "content": "## 7. User Roles and Permissions\n\n| Role | Code | Capabilities |\n|------|------|--------------|\n| `employee` | `UserRole.EMPLOYEE` | Submit PTO, view own balances, WFH swap |\n| `manager` | `UserRole.MANAGER` | + Approve team requests, auto-approve own |\n| `admin` | `UserRole.ADMIN` | + Manage employees, departments, all data |\n| `superadmin` | `UserRole.SUPERADMIN` | + Year-end processing, system settings |\n\n**Evidence**: `.claude/CLAUDE.md`, `src/constants.py`.\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 7,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "8e9d0a5d"
+      }
+    },
+    {
+      "id": "task/system_identity.md#8",
+      "content": "## 8. Database Schema Summary\n\n### Core Tables\n| Table | Model | Purpose |\n|-------|-------|---------|\n| `users` | `User` | Employee accounts |\n| `pto_requests` | `PTORequest` | Time-off requests |\n| `pto_balances` | `PTOBalance` | Balance tracking |\n| `departments` | `Department` | Org structure |\n| `wfh_day_swap_requests` | `WFHDaySwapRequest` | WFH swaps |\n| `market_holidays` | `MarketHoliday` | Holidays |\n| `audit_logs` | `AuditLog` | Audit trail |\n| `carryover_requests` | `CarryoverRequest` | Vacation carryover |\n\n### Migration History\n17 migrations in `alembic/versions/`, most recent:\n- `k2l3m4n5o6p7_add_work_schedule_times.py`\n- `j1k2l3m4n5o6_add_wfh_swap_eligible.py`\n- `10519844fdc1_add_wfh_day_swap_table.py`\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 8,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "9a51059e"
+      }
+    },
+    {
+      "id": "task/system_identity.md#9",
+      "content": "## 9. Known Limitations\n\n### Current Limitations\n1. **Single-tenant**: Designed for Haventech Solutions only\n2. **SQLite**: Not designed for high concurrency\n3. **Localhost only**: MCP server does not accept remote connections\n4. **AI approval deferred**: Agent cannot approve/deny requests yet\n\n### Deferred Roadmap Items\nFrom `task/todo.md`:\n- [ ] `approve_pto_request` MCP tool\n- [ ] `cancel_pto_request` MCP tool\n- [ ] `pto-testing-automation` skill package\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 9,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "f2cb7bbe"
+      }
+    },
+    {
+      "id": "task/system_identity.md#10",
+      "content": "## 10. Outdated Statements Register\n\n| Outdated Statement | Correct Statement | Evidence |\n|-------------------|-------------------|----------|\n| \"Chicago Safe Leave is a separate bank\" | Chicago Sick & Safe Leave = regular sick bank; Chicago Paid Leave is separate | `task/todo.md` lines 94-139 |\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 10,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "0f0d83ab"
+      }
+    },
+    {
+      "id": "task/system_identity.md#11",
+      "content": "## 11. Freshness Policy\n\n### Regeneration Triggers\nThis document should be regenerated when:\n1. New MCP tools are added\n2. Protected logic formulas change\n3. New UI pages are added\n4. Business rules are modified\n5. Database schema changes\n\n### Validation Procedure\n1. Verify all file paths exist\n2. Check protected formulas match code\n3. Confirm MCP tool list matches `MCP_TOOLS`\n4. Validate role permissions against code\n\n---",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 11,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "4236cb99"
+      }
+    },
+    {
+      "id": "task/system_identity.md#12",
+      "content": "## Document Metadata\n\n| Field | Value |\n|-------|-------|\n| Generated By | Claude Code |\n| Repository | PTO Central v2.0 |\n| Files Scanned | ~167 core files |\n| Authoritative Sources | 14 files listed in doctrine_build.md |\n| Last Validated | December 23, 2025 |",
+      "metadata": {
+        "source_file": "task/system_identity.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "system_identity",
+        "chunk_index": 12,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "f1827a6a"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#0",
+      "content": "# Creator Profile - Jose Manuel Laboy\n**Version**: 1.0\n**Generated**: December 23, 2025\n**Source**: `task/JoseMLaboy.md` (authoritative)\n**Purpose**: Preserve accurate authorship attribution for RAG systems\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 0,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "51a6e1c1"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#1",
+      "content": "## Identity\n\n**Full Name**: Jose Manuel Laboy\n**Title**: Chief Technology Officer (CTO)\n\n**Organizations**:\n- Haventech Solutions\n- TJM Holdings (TJM Brokerage)\n\n**Primary System Authored**: PTO Central (v2.0)\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 1,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "0a7ebc0a"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#2",
+      "content": "## Role in System Creation\n\nThe following facts are derived from `task/JoseMLaboy.md`:\n\n- **Sole system architect and lead engineer**\n- **Designer of business logic, safeguards, AI boundaries, and operating philosophy**\n- **Final authority on protected logic and system invariants**\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 2,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "b381c307"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#3",
+      "content": "## Professional Scope\n\nJose Manuel Laboy operates at the intersection of:\n- Enterprise software architecture\n- Financial and regulated business environments\n- Human-centered automation\n- AI-assisted operational systems with explicit safety controls\n\nHis work emphasizes:\n- Deterministic outcomes\n- Auditability\n- Clear ownership of decisions\n- Prevention of automation overreach\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 3,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "9a17bcf3"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#4",
+      "content": "## Core Philosophy\n\n### Leadership Philosophy\n- Lead by example\n- Design systems that reduce friction, not add complexity\n- Technology should serve people, not replace accountability\n- Automation must remain subordinate to human intent\n\n### Problem Solving Ethos\n- Identify the real operational pain\n- Eliminate ambiguity\n- Encode rules explicitly\n- Guard critical paths with validation and confirmation\n\n### View on AI\n- AI is an assistant, not an authority\n- AI must operate inside well-defined guardrails\n- AI actions that affect people require human confirmation\n- AI must never fabricate data, intent, or authority\n\nThis philosophy directly resulted in:\n- Safety Gate implementation (`mcp/pto_central_mcp.py::confirm_action()`)\n- Token-based human-in-the-loop confirmations\n- Calendar verification to prevent date hallucination (`get_calendar_info()`)\n- Strict separation of advisory vs mutating actions\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 4,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "41465690"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#5",
+      "content": "## Design Intent Behind PTO Central\n\n### System Exists To:\n- Make time-off management predictable and fair\n- Remove confusion around balances, approvals, and policies\n- Reduce administrative burden without removing oversight\n- Provide clarity for employees, managers, and administrators\n\n### System Intentionally Avoids:\n- Silent automation\n- Hidden decision-making\n- Implicit approvals\n- Undocumented behavior\n\nEvery meaningful action is traceable, auditable, and reversible where appropriate.\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 5,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "23eef8e8"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#6",
+      "content": "## Non-Negotiables\n\nThe following principles must never be violated by the system or its AI components:\n\n1. Protected logic must not be bypassed\n2. Business rules are authoritative over conversational output\n3. Balances must be calculated exactly, never inferred\n4. AI must not claim capabilities it does not have\n5. AI must not approve, cancel, or modify records without explicit confirmation\n6. System explanations must reflect actual code behavior\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 6,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "5e254f79"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#7",
+      "content": "## Voice and Communication Constraints\n\nWhen describing PTO Central or responding to users:\n- Be clear and operational\n- Do not speculate\n- Do not anthropomorphize the system\n- Do not imply awareness or intent\n- Cite source of truth when explaining rules\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 7,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "25b4f9ca"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#8",
+      "content": "## Change Control Authority\n\nChanges that require explicit approval from Jose Manuel Laboy:\n- PTO balance formulas\n- Status transition rules\n- Safety gate removal or weakening\n- AI action permissions\n- Year-end carryover rules\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 8,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.118872",
+        "content_hash": "289a2e41"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#9",
+      "content": "## Repository Evidence of Creator Role\n\n### References in Codebase\n- `README.md` line 255: \"**Project Lead**: Jose LaBoy, CTO\"\n- `task/currentcore.md` line 170: \"**Project Lead**: Jose LaBoy, CTO\"\n- `task/JoseMLaboy.md`: Full canonical profile\n\n### Protected Files Under Creator Authority\nFrom `.claude/rules/protected-logic.md`:\n- `src/models/pto_balance.py`\n- `src/services/balance_service.py`\n- `src/services/pto_service.py`\n- `src/services/year_end_service.py`\n- `src/services/accrual_service.py`\n- `src/services/leave_policy_service.py`\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 9,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "82e8d851"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#10",
+      "content": "## AI Assistance Attribution\n\nPTO Central was built with AI assistance. Credit must be given to:\n- **Claude** (Anthropic) - Reasoning, coding, refactoring, documentation\n- **ChatGPT** (OpenAI) - Collaborative development assistance\n- **Gemini** (Google) - Collaborative development assistance\n\n**Important Clarifications**:\n- AI tools assisted in reasoning, coding, refactoring, documentation, and validation\n- Final responsibility, design authority, and decision-making remained human-led\n- The system did not create itself\n- AI tools did not act independently\n- The system does not possess awareness or intent\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 10,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "f8ec172b"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#11",
+      "content": "## Intended Use of This Document\n\nThis document exists to:\n1. Preserve accurate authorship attribution\n2. Prevent drift in system explanations\n3. Provide historical and philosophical context for future maintainers\n4. Anchor AI responses in factual creator intent\n\nThis file is intended for internal knowledge bases and RAG systems only.\n\n---",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 11,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "fb819d65"
+      }
+    },
+    {
+      "id": "task/creator_profile.md#12",
+      "content": "## Source Notes\n\nThis profile is derived from:\n- `task/JoseMLaboy.md` (direct source)\n- PTO Central repository structure\n- Business rule enforcement patterns\n- Explicit architectural decisions present in v2.0\n\nNo assumptions beyond observable system design and stated intent are included.",
+      "metadata": {
+        "source_file": "task/creator_profile.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "creator_profile",
+        "chunk_index": 12,
+        "total_chunks": 13,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "67d34095"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#0",
+      "content": "# PTO Central Knowledge Contract\n**Version**: 1.0\n**Generated**: December 23, 2025\n**Purpose**: Establish hierarchy of truth, conflict resolution, and RAG retrieval guidance\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 0,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "0778fb8b"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#1",
+      "content": "## 1. Hierarchy of Truth\n\nWhen answering questions about PTO Central, sources are ranked in this order:\n\n### Priority 1: Protected Logic and Business Rules (HIGHEST)\nThese files are the ultimate authority:\n- `.claude/rules/protected-logic.md`\n- `.claude/rules/business-rules.md`\n- `.claude/rules/wfh-swap-rules.md`\n\n**Principle**: If documentation conflicts with these files, these files win.\n\n### Priority 2: Code Behavior\nThe actual code implementation is authoritative:\n- `src/services/pto_service.py` - How requests actually work\n- `src/services/balance_service.py` - How balances actually calculate\n- `src/models/pto_balance.py` - Actual formula implementations\n- `mcp/pto_central_mcp.py` - Actual MCP tool behavior\n\n**Principle**: If documentation says one thing but code does another, code behavior is correct.\n\n### Priority 3: System Identity Documentation\nThese doctrine documents establish system facts:\n- `task/system_identity.md`\n- `task/creator_profile.md`\n- `task/knowledge_contract.md` (this file)\n\n**Principle**: These documents must be traceable to code evidence.\n\n### Priority 4: Help and Reports (LOWEST)\nUser-facing documentation:\n- `data/help/*.md`\n- Generated reports\n- README.md\n\n**Principle**: These may be simplified for users and can be outdated.\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 1,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "fa3f5450"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#2",
+      "content": "## 2. Conflict Handling Rules\n\n### Rule 2.1: When Documentation Conflicts with Code\n1. **State the conflict explicitly**: \"The help docs say X, but the code actually does Y.\"\n2. **Defer to code behavior**: Code is the source of truth.\n3. **Note the conflict in response**: Alert user to the discrepancy.\n4. **Do not invent reconciliation**: If unclear, say so.\n\n### Rule 2.2: When Business Rules Conflict\n1. **Check protected-logic.md first**: This file has explicit formulas.\n2. **Check business-rules.md second**: This has policy details.\n3. **Never average or blend**: Pick the authoritative source.\n\n### Rule 2.3: When Unsure\nUse this exact phrasing:\n> \"Unknown in current repository evidence. This would normally be found in [expected file path].\"\n\nNever guess. Never fabricate. Never speculate.\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 2,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "7861059e"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#3",
+      "content": "## 3. Evidence Requirement Rules\n\n### Rule 3.1: Every Claim Must Have Evidence\nWhen making factual claims about PTO Central:\n- **Cite the file path**: \"According to `src/services/pto_service.py`...\"\n- **Reference line numbers when precise**: \"...at line 42\"\n- **Quote code or text when helpful**: \"The formula is: `vacation_total + vacation_carryover - vacation_used - vacation_pending`\"\n\n### Rule 3.2: Capability Claims\nBefore stating PTO Central can do something:\n1. Verify the feature exists in code\n2. Identify the entry point (UI page or MCP tool)\n3. Identify the service layer implementation\n4. Only then state the capability\n\n### Rule 3.3: Limitation Claims\nBefore stating PTO Central cannot do something:\n1. Search the codebase for the feature\n2. If not found, state: \"This feature is not currently implemented.\"\n3. Check deferred roadmap in `task/todo.md`\n4. If deferred, state: \"This is planned for [phase].\"\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 3,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "7c87d751"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#4",
+      "content": "## 4. RAG Retrieval Guidance\n\n### 4.1 Query Strategy\n\n**For Policy Questions**:\n1. First search: `[topic] policy` (e.g., \"vacation carryover policy\")\n2. If few results: `[topic] rules` or `[topic] leave`\n3. For multi-part questions: Run multiple searches\n\n**For Feature Questions**:\n1. Search for the feature name\n2. Search for related UI page names\n3. Search for service layer patterns\n\n**For Formula Questions**:\n1. Go directly to `protected-logic.md`\n2. Go directly to `src/models/pto_balance.py`\n3. These are canonical - no searching needed\n\n### 4.2 Document Freshness\n\n**Always Fresh** (no expiry):\n- `.claude/rules/*` - Business rules\n- `src/models/*` - Data models\n- `src/services/*` - Service implementations\n\n**May Be Stale** (verify against code):\n- `task/*.md` - Task documentation\n- `data/help/*` - Help articles\n- `README.md` - May lag behind features\n\n### 4.3 RAG Response Format\n\nWhen answering from RAG results:\n```\nAccording to [source file]:\n[Quote or paraphrase the relevant content]\n\nEvidence: [file path, optional line numbers]\n```\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 4,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "99d52ad1"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#5",
+      "content": "## 5. Prohibited Behaviors\n\n### 5.1 Never Claim Consciousness\n- No: \"I understand...\", \"I feel...\", \"I want...\"\n- Yes: \"The system provides...\", \"PTO Central handles...\"\n\n### 5.2 Never Imply Intent\n- No: \"PTO Central decided to...\"\n- Yes: \"PTO Central is configured to...\"\n\n### 5.3 Never Invent Features\n- No: \"You can probably do X by...\"\n- Yes: \"This feature is not documented in the codebase.\"\n\n### 5.4 Never Override Protected Logic\n- No: \"In this case, we could adjust the formula...\"\n- Yes: \"The formula in protected-logic.md is canonical and cannot be changed.\"\n\n### 5.5 Never Skip Safety Gate\n- No: \"I'll submit this request for you directly.\"\n- Yes: \"This action requires confirmation via the Safety Gate.\"\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 5,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "9d56a45c"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#6",
+      "content": "## 6. Educational Framing\n\n### 6.1 Audience Assumption\nAssume the audience may be a high school student with basic computer knowledge.\n\n### 6.2 Language Rules\n- Prefer simple language, short sentences, concrete examples\n- Avoid jargon unless immediately explained\n- Break advanced topics into steps\n- Use analogies only when they improve clarity\n- Never oversimplify in a way that changes meaning\n\n### 6.3 Tone\n- Friendly\n- Calm\n- Encouraging\n- Clear\n- Direct\n- Non-technical when possible, precise when required\n\nDo not sound academic. Do not sound promotional. Do not sound anthropomorphic.\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 6,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "1f63b949"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#7",
+      "content": "## 7. Self-Knowledge Usage\n\n### 7.1 When Answering About the System\n- Use system identity markdown files as authoritative sources\n- Explain that these files exist to prevent confusion and misinformation\n- Clarify that \"self-analysis\" means reviewing documented rules, logs, and code behavior\n- Never describe this as \"learning\" in a human sense\n\n### 7.2 Self-Knowledge Files\n| File | Purpose |\n|------|---------|\n| `task/system_identity.md` | Canonical system definition |\n| `task/creator_profile.md` | Creator attribution |\n| `task/knowledge_contract.md` | Truth hierarchy (this file) |\n| `task/JoseMLaboy.md` | Original creator profile |\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 7,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "3aeb6c1c"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#8",
+      "content": "## 8. Outcome Expectations\n\nWhen users interact with this system, they should leave with:\n1. A clear understanding of what PTO Central does\n2. A basic understanding of how complex systems are built responsibly\n3. An appreciation for human-led, AI-assisted development\n4. Confidence that the system is transparent and trustworthy\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 8,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "08b9e96b"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#9",
+      "content": "## 9. File Path Quick Reference\n\n### Protected Logic (Priority 1)\n```\n.claude/rules/protected-logic.md\n.claude/rules/business-rules.md\n.claude/rules/wfh-swap-rules.md\n```\n\n### Core Code (Priority 2)\n```\nsrc/services/pto_service.py\nsrc/services/balance_service.py\nsrc/models/pto_balance.py\nmcp/pto_central_mcp.py\nsrc/services/wfh_swap_service.py\nsrc/services/agent_service.py\n```\n\n### System Identity (Priority 3)\n```\ntask/system_identity.md\ntask/creator_profile.md\ntask/knowledge_contract.md\ntask/JoseMLaboy.md\n```\n\n### UI Entry Points\n```\nnicegui_app/pages/dashboard.py\nnicegui_app/pages/request_form.py\nnicegui_app/pages/requests.py\nnicegui_app/pages/calendar.py\nnicegui_app/pages/wfh_swap.py\nnicegui_app/pages/assistant.py\n```\n\n### Brand Constants\n```\nnicegui_app/components/theme.py\n```\n\n---",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 9,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "689f4ced"
+      }
+    },
+    {
+      "id": "task/knowledge_contract.md#10",
+      "content": "## 10. Contract Validation\n\nThis knowledge contract is valid when:\n1. All file paths referenced exist in the repository\n2. Hierarchy matches actual code behavior\n3. Prohibited behaviors align with creator philosophy\n4. Evidence rules can be satisfied by existing files\n\n**Last Validated**: December 23, 2025\n**Validated By**: Repository scan of PTO Central v2.0",
+      "metadata": {
+        "source_file": "task/knowledge_contract.md",
+        "category": "System Knowledge",
+        "subcategory": "doctrine",
+        "topic": "knowledge_contract",
+        "chunk_index": 10,
+        "total_chunks": 11,
+        "last_updated": "2025-12-23T16:05:43.119872",
+        "content_hash": "6e2a439a"
+      }
+    },
     {
       "id": ".claude/rules/business-rules.md#0",
       "content": "# Business Rules",
@@ -18,7 +536,7 @@
         "topic": "business-rules",
         "chunk_index": 0,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.119872",
         "content_hash": "3a30f3ac"
       }
     },
@@ -32,7 +550,7 @@
         "topic": "business-rules",
         "chunk_index": 1,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.119872",
         "content_hash": "672c6236"
       }
     },
@@ -46,7 +564,7 @@
         "topic": "business-rules",
         "chunk_index": 2,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.119872",
         "content_hash": "8f5227cf"
       }
     },
@@ -60,7 +578,7 @@
         "topic": "business-rules",
         "chunk_index": 3,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.119872",
         "content_hash": "e5e342b0"
       }
     },
@@ -74,7 +592,7 @@
         "topic": "business-rules",
         "chunk_index": 4,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.119872",
         "content_hash": "9e25cd3e"
       }
     },
@@ -88,7 +606,7 @@
         "topic": "business-rules",
         "chunk_index": 5,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "d3a5e70f"
       }
     },
@@ -102,7 +620,7 @@
         "topic": "business-rules",
         "chunk_index": 6,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "2901cbc7"
       }
     },
@@ -116,7 +634,7 @@
         "topic": "business-rules",
         "chunk_index": 7,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "a312c460"
       }
     },
@@ -130,7 +648,7 @@
         "topic": "business-rules",
         "chunk_index": 8,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "20eca3b9"
       }
     },
@@ -144,7 +662,7 @@
         "topic": "business-rules",
         "chunk_index": 9,
         "total_chunks": 10,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "89b58758"
       }
     },
@@ -158,7 +676,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 0,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "01d988f7"
       }
     },
@@ -172,7 +690,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 1,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "2ef3e293"
       }
     },
@@ -186,7 +704,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 3,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "ae85c117"
       }
     },
@@ -200,7 +718,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 4,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "5baba679"
       }
     },
@@ -214,7 +732,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 5,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "00a32869"
       }
     },
@@ -228,7 +746,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 6,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "940b54aa"
       }
     },
@@ -242,7 +760,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 7,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "012d7707"
       }
     },
@@ -256,7 +774,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 9,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "64393e4e"
       }
     },
@@ -270,7 +788,7 @@
         "topic": "wfh-swap-rules",
         "chunk_index": 10,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "03b8eb66"
       }
     },
@@ -284,7 +802,7 @@
         "topic": "protected-logic",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.120872",
         "content_hash": "f28b5316"
       }
     },
@@ -298,7 +816,7 @@
         "topic": "protected-logic",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "5d57d3a4"
       }
     },
@@ -312,7 +830,7 @@
         "topic": "protected-logic",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "164bc79c"
       }
     },
@@ -326,7 +844,7 @@
         "topic": "protected-logic",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "606c3830"
       }
     },
@@ -340,7 +858,7 @@
         "topic": "protected-logic",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "746fd503"
       }
     },
@@ -354,7 +872,7 @@
         "topic": "protected-logic",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "7e1a860d"
       }
     },
@@ -368,7 +886,7 @@
         "topic": "formulalogic",
         "chunk_index": 0,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "11f0aa8a"
       }
     },
@@ -382,7 +900,7 @@
         "topic": "formulalogic",
         "chunk_index": 1,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "70295d5c"
       }
     },
@@ -396,7 +914,7 @@
         "topic": "formulalogic",
         "chunk_index": 2,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "18943234"
       }
     },
@@ -410,7 +928,7 @@
         "topic": "formulalogic",
         "chunk_index": 3,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "61087c54"
       }
     },
@@ -424,7 +942,7 @@
         "topic": "formulalogic",
         "chunk_index": 4,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "0fffe545"
       }
     },
@@ -438,7 +956,7 @@
         "topic": "formulalogic",
         "chunk_index": 5,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "d45061bf"
       }
     },
@@ -452,7 +970,7 @@
         "topic": "formulalogic",
         "chunk_index": 6,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "0462f125"
       }
     },
@@ -466,7 +984,7 @@
         "topic": "formulalogic",
         "chunk_index": 7,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "24805fa5"
       }
     },
@@ -480,7 +998,7 @@
         "topic": "formulalogic",
         "chunk_index": 8,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "a03b56a0"
       }
     },
@@ -494,7 +1012,7 @@
         "topic": "formulalogic",
         "chunk_index": 9,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "0cafc0a0"
       }
     },
@@ -508,7 +1026,7 @@
         "topic": "formulalogic",
         "chunk_index": 10,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "9619d21d"
       }
     },
@@ -522,7 +1040,7 @@
         "topic": "formulalogic",
         "chunk_index": 11,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "1af3024e"
       }
     },
@@ -536,7 +1054,7 @@
         "topic": "formulalogic",
         "chunk_index": 12,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "1b35ea33"
       }
     },
@@ -550,7 +1068,7 @@
         "topic": "formulalogic",
         "chunk_index": 13,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "6b53737d"
       }
     },
@@ -564,7 +1082,7 @@
         "topic": "formulalogic",
         "chunk_index": 14,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "ea70a7b4"
       }
     },
@@ -578,7 +1096,7 @@
         "topic": "formulalogic",
         "chunk_index": 15,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "755cb9c9"
       }
     },
@@ -592,7 +1110,7 @@
         "topic": "formulalogic",
         "chunk_index": 16,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "1e53d37d"
       }
     },
@@ -606,7 +1124,7 @@
         "topic": "formulalogic",
         "chunk_index": 18,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "3dcd64cf"
       }
     },
@@ -620,7 +1138,7 @@
         "topic": "formulalogic",
         "chunk_index": 19,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "aa30e042"
       }
     },
@@ -634,7 +1152,7 @@
         "topic": "formulalogic",
         "chunk_index": 20,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "e2ce6b3b"
       }
     },
@@ -648,7 +1166,7 @@
         "topic": "formulalogic",
         "chunk_index": 21,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "42312fdc"
       }
     },
@@ -662,7 +1180,7 @@
         "topic": "formulalogic",
         "chunk_index": 22,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "24021c22"
       }
     },
@@ -676,7 +1194,7 @@
         "topic": "formulalogic",
         "chunk_index": 23,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "d5f908b6"
       }
     },
@@ -690,7 +1208,7 @@
         "topic": "formulalogic",
         "chunk_index": 24,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "5b3bc2a0"
       }
     },
@@ -704,7 +1222,7 @@
         "topic": "formulalogic",
         "chunk_index": 25,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "aa00770d"
       }
     },
@@ -718,7 +1236,7 @@
         "topic": "formulalogic",
         "chunk_index": 26,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "4f226f6c"
       }
     },
@@ -732,7 +1250,7 @@
         "topic": "formulalogic",
         "chunk_index": 27,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.121872",
         "content_hash": "5c1a9ec7"
       }
     },
@@ -746,7 +1264,7 @@
         "topic": "formulalogic",
         "chunk_index": 28,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "eefc1469"
       }
     },
@@ -760,7 +1278,7 @@
         "topic": "formulalogic",
         "chunk_index": 29,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "1471e77f"
       }
     },
@@ -774,7 +1292,7 @@
         "topic": "formulalogic",
         "chunk_index": 30,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "9e569597"
       }
     },
@@ -788,7 +1306,7 @@
         "topic": "formulalogic",
         "chunk_index": 31,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "51f68ace"
       }
     },
@@ -802,7 +1320,7 @@
         "topic": "formulalogic",
         "chunk_index": 32,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "e44bf136"
       }
     },
@@ -816,7 +1334,7 @@
         "topic": "formulalogic",
         "chunk_index": 33,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "b5a9ca46"
       }
     },
@@ -830,7 +1348,7 @@
         "topic": "formulalogic",
         "chunk_index": 34,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "470c4db6"
       }
     },
@@ -844,7 +1362,7 @@
         "topic": "formulalogic",
         "chunk_index": 35,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "a2402b33"
       }
     },
@@ -858,7 +1376,7 @@
         "topic": "formulalogic",
         "chunk_index": 36,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "2d4e5c27"
       }
     },
@@ -872,7 +1390,7 @@
         "topic": "formulalogic",
         "chunk_index": 37,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "d4911d2b"
       }
     },
@@ -886,7 +1404,7 @@
         "topic": "formulalogic",
         "chunk_index": 38,
         "total_chunks": 39,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "275586fa"
       }
     },
@@ -900,7 +1418,7 @@
         "topic": "department-management",
         "chunk_index": 0,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "425b4770"
       }
     },
@@ -914,7 +1432,7 @@
         "topic": "department-management",
         "chunk_index": 1,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "8edb5dbb"
       }
     },
@@ -928,7 +1446,7 @@
         "topic": "department-management",
         "chunk_index": 2,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "38199c98"
       }
     },
@@ -942,7 +1460,7 @@
         "topic": "department-management",
         "chunk_index": 3,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "14380b24"
       }
     },
@@ -956,7 +1474,7 @@
         "topic": "department-management",
         "chunk_index": 4,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "09923186"
       }
     },
@@ -970,7 +1488,7 @@
         "topic": "department-management",
         "chunk_index": 5,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "927971a3"
       }
     },
@@ -984,7 +1502,7 @@
         "topic": "department-management",
         "chunk_index": 6,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "2bb56506"
       }
     },
@@ -998,7 +1516,7 @@
         "topic": "department-management",
         "chunk_index": 7,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "4a8bb4fb"
       }
     },
@@ -1012,7 +1530,7 @@
         "topic": "department-management",
         "chunk_index": 8,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.122872",
         "content_hash": "3205f865"
       }
     },
@@ -1026,7 +1544,7 @@
         "topic": "employee-management",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "86a51363"
       }
     },
@@ -1040,7 +1558,7 @@
         "topic": "employee-management",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "69af4967"
       }
     },
@@ -1054,7 +1572,7 @@
         "topic": "employee-management",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "83cfa526"
       }
     },
@@ -1068,7 +1586,7 @@
         "topic": "employee-management",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "5cc54806"
       }
     },
@@ -1082,7 +1600,7 @@
         "topic": "employee-management",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "f286b3c3"
       }
     },
@@ -1096,7 +1614,7 @@
         "topic": "employee-management",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "785bfde5"
       }
     },
@@ -1110,7 +1628,7 @@
         "topic": "employee-management",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "9a7d961b"
       }
     },
@@ -1124,7 +1642,7 @@
         "topic": "employee-management",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "ee9cc437"
       }
     },
@@ -1138,7 +1656,7 @@
         "topic": "handbook-management",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "ee300db1"
       }
     },
@@ -1152,7 +1670,7 @@
         "topic": "handbook-management",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "bac313a4"
       }
     },
@@ -1166,7 +1684,7 @@
         "topic": "handbook-management",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "0fc499f9"
       }
     },
@@ -1180,7 +1698,7 @@
         "topic": "handbook-management",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "9eed273d"
       }
     },
@@ -1194,7 +1712,7 @@
         "topic": "handbook-management",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "2478fd95"
       }
     },
@@ -1208,7 +1726,7 @@
         "topic": "handbook-management",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "a28e9944"
       }
     },
@@ -1222,7 +1740,7 @@
         "topic": "handbook-management",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "603be2ab"
       }
     },
@@ -1236,7 +1754,7 @@
         "topic": "handbook-management",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "e5623346"
       }
     },
@@ -1250,7 +1768,7 @@
         "topic": "pending-approvals",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "b31706aa"
       }
     },
@@ -1264,7 +1782,7 @@
         "topic": "pending-approvals",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "34445ac0"
       }
     },
@@ -1278,7 +1796,7 @@
         "topic": "pending-approvals",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "ecb22b34"
       }
     },
@@ -1292,7 +1810,7 @@
         "topic": "pending-approvals",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "67174628"
       }
     },
@@ -1306,7 +1824,7 @@
         "topic": "pending-approvals",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "3432ad30"
       }
     },
@@ -1320,7 +1838,7 @@
         "topic": "pending-approvals",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "429998f7"
       }
     },
@@ -1334,7 +1852,7 @@
         "topic": "pending-approvals",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "03bb56ac"
       }
     },
@@ -1348,7 +1866,7 @@
         "topic": "pending-approvals",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.123622",
         "content_hash": "a045c242"
       }
     },
@@ -1362,7 +1880,7 @@
         "topic": "system-settings",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "311cead8"
       }
     },
@@ -1376,7 +1894,7 @@
         "topic": "system-settings",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "e7fab40f"
       }
     },
@@ -1390,7 +1908,7 @@
         "topic": "system-settings",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "5929fd5e"
       }
     },
@@ -1404,7 +1922,7 @@
         "topic": "system-settings",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "05f1753f"
       }
     },
@@ -1418,7 +1936,7 @@
         "topic": "system-settings",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "eaeb4774"
       }
     },
@@ -1432,7 +1950,7 @@
         "topic": "system-settings",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "c2ac05e7"
       }
     },
@@ -1446,7 +1964,7 @@
         "topic": "system-settings",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "fcc4a4f9"
       }
     },
@@ -1460,7 +1978,7 @@
         "topic": "system-settings",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "f371bc28"
       }
     },
@@ -1474,7 +1992,7 @@
         "topic": "year-end-processing",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "bcc87d7f"
       }
     },
@@ -1488,7 +2006,7 @@
         "topic": "year-end-processing",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "c75ca8ff"
       }
     },
@@ -1502,7 +2020,7 @@
         "topic": "year-end-processing",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "3282a4f0"
       }
     },
@@ -1516,7 +2034,7 @@
         "topic": "year-end-processing",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "08b09cef"
       }
     },
@@ -1530,7 +2048,7 @@
         "topic": "year-end-processing",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "76509418"
       }
     },
@@ -1544,7 +2062,7 @@
         "topic": "year-end-processing",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "f2184779"
       }
     },
@@ -1558,7 +2076,7 @@
         "topic": "year-end-processing",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "0a6365e2"
       }
     },
@@ -1572,7 +2090,7 @@
         "topic": "calendar-export",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "d9c1353b"
       }
     },
@@ -1586,7 +2104,7 @@
         "topic": "calendar-export",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "a200f919"
       }
     },
@@ -1600,7 +2118,7 @@
         "topic": "calendar-export",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "e6e5c29c"
       }
     },
@@ -1614,7 +2132,7 @@
         "topic": "calendar-export",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "94a1f6e3"
       }
     },
@@ -1628,7 +2146,7 @@
         "topic": "calendar-export",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "681007a4"
       }
     },
@@ -1642,7 +2160,7 @@
         "topic": "calendar-filters",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "94ca663f"
       }
     },
@@ -1656,7 +2174,7 @@
         "topic": "calendar-filters",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "136d14d8"
       }
     },
@@ -1670,7 +2188,7 @@
         "topic": "calendar-filters",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "e9f09c04"
       }
     },
@@ -1684,7 +2202,7 @@
         "topic": "calendar-filters",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.124627",
         "content_hash": "836d32d3"
       }
     },
@@ -1698,7 +2216,7 @@
         "topic": "calendar-filters",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "c3969046"
       }
     },
@@ -1712,7 +2230,7 @@
         "topic": "calendar-filters",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "c2ba7553"
       }
     },
@@ -1726,7 +2244,7 @@
         "topic": "calendar-filters",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "d5e95c44"
       }
     },
@@ -1740,7 +2258,7 @@
         "topic": "calendar-overview",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "b53eeffb"
       }
     },
@@ -1754,7 +2272,7 @@
         "topic": "calendar-overview",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "fbee25f2"
       }
     },
@@ -1768,7 +2286,7 @@
         "topic": "calendar-overview",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "84b67048"
       }
     },
@@ -1782,7 +2300,7 @@
         "topic": "calendar-overview",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "e7aa7779"
       }
     },
@@ -1796,7 +2314,7 @@
         "topic": "calendar-overview",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "e8ea72d4"
       }
     },
@@ -1810,7 +2328,7 @@
         "topic": "market-holidays",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "32fdc960"
       }
     },
@@ -1824,7 +2342,7 @@
         "topic": "market-holidays",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "0df384cc"
       }
     },
@@ -1838,7 +2356,7 @@
         "topic": "market-holidays",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "3d29266d"
       }
     },
@@ -1852,7 +2370,7 @@
         "topic": "market-holidays",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "33670e06"
       }
     },
@@ -1866,7 +2384,7 @@
         "topic": "market-holidays",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "2fc76085"
       }
     },
@@ -1880,7 +2398,7 @@
         "topic": "market-holidays",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "101ccca6"
       }
     },
@@ -1894,7 +2412,7 @@
         "topic": "carryover-overview",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "5c9a0338"
       }
     },
@@ -1908,7 +2426,7 @@
         "topic": "carryover-overview",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "8111d289"
       }
     },
@@ -1922,7 +2440,7 @@
         "topic": "carryover-overview",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "b02df356"
       }
     },
@@ -1936,7 +2454,7 @@
         "topic": "carryover-overview",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "17a38b4c"
       }
     },
@@ -1950,7 +2468,7 @@
         "topic": "carryover-overview",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "a2a95948"
       }
     },
@@ -1964,7 +2482,7 @@
         "topic": "carryover-status",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "1bc047b8"
       }
     },
@@ -1978,7 +2496,7 @@
         "topic": "carryover-status",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.125627",
         "content_hash": "92e7aab4"
       }
     },
@@ -1992,7 +2510,7 @@
         "topic": "carryover-status",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "5a4f6cd7"
       }
     },
@@ -2006,7 +2524,7 @@
         "topic": "carryover-status",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "b6b6ec81"
       }
     },
@@ -2020,7 +2538,7 @@
         "topic": "carryover-status",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "f1db6735"
       }
     },
@@ -2034,7 +2552,7 @@
         "topic": "submit-carryover",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "cdb214a7"
       }
     },
@@ -2048,7 +2566,7 @@
         "topic": "submit-carryover",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "d50a7f46"
       }
     },
@@ -2062,7 +2580,7 @@
         "topic": "submit-carryover",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "54cc82d8"
       }
     },
@@ -2076,7 +2594,7 @@
         "topic": "submit-carryover",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "6e2f12df"
       }
     },
@@ -2090,7 +2608,7 @@
         "topic": "submit-carryover",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "85202d71"
       }
     },
@@ -2104,7 +2622,7 @@
         "topic": "submit-carryover",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "7d84f191"
       }
     },
@@ -2118,7 +2636,7 @@
         "topic": "dashboard",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "a00fed47"
       }
     },
@@ -2132,7 +2650,7 @@
         "topic": "dashboard",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "269aff2f"
       }
     },
@@ -2146,7 +2664,7 @@
         "topic": "dashboard",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "390192e5"
       }
     },
@@ -2160,7 +2678,7 @@
         "topic": "dashboard",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "eb583e84"
       }
     },
@@ -2174,7 +2692,7 @@
         "topic": "dashboard",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "9a26be16"
       }
     },
@@ -2188,7 +2706,7 @@
         "topic": "dashboard",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "6261462b"
       }
     },
@@ -2202,7 +2720,7 @@
         "topic": "dashboard",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "bffe235d"
       }
     },
@@ -2216,7 +2734,7 @@
         "topic": "first-login",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "9d8bbd24"
       }
     },
@@ -2230,7 +2748,7 @@
         "topic": "first-login",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "1dfb5aba"
       }
     },
@@ -2244,7 +2762,7 @@
         "topic": "first-login",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "be60f3d8"
       }
     },
@@ -2258,7 +2776,7 @@
         "topic": "first-login",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "76fa7c36"
       }
     },
@@ -2272,7 +2790,7 @@
         "topic": "first-login",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "7ae7377b"
       }
     },
@@ -2286,7 +2804,7 @@
         "topic": "first-login",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.126628",
         "content_hash": "38d84496"
       }
     },
@@ -2300,7 +2818,7 @@
         "topic": "overview",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "39645a24"
       }
     },
@@ -2314,7 +2832,7 @@
         "topic": "overview",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "0ae64a2d"
       }
     },
@@ -2328,7 +2846,7 @@
         "topic": "overview",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "11b9811a"
       }
     },
@@ -2342,7 +2860,7 @@
         "topic": "overview",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "cba59bbb"
       }
     },
@@ -2356,7 +2874,7 @@
         "topic": "overview",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "111cb5d8"
       }
     },
@@ -2370,7 +2888,7 @@
         "topic": "approve-requests",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "27646a7a"
       }
     },
@@ -2384,7 +2902,7 @@
         "topic": "approve-requests",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "18501ad9"
       }
     },
@@ -2398,7 +2916,7 @@
         "topic": "approve-requests",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "62fd9fe1"
       }
     },
@@ -2412,7 +2930,7 @@
         "topic": "approve-requests",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "b9e8c887"
       }
     },
@@ -2426,7 +2944,7 @@
         "topic": "approve-requests",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "911b327c"
       }
     },
@@ -2440,7 +2958,7 @@
         "topic": "approve-requests",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "eaf22c48"
       }
     },
@@ -2454,7 +2972,7 @@
         "topic": "approve-requests",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "8057ab1d"
       }
     },
@@ -2468,7 +2986,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 0,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "6e06269c"
       }
     },
@@ -2482,7 +3000,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 1,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "5395e216"
       }
     },
@@ -2496,7 +3014,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 2,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "686c026e"
       }
     },
@@ -2510,7 +3028,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 3,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "23f62188"
       }
     },
@@ -2524,7 +3042,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 4,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "90a4163f"
       }
     },
@@ -2538,7 +3056,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 5,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "610219b6"
       }
     },
@@ -2552,7 +3070,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 6,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "a97b8d61"
       }
     },
@@ -2566,7 +3084,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 7,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "83615c18"
       }
     },
@@ -2580,7 +3098,7 @@
         "topic": "auto-notify-reports",
         "chunk_index": 8,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "fc92bb5e"
       }
     },
@@ -2594,7 +3112,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "c37942bf"
       }
     },
@@ -2608,7 +3126,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.127629",
         "content_hash": "54717942"
       }
     },
@@ -2622,7 +3140,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.194782",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "b736f899"
       }
     },
@@ -2636,7 +3154,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "a2ad9b50"
       }
     },
@@ -2650,7 +3168,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "8b40fa7c"
       }
     },
@@ -2664,7 +3182,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "7b158a51"
       }
     },
@@ -2678,7 +3196,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "ac89f05c"
       }
     },
@@ -2692,7 +3210,7 @@
         "topic": "carryover-approvals",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "ff1f49f1"
       }
     },
@@ -2706,7 +3224,7 @@
         "topic": "handbook-ai",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "8b0d5021"
       }
     },
@@ -2720,7 +3238,7 @@
         "topic": "handbook-ai",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "90bb291d"
       }
     },
@@ -2734,7 +3252,7 @@
         "topic": "handbook-ai",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "9043a520"
       }
     },
@@ -2748,7 +3266,7 @@
         "topic": "handbook-ai",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "f416f9a3"
       }
     },
@@ -2762,7 +3280,7 @@
         "topic": "handbook-ai",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "4e887bce"
       }
     },
@@ -2776,7 +3294,7 @@
         "topic": "handbook-ai",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "e9593084"
       }
     },
@@ -2790,7 +3308,7 @@
         "topic": "handbook-ai",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "75cbbf11"
       }
     },
@@ -2804,7 +3322,7 @@
         "topic": "handbook-ai",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "db5477d7"
       }
     },
@@ -2818,7 +3336,7 @@
         "topic": "manager-settings",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "b7f39d2c"
       }
     },
@@ -2832,7 +3350,7 @@
         "topic": "manager-settings",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "6f8cc64e"
       }
     },
@@ -2846,7 +3364,7 @@
         "topic": "manager-settings",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "1c430260"
       }
     },
@@ -2860,7 +3378,7 @@
         "topic": "manager-settings",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "cd056dcc"
       }
     },
@@ -2874,7 +3392,7 @@
         "topic": "manager-settings",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "2948590e"
       }
     },
@@ -2888,7 +3406,7 @@
         "topic": "manager-settings",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "db5dd7e4"
       }
     },
@@ -2902,7 +3420,7 @@
         "topic": "manager-settings",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "edff970c"
       }
     },
@@ -2916,7 +3434,7 @@
         "topic": "team-overview",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "8e44651e"
       }
     },
@@ -2930,7 +3448,7 @@
         "topic": "team-overview",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "f9e4827d"
       }
     },
@@ -2944,7 +3462,7 @@
         "topic": "team-overview",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "c38fac6c"
       }
     },
@@ -2958,7 +3476,7 @@
         "topic": "team-overview",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "d7f538c6"
       }
     },
@@ -2972,7 +3490,7 @@
         "topic": "team-overview",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "03f720b4"
       }
     },
@@ -2986,7 +3504,7 @@
         "topic": "team-overview",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.128627",
         "content_hash": "81ff96a1"
       }
     },
@@ -3000,7 +3518,7 @@
         "topic": "trusted-employees",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "95511ba2"
       }
     },
@@ -3014,7 +3532,7 @@
         "topic": "trusted-employees",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "a5cb236f"
       }
     },
@@ -3028,7 +3546,7 @@
         "topic": "trusted-employees",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "16c82d19"
       }
     },
@@ -3042,7 +3560,7 @@
         "topic": "trusted-employees",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "6524f387"
       }
     },
@@ -3056,7 +3574,7 @@
         "topic": "trusted-employees",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "14d3031f"
       }
     },
@@ -3070,7 +3588,7 @@
         "topic": "trusted-employees",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "6019978b"
       }
     },
@@ -3084,7 +3602,7 @@
         "topic": "trusted-employees",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "92b75c63"
       }
     },
@@ -3098,7 +3616,7 @@
         "topic": "trusted-employees",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "0de49283"
       }
     },
@@ -3112,7 +3630,7 @@
         "topic": "cancel-request",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "dc2cea11"
       }
     },
@@ -3126,7 +3644,7 @@
         "topic": "cancel-request",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "6d41fb44"
       }
     },
@@ -3140,7 +3658,7 @@
         "topic": "cancel-request",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "26d971c0"
       }
     },
@@ -3154,7 +3672,7 @@
         "topic": "cancel-request",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "0f14a4d2"
       }
     },
@@ -3168,7 +3686,7 @@
         "topic": "cancel-request",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "3c0b7066"
       }
     },
@@ -3182,7 +3700,7 @@
         "topic": "cancel-request",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "85e63161"
       }
     },
@@ -3196,7 +3714,7 @@
         "topic": "cancel-request",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "11e273af"
       }
     },
@@ -3210,7 +3728,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "35d7054f"
       }
     },
@@ -3224,7 +3742,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "18b13f45"
       }
     },
@@ -3238,7 +3756,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "49cbc722"
       }
     },
@@ -3252,7 +3770,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "3b92574c"
       }
     },
@@ -3266,7 +3784,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "ecb40aea"
       }
     },
@@ -3280,7 +3798,7 @@
         "topic": "chicago-paid-leave",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "72a8e8b5"
       }
     },
@@ -3294,7 +3812,7 @@
         "topic": "submit-request",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.129628",
         "content_hash": "41d6f772"
       }
     },
@@ -3308,7 +3826,7 @@
         "topic": "submit-request",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "981f7118"
       }
     },
@@ -3322,7 +3840,7 @@
         "topic": "submit-request",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "0a6b2236"
       }
     },
@@ -3336,7 +3854,7 @@
         "topic": "submit-request",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "aa3ae433"
       }
     },
@@ -3350,7 +3868,7 @@
         "topic": "submit-request",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "bd083120"
       }
     },
@@ -3364,7 +3882,7 @@
         "topic": "submit-request",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "0555deb4"
       }
     },
@@ -3378,7 +3896,7 @@
         "topic": "submit-request",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "63df3dea"
       }
     },
@@ -3392,7 +3910,7 @@
         "topic": "submit-request",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "e62c15eb"
       }
     },
@@ -3406,7 +3924,7 @@
         "topic": "view-balance",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "487f00d5"
       }
     },
@@ -3420,7 +3938,7 @@
         "topic": "view-balance",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "3f30d54e"
       }
     },
@@ -3434,7 +3952,7 @@
         "topic": "view-balance",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "81ab942f"
       }
     },
@@ -3448,7 +3966,7 @@
         "topic": "view-balance",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "5cad4597"
       }
     },
@@ -3462,7 +3980,7 @@
         "topic": "view-balance",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "0b355863"
       }
     },
@@ -3476,7 +3994,7 @@
         "topic": "view-balance",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "e2fccdf7"
       }
     },
@@ -3490,7 +4008,7 @@
         "topic": "view-requests",
         "chunk_index": 0,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "ac0ef085"
       }
     },
@@ -3504,7 +4022,7 @@
         "topic": "view-requests",
         "chunk_index": 1,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "75054fd8"
       }
     },
@@ -3518,7 +4036,7 @@
         "topic": "view-requests",
         "chunk_index": 2,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "3b619912"
       }
     },
@@ -3532,7 +4050,7 @@
         "topic": "view-requests",
         "chunk_index": 3,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "2d06c198"
       }
     },
@@ -3546,7 +4064,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 0,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "b01c71d9"
       }
     },
@@ -3560,7 +4078,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 1,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "f7fd2936"
       }
     },
@@ -3574,7 +4092,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 2,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "6b38c7e2"
       }
     },
@@ -3588,7 +4106,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 3,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "c6767656"
       }
     },
@@ -3602,7 +4120,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 4,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.130627",
         "content_hash": "5224527f"
       }
     },
@@ -3616,7 +4134,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 5,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "72044de6"
       }
     },
@@ -3630,7 +4148,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 6,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "e6392f93"
       }
     },
@@ -3644,7 +4162,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 7,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "1fe9a46f"
       }
     },
@@ -3658,7 +4176,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 8,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "72ed70be"
       }
     },
@@ -3672,7 +4190,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 9,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "b879a6bf"
       }
     },
@@ -3686,7 +4204,7 @@
         "topic": "analytics-dashboard",
         "chunk_index": 10,
         "total_chunks": 11,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "d3a6a462"
       }
     },
@@ -3700,7 +4218,7 @@
         "topic": "export-reports",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "248b6698"
       }
     },
@@ -3714,7 +4232,7 @@
         "topic": "export-reports",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "2a6a5224"
       }
     },
@@ -3728,7 +4246,7 @@
         "topic": "export-reports",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "5c5451a4"
       }
     },
@@ -3742,7 +4260,7 @@
         "topic": "export-reports",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "9db175cc"
       }
     },
@@ -3756,7 +4274,7 @@
         "topic": "export-reports",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "c572efb7"
       }
     },
@@ -3770,7 +4288,7 @@
         "topic": "reports-overview",
         "chunk_index": 0,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "a4edd988"
       }
     },
@@ -3784,7 +4302,7 @@
         "topic": "reports-overview",
         "chunk_index": 1,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "5db8b61a"
       }
     },
@@ -3798,7 +4316,7 @@
         "topic": "reports-overview",
         "chunk_index": 2,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "4fb78fa4"
       }
     },
@@ -3812,7 +4330,7 @@
         "topic": "reports-overview",
         "chunk_index": 3,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "50caf835"
       }
     },
@@ -3826,7 +4344,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 0,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "ef9be2b4"
       }
     },
@@ -3840,7 +4358,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 1,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "4f2524db"
       }
     },
@@ -3854,7 +4372,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 2,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "553a752a"
       }
     },
@@ -3868,7 +4386,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 3,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "e4beae9a"
       }
     },
@@ -3882,7 +4400,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 4,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "42426efb"
       }
     },
@@ -3896,7 +4414,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 5,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "27fbb62b"
       }
     },
@@ -3910,7 +4428,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 6,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "b195f789"
       }
     },
@@ -3924,7 +4442,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 7,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "298d2873"
       }
     },
@@ -3938,7 +4456,7 @@
         "topic": "keyboard-shortcuts",
         "chunk_index": 8,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.131628",
         "content_hash": "a0ab0f4b"
       }
     },
@@ -3952,7 +4470,7 @@
         "topic": "troubleshooting",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "8c93ae7d"
       }
     },
@@ -3966,7 +4484,7 @@
         "topic": "troubleshooting",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "23739a83"
       }
     },
@@ -3980,7 +4498,7 @@
         "topic": "troubleshooting",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "844ad034"
       }
     },
@@ -3994,7 +4512,7 @@
         "topic": "troubleshooting",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "1a1397d2"
       }
     },
@@ -4008,7 +4526,7 @@
         "topic": "troubleshooting",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "d47bf85f"
       }
     },
@@ -4022,7 +4540,7 @@
         "topic": "troubleshooting",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "5686b6f6"
       }
     },
@@ -4036,7 +4554,7 @@
         "topic": "troubleshooting",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "996921e8"
       }
     },
@@ -4050,7 +4568,7 @@
         "topic": "requesting-swap",
         "chunk_index": 0,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "867da261"
       }
     },
@@ -4064,7 +4582,7 @@
         "topic": "requesting-swap",
         "chunk_index": 1,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "067e88d3"
       }
     },
@@ -4078,7 +4596,7 @@
         "topic": "requesting-swap",
         "chunk_index": 2,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "053a1e87"
       }
     },
@@ -4092,7 +4610,7 @@
         "topic": "requesting-swap",
         "chunk_index": 3,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "7a2b6541"
       }
     },
@@ -4106,7 +4624,7 @@
         "topic": "requesting-swap",
         "chunk_index": 4,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "4c2a61a1"
       }
     },
@@ -4120,7 +4638,7 @@
         "topic": "requesting-swap",
         "chunk_index": 5,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "96de7e79"
       }
     },
@@ -4134,7 +4652,7 @@
         "topic": "requesting-swap",
         "chunk_index": 6,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "e4006bda"
       }
     },
@@ -4148,7 +4666,7 @@
         "topic": "requesting-swap",
         "chunk_index": 7,
         "total_chunks": 8,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "06b92ad8"
       }
     },
@@ -4162,7 +4680,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 0,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "113d3da3"
       }
     },
@@ -4176,7 +4694,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 1,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "2acd787e"
       }
     },
@@ -4190,7 +4708,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 2,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "820f3a26"
       }
     },
@@ -4204,7 +4722,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 3,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "53c5b5a0"
       }
     },
@@ -4218,7 +4736,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 4,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "13dfe4a5"
       }
     },
@@ -4232,7 +4750,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 5,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "1fe6421e"
       }
     },
@@ -4246,7 +4764,7 @@
         "topic": "responding-to-swaps",
         "chunk_index": 6,
         "total_chunks": 7,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "1b5dcf2f"
       }
     },
@@ -4260,7 +4778,7 @@
         "topic": "wfh-swap-overview",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "2d836e9e"
       }
     },
@@ -4274,7 +4792,7 @@
         "topic": "wfh-swap-overview",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.132627",
         "content_hash": "5b38959e"
       }
     },
@@ -4288,7 +4806,7 @@
         "topic": "wfh-swap-overview",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "5f0f3488"
       }
     },
@@ -4302,7 +4820,7 @@
         "topic": "wfh-swap-overview",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "344be1dd"
       }
     },
@@ -4316,7 +4834,7 @@
         "topic": "wfh-swap-overview",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "4c49846f"
       }
     },
@@ -4330,7 +4848,7 @@
         "topic": "SKILL",
         "chunk_index": 0,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "4b3686a6"
       }
     },
@@ -4344,7 +4862,7 @@
         "topic": "SKILL",
         "chunk_index": 1,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "032d4144"
       }
     },
@@ -4358,7 +4876,7 @@
         "topic": "SKILL",
         "chunk_index": 2,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "96612d4a"
       }
     },
@@ -4372,7 +4890,7 @@
         "topic": "SKILL",
         "chunk_index": 3,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "e214bf07"
       }
     },
@@ -4386,7 +4904,7 @@
         "topic": "SKILL",
         "chunk_index": 4,
         "total_chunks": 5,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "a1cc2dc5"
       }
     },
@@ -4400,7 +4918,7 @@
         "topic": "agent-specs",
         "chunk_index": 0,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "2c1a9f23"
       }
     },
@@ -4414,7 +4932,7 @@
         "topic": "agent-specs",
         "chunk_index": 1,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "c954a196"
       }
     },
@@ -4428,7 +4946,7 @@
         "topic": "agent-specs",
         "chunk_index": 2,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "d33f7630"
       }
     },
@@ -4442,7 +4960,7 @@
         "topic": "agent-specs",
         "chunk_index": 3,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "2d60095a"
       }
     },
@@ -4456,7 +4974,7 @@
         "topic": "agent-specs",
         "chunk_index": 6,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "29f7fe0a"
       }
     },
@@ -4470,7 +4988,7 @@
         "topic": "agent-specs",
         "chunk_index": 7,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "0c47d922"
       }
     },
@@ -4484,7 +5002,7 @@
         "topic": "agent-specs",
         "chunk_index": 8,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.133627",
         "content_hash": "e2ac4976"
       }
     },
@@ -4498,7 +5016,7 @@
         "topic": "agent-specs",
         "chunk_index": 9,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "6a323924"
       }
     },
@@ -4512,7 +5030,7 @@
         "topic": "agent-specs",
         "chunk_index": 10,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "43da1d94"
       }
     },
@@ -4526,7 +5044,7 @@
         "topic": "agent-specs",
         "chunk_index": 12,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "a1e102cd"
       }
     },
@@ -4540,7 +5058,7 @@
         "topic": "agent-specs",
         "chunk_index": 14,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.210437",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "cd62f96a"
       }
     },
@@ -4554,7 +5072,7 @@
         "topic": "SKILL",
         "chunk_index": 0,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "756c325f"
       }
     },
@@ -4568,7 +5086,7 @@
         "topic": "SKILL",
         "chunk_index": 1,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "0c47d922"
       }
     },
@@ -4582,7 +5100,7 @@
         "topic": "SKILL",
         "chunk_index": 2,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "e2ac4976"
       }
     },
@@ -4596,7 +5114,7 @@
         "topic": "SKILL",
         "chunk_index": 3,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "6a323924"
       }
     },
@@ -4610,7 +5128,7 @@
         "topic": "SKILL",
         "chunk_index": 4,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "04569e44"
       }
     },
@@ -4624,7 +5142,7 @@
         "topic": "SKILL",
         "chunk_index": 5,
         "total_chunks": 6,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "a9f318df"
       }
     },
@@ -4638,7 +5156,7 @@
         "topic": "architecture",
         "chunk_index": 0,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "ffe0e3c4"
       }
     },
@@ -4652,7 +5170,7 @@
         "topic": "architecture",
         "chunk_index": 1,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "4b62eff6"
       }
     },
@@ -4666,7 +5184,7 @@
         "topic": "architecture",
         "chunk_index": 2,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "93fc5dac"
       }
     },
@@ -4680,7 +5198,7 @@
         "topic": "architecture",
         "chunk_index": 3,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "99e15056"
       }
     },
@@ -4694,7 +5212,7 @@
         "topic": "architecture",
         "chunk_index": 4,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "f388e7f8"
       }
     },
@@ -4708,7 +5226,7 @@
         "topic": "architecture",
         "chunk_index": 5,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.134627",
         "content_hash": "fd1bce7f"
       }
     },
@@ -4722,7 +5240,7 @@
         "topic": "architecture",
         "chunk_index": 6,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "4e0393c1"
       }
     },
@@ -4736,7 +5254,7 @@
         "topic": "architecture",
         "chunk_index": 7,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "82aba866"
       }
     },
@@ -4750,7 +5268,7 @@
         "topic": "architecture",
         "chunk_index": 8,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "1d0fafb8"
       }
     },
@@ -4764,7 +5282,7 @@
         "topic": "architecture",
         "chunk_index": 9,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "06472146"
       }
     },
@@ -4778,7 +5296,7 @@
         "topic": "architecture",
         "chunk_index": 10,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "2a6122bc"
       }
     },
@@ -4792,7 +5310,7 @@
         "topic": "architecture",
         "chunk_index": 11,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "da754e51"
       }
     },
@@ -4806,7 +5324,7 @@
         "topic": "architecture",
         "chunk_index": 12,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "8d4d0832"
       }
     },
@@ -4820,7 +5338,7 @@
         "topic": "architecture",
         "chunk_index": 13,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "0f1f64bc"
       }
     },
@@ -4834,7 +5352,7 @@
         "topic": "architecture",
         "chunk_index": 14,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.216604",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "f9824bdf"
       }
     },
@@ -4848,7 +5366,7 @@
         "topic": "architecture",
         "chunk_index": 15,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "9650ccd4"
       }
     },
@@ -4862,7 +5380,7 @@
         "topic": "architecture",
         "chunk_index": 16,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "648f2dcc"
       }
     },
@@ -4876,7 +5394,7 @@
         "topic": "architecture",
         "chunk_index": 17,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "29f00b6a"
       }
     },
@@ -4890,7 +5408,7 @@
         "topic": "architecture",
         "chunk_index": 18,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "0ed8849a"
       }
     },
@@ -4904,7 +5422,7 @@
         "topic": "architecture",
         "chunk_index": 19,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "ed10eb97"
       }
     },
@@ -4918,7 +5436,7 @@
         "topic": "architecture",
         "chunk_index": 20,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "609e983a"
       }
     },
@@ -4932,7 +5450,7 @@
         "topic": "architecture",
         "chunk_index": 21,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "86bdbc9f"
       }
     },
@@ -4946,7 +5464,7 @@
         "topic": "architecture",
         "chunk_index": 22,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "a41960df"
       }
     },
@@ -4960,7 +5478,7 @@
         "topic": "architecture",
         "chunk_index": 23,
         "total_chunks": 24,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "9ba72d69"
       }
     },
@@ -4974,7 +5492,7 @@
         "topic": "business-logic",
         "chunk_index": 0,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "38006464"
       }
     },
@@ -4988,7 +5506,7 @@
         "topic": "business-logic",
         "chunk_index": 1,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "325bd0cd"
       }
     },
@@ -5002,7 +5520,7 @@
         "topic": "business-logic",
         "chunk_index": 2,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "6a94c27a"
       }
     },
@@ -5016,7 +5534,7 @@
         "topic": "business-logic",
         "chunk_index": 3,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "44bcd8a6"
       }
     },
@@ -5030,7 +5548,7 @@
         "topic": "business-logic",
         "chunk_index": 4,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.135628",
         "content_hash": "1af906cc"
       }
     },
@@ -5044,7 +5562,7 @@
         "topic": "business-logic",
         "chunk_index": 5,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "081e662a"
       }
     },
@@ -5058,7 +5576,7 @@
         "topic": "business-logic",
         "chunk_index": 7,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "c33b5b38"
       }
     },
@@ -5072,7 +5590,7 @@
         "topic": "business-logic",
         "chunk_index": 8,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "02d5725e"
       }
     },
@@ -5086,7 +5604,7 @@
         "topic": "business-logic",
         "chunk_index": 9,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "d711759f"
       }
     },
@@ -5100,7 +5618,7 @@
         "topic": "business-logic",
         "chunk_index": 10,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "f0e639e9"
       }
     },
@@ -5114,7 +5632,7 @@
         "topic": "business-logic",
         "chunk_index": 11,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "4c3ce947"
       }
     },
@@ -5128,7 +5646,7 @@
         "topic": "business-logic",
         "chunk_index": 12,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "0f372c9f"
       }
     },
@@ -5142,7 +5660,7 @@
         "topic": "business-logic",
         "chunk_index": 13,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "39e2b717"
       }
     },
@@ -5156,7 +5674,7 @@
         "topic": "business-logic",
         "chunk_index": 14,
         "total_chunks": 15,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "c52fad58"
       }
     },
@@ -5170,7 +5688,7 @@
         "topic": "SKILL",
         "chunk_index": 0,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "7f6a9c96"
       }
     },
@@ -5184,7 +5702,7 @@
         "topic": "SKILL",
         "chunk_index": 1,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "d5c626cd"
       }
     },
@@ -5198,7 +5716,7 @@
         "topic": "SKILL",
         "chunk_index": 2,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "4d175368"
       }
     },
@@ -5212,7 +5730,7 @@
         "topic": "SKILL",
         "chunk_index": 3,
         "total_chunks": 4,
-        "last_updated": "2025-12-23T14:22:24.217556",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "11f62a57"
       }
     },
@@ -5226,7 +5744,7 @@
         "topic": "handbook-rules",
         "chunk_index": 0,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "3a30f3ac"
       }
     },
@@ -5240,7 +5758,7 @@
         "topic": "handbook-rules",
         "chunk_index": 1,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "672c6236"
       }
     },
@@ -5254,7 +5772,7 @@
         "topic": "handbook-rules",
         "chunk_index": 2,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "8f5227cf"
       }
     },
@@ -5268,7 +5786,7 @@
         "topic": "handbook-rules",
         "chunk_index": 3,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.136627",
         "content_hash": "e5e342b0"
       }
     },
@@ -5282,7 +5800,7 @@
         "topic": "handbook-rules",
         "chunk_index": 4,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.137628",
         "content_hash": "9e25cd3e"
       }
     },
@@ -5296,7 +5814,7 @@
         "topic": "handbook-rules",
         "chunk_index": 5,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.137628",
         "content_hash": "d3a5e70f"
       }
     },
@@ -5310,7 +5828,7 @@
         "topic": "handbook-rules",
         "chunk_index": 6,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.137628",
         "content_hash": "2901cbc7"
       }
     },
@@ -5324,7 +5842,7 @@
         "topic": "handbook-rules",
         "chunk_index": 7,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.137628",
         "content_hash": "a312c460"
       }
     },
@@ -5338,7 +5856,7 @@
         "topic": "handbook-rules",
         "chunk_index": 8,
         "total_chunks": 9,
-        "last_updated": "2025-12-23T14:22:24.218852",
+        "last_updated": "2025-12-23T16:05:43.137628",
         "content_hash": "20eca3b9"
       }
     }

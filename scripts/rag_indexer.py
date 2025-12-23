@@ -34,6 +34,15 @@ def get_allowed_files(manifest: Dict[str, Any]) -> List[Path]:
     """Get list of allowed files from manifest."""
     allowed_files = []
 
+    # System Knowledge (doctrine files - highest priority)
+    for path in manifest['allow'].get('system_knowledge', []):
+        full_path = PROJECT_ROOT / path
+        if full_path.exists():
+            allowed_files.append(full_path)
+            print(f"  Doctrine: {path}")
+        else:
+            print(f"  WARNING: {path} not found")
+
     # Policy Core
     for path in manifest['allow'].get('policy_core', []):
         full_path = PROJECT_ROOT / path
@@ -177,6 +186,13 @@ def create_chunk_metadata(filepath: Path, chunk: Dict[str, Any], manifest: Dict[
         'pto-agent-orchestrator': 'Agent Orchestrator Skill',
     }
 
+    # Doctrine file mapping (highest priority)
+    DOCTRINE_MAP = {
+        'system_identity': 'System Knowledge',
+        'creator_profile': 'System Knowledge',
+        'knowledge_contract': 'System Knowledge',
+    }
+
     # Determine category based on path
     if 'skills/' in rel_path:
         # Extract skill name from path like "skills/pto-central-development/SKILL.md"
@@ -199,6 +215,10 @@ def create_chunk_metadata(filepath: Path, chunk: Dict[str, Any], manifest: Dict[
     elif '.claude/rules' in rel_path:
         category = 'Policy Rules'
         subcategory = 'governance'
+    elif filepath.stem in DOCTRINE_MAP:
+        # Doctrine files get highest priority category
+        category = DOCTRINE_MAP[filepath.stem]
+        subcategory = 'doctrine'
     elif 'task/' in rel_path:
         category = 'Policy Formulas'
         subcategory = 'math'

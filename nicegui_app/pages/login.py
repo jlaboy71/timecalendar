@@ -5,7 +5,7 @@ from src.services.rate_limiter import LoginRateLimiter
 from src.services.year_end_service import YearEndService
 from src.database import get_db
 from nicegui_app.logo import LOGO_DATA_URL
-from nicegui_app.components.theme import apply_dark_mode, validate_required
+from nicegui_app.components.theme import apply_dark_mode, validate_required, PTO_GOLD, BRAND_COLORS
 
 
 def login_page(timeout: str = None):
@@ -14,7 +14,7 @@ def login_page(timeout: str = None):
     apply_dark_mode()
 
     with ui.column().classes('w-full h-screen flex items-center justify-center'):
-        with ui.card().classes('w-96 p-8 animate-fade-in-up'):
+        with ui.card().classes('w-96 p-8 animate-fade-in-up shadow-xl'):
             # Logo
             with ui.column().classes('w-full items-center mb-6'):
                 ui.element('img').props(f'src="{LOGO_DATA_URL}"').style('height: 120px; width: auto;')

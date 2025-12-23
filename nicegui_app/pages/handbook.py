@@ -5,7 +5,7 @@ Uses database content (if available) for both display and AI search.
 from nicegui import ui, app
 from nicegui_app.static.handbook_content import HANDBOOK_SECTIONS
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, PTO_GOLD, PTO_GRAY, BRAND_COLORS
 from src.database import get_db
 
 
@@ -88,10 +88,10 @@ def render_ai_chat():
     # Get version info
     version = handbook_service.get_handbook_version()
 
-    with ui.card().classes('w-full'):
+    with ui.card().classes('w-full shadow-md'):
         with ui.row().classes('w-full items-center gap-2 mb-4'):
             ui.icon('smart_toy', color='primary').classes('text-2xl')
-            ui.label('Handbook AI Assistant').classes('text-lg font-semibold').style('color: #5a6a72;')
+            ui.label('Handbook AI Assistant').classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
             if version:
                 ui.badge(f'v{version}', color='blue').props('outline dense')
             if not handbook_service.is_available():
@@ -213,8 +213,8 @@ def render_handbook_content(content: str):
 def render_markdown_handbook(content: str):
     """Render handbook as markdown content with scrollable sections."""
 
-    with ui.card().classes('w-full p-6'):
-        ui.label('Employee Handbook').classes('text-lg font-semibold mb-4').style('color: #5a6a72;')
+    with ui.card().classes('w-full p-6 shadow-md'):
+        ui.label('Employee Handbook').classes('text-lg font-semibold mb-4').style(f'color: {PTO_GRAY};')
         ui.markdown(content).classes('prose max-w-none')
 
     # Footer
@@ -228,8 +228,8 @@ def render_styled_handbook():
     """Render the styled handbook viewer using static sections."""
 
     # Section navigation card
-    with ui.card().classes('w-full mb-4 p-3'):
-        ui.label('Quick Navigation').classes('text-sm font-semibold mb-2').style('color: #5a6a72;')
+    with ui.card().classes('w-full mb-4 p-3 shadow-md'):
+        ui.label('Quick Navigation').classes('text-sm font-semibold mb-2').style(f'color: {PTO_GRAY};')
         with ui.row().classes('w-full gap-2 flex-wrap'):
             for section in HANDBOOK_SECTIONS:
                 ui.button(
@@ -256,10 +256,10 @@ def render_styled_handbook():
         }
         border_class = border_colors.get(section['id'], 'border-blue-500')
 
-        with ui.card().classes(f'w-full mb-4 border-l-4 {border_class}').props(f'id="{section["id"]}"'):
+        with ui.card().classes(f'w-full mb-4 border-l-4 shadow-md {border_class}').props(f'id="{section["id"]}"'):
             with ui.row().classes('items-center gap-2 mb-3'):
                 ui.icon(section['icon'], color='primary').classes('text-xl')
-                ui.label(section['title']).classes('text-lg font-semibold').style('color: #5a6a72;')
+                ui.label(section['title']).classes('text-lg font-semibold').style(f'color: {PTO_GRAY};')
 
             ui.markdown(section['content']).classes('text-sm handbook-content')
 

@@ -1,7 +1,7 @@
 """Admin panel landing page with navigation to admin functions."""
 from nicegui import ui, app
 from nicegui_app.components.header import page_header, go_back
-from nicegui_app.components.theme import apply_dark_mode
+from nicegui_app.components.theme import apply_dark_mode, PTO_GOLD, PTO_GRAY, BRAND_COLORS
 
 
 def admin_dashboard_page():
@@ -19,7 +19,7 @@ def admin_dashboard_page():
         # Navigation cards (flex-wrap for mobile responsive)
         with ui.row().classes('w-full gap-4 justify-center flex-wrap stagger-children'):
             # Manage Departments card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+            with ui.card().classes('p-6 cursor-pointer shadow-md hover:shadow-xl transition-all'):
                 with ui.column().classes('items-center gap-4'):
                     ui.icon('business', size='3rem').classes('text-primary')
                     ui.label('Manage Departments').classes('text-xl font-semibold')
@@ -27,7 +27,7 @@ def admin_dashboard_page():
                     ui.button('Go to Departments', on_click=lambda: ui.navigate.to('/admin/departments'), color='primary')
 
             # Manage Employees card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+            with ui.card().classes('p-6 cursor-pointer shadow-md hover:shadow-xl transition-all'):
                 with ui.column().classes('items-center gap-4'):
                     ui.icon('people', size='3rem').classes('text-primary')
                     ui.label('Manage Employees').classes('text-xl font-semibold')
@@ -35,7 +35,7 @@ def admin_dashboard_page():
                     ui.button('Go to Employees', on_click=lambda: ui.navigate.to('/admin/employees'), color='primary')
 
             # Carryover Approvals card
-            with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow'):
+            with ui.card().classes('p-6 cursor-pointer shadow-md hover:shadow-xl transition-all'):
                 with ui.column().classes('items-center gap-4'):
                     ui.icon('approval', size='3rem').classes('text-primary')
                     ui.label('Carryover Approvals').classes('text-xl font-semibold')
@@ -46,7 +46,7 @@ def admin_dashboard_page():
         if user_role == 'superadmin':
             with ui.row().classes('w-full gap-4 justify-center mt-6 flex-wrap stagger-children'):
                 # System Administration card
-                with ui.card().classes('p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-amber-500'):
+                with ui.card().classes('p-6 cursor-pointer shadow-md hover:shadow-xl transition-all border-2 border-amber-500'):
                     with ui.column().classes('items-center gap-4'):
                         ui.icon('settings_applications', size='3rem').classes('text-amber-600')
                         ui.label('System Administration').classes('text-xl font-semibold')
