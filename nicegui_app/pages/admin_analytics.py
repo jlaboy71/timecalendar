@@ -38,7 +38,7 @@ def create_help_button(title: str, message: str):
                 with ui.row().classes('items-center gap-2 mb-3'):
                     ui.icon('help_outline', size='sm').style(f'color: {PTO_GOLD};')
                     ui.label(title).classes('text-lg font-bold').style(f'color: {PTO_GOLD};')
-                ui.html(message).classes('text-gray-300 text-sm leading-relaxed')
+                ui.html(message, sanitize=False).classes('text-gray-300 text-sm leading-relaxed')
                 with ui.row().classes('w-full justify-end mt-4'):
                     ui.button('Got it', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: black !important;')
             dialog.open()
@@ -478,7 +478,7 @@ def render_ai_education_section():
                 time off easier for everyone. Think of them as smart assistants that understand your
                 company's PTO policies and can help with specific tasks.
             </p>
-        ''')
+        ''', sanitize=False)
 
         # The Three Agents
         with ui.element('div').classes('grid grid-cols-1 md:grid-cols-3 gap-4 mb-6'):
@@ -498,7 +498,7 @@ def render_ai_education_section():
                     <p class="text-sm text-gray-400 italic">
                         "I want to take a week off in March" → Suggests best available dates
                     </p>
-                ''')
+                ''', sanitize=False)
 
             # Year-End Optimizer
             with ui.card().classes('p-4').style('background-color: #3d2e1f; border-left: 4px solid #f59e0b;'):
@@ -516,7 +516,7 @@ def render_ai_education_section():
                     <p class="text-sm text-gray-400 italic">
                         "How much PTO will I lose?" → Shows expiring balance + usage plan
                     </p>
-                ''')
+                ''', sanitize=False)
 
             # Approval Assistant
             with ui.card().classes('p-4').style('background-color: #1f3d2e; border-left: 4px solid #22c55e;'):
@@ -534,7 +534,7 @@ def render_ai_education_section():
                     <p class="text-sm text-gray-400 italic">
                         "Show me pending requests" → Lists all with recommendations
                     </p>
-                ''')
+                ''', sanitize=False)
 
         # How They Work Together
         with ui.expansion('How Do They Work Together?', icon='sync_alt').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
@@ -556,7 +556,7 @@ def render_ai_education_section():
                         The AI handles the policy checking and calendar analysis so humans can focus on decisions.
                     </p>
                 </div>
-            ''')
+            ''', sanitize=False)
 
         # Understanding the Metrics
         with ui.expansion('What Do These Metrics Mean?', icon='insights').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
@@ -589,7 +589,7 @@ def render_ai_education_section():
                         </tr>
                     </table>
                 </div>
-            ''')
+            ''', sanitize=False)
 
         # Safety & Privacy
         with ui.expansion('Safety & Privacy', icon='security').classes('').style(f'background-color: #374151; border-radius: 8px;'):
@@ -614,7 +614,7 @@ def render_ai_education_section():
                         Conversations are not stored beyond the current session.
                     </p>
                 </div>
-            ''')
+            ''', sanitize=False)
 
 
 def admin_analytics_page():
