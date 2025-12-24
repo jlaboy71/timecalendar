@@ -397,14 +397,17 @@ window.ptoVoice.init();
             voice_state['enabled'] = enabled
             if enabled:
                 voice_state['mic_button'].classes(remove='hidden')
-                ui.notify('Voice mode enabled. Click the mic to speak.', type='info')
+                voice_state['speaker_button'].classes(remove='hidden')
+                ui.notify('🎤 Voice mode ON - Click mic to speak', type='info')
             else:
                 voice_state['mic_button'].classes(add='hidden')
+                voice_state['speaker_button'].classes(add='hidden')
                 voice_state['recording_indicator'].classes(add='hidden')
                 if voice_state['recording']:
                     ui.run_javascript('window.ptoVoice.stop()')
                     voice_state['recording'] = False
                     voice_state['mic_button'].props(remove='color=red')
+                    voice_state['mic_button'].props('color=amber')
 
         async def toggle_recording():
             """Toggle voice recording on/off."""
@@ -412,14 +415,17 @@ window.ptoVoice.init();
                 # Stop recording
                 voice_state['recording'] = False
                 voice_state['mic_button'].props(remove='color=red')
+                voice_state['mic_button'].props('color=amber')
                 voice_state['recording_indicator'].classes(add='hidden')
                 await ui.run_javascript('window.ptoVoice.stop()')
             else:
                 # Start recording
                 voice_state['recording'] = True
+                voice_state['mic_button'].props(remove='color=amber')
                 voice_state['mic_button'].props('color=red')
                 voice_state['recording_indicator'].classes(remove='hidden')
                 await ui.run_javascript('window.ptoVoice.start()')
+                ui.notify('🎤 Listening... speak now', type='info')
 
         async def replay_last_response():
             """Replay the last agent response using browser TTS."""
@@ -437,17 +443,32 @@ window.ptoVoice.init();
                 ui.notify('No response to replay', type='warning')
                 return
 
+            # Change speaker button to green while playing
+            voice_state['speaker_button'].props(remove='color=amber')
+            voice_state['speaker_button'].props('color=green')
+
             # Use browser's built-in TTS
             # Strip markdown formatting for cleaner speech
             clean_text = last_assistant_msg.replace('**', '').replace('*', '').replace('#', '')
-            clean_text = clean_text[:500]  # Limit length
+            clean_text = clean_text[:1000]  # Limit length
             await ui.run_javascript(f'''
                 const utterance = new SpeechSynthesisUtterance({repr(clean_text)});
                 utterance.rate = 1.0;
                 utterance.pitch = 1.0;
+                utterance.onend = () => {{
+                    // Will need to manually reset color
+                }};
                 window.speechSynthesis.speak(utterance);
             ''')
-            ui.notify('Playing response...', type='info')
+            ui.notify('🔊 Playing response...', type='info')
+
+            # Reset color after a delay (approximate based on text length)
+            async def reset_color():
+                await asyncio.sleep(min(len(clean_text) / 15, 30))  # Rough estimate
+                voice_state['speaker_button'].props(remove='color=green')
+                voice_state['speaker_button'].props('color=amber')
+
+            asyncio.create_task(reset_color())
 
         # Input row at bottom
         with ui.row().classes('w-full items-center gap-2 mt-4'):
@@ -459,7 +480,7 @@ window.ptoVoice.init();
             voice_state['mic_button'] = ui.button(
                 icon='mic',
                 on_click=toggle_recording
-            ).props('round fab-mini').classes('hidden').tooltip('Click to speak')
+            ).props('round fab-mini color=amber').classes('hidden').tooltip('Click to speak')
 
             # Recording indicator (hidden)
             voice_state['recording_indicator'] = ui.row().classes('items-center gap-1 hidden')
@@ -477,13 +498,11 @@ window.ptoVoice.init();
                 f'background-color: {PTO_GOLD} !important; color: white !important;'
             )
 
-            # Speaker button (replay last response)
+            # Speaker button (replay last response - hidden until voice enabled)
             voice_state['speaker_button'] = ui.button(
                 icon='volume_up',
                 on_click=replay_last_response
-            ).props('round fab-mini').tooltip('Replay last response').style(
-                f'color: {PTO_GOLD} !important;'
-            )
+            ).props('round fab-mini color=amber').classes('hidden').tooltip('Play last response')
 
             # Clear button
             ui.button('Clear', icon='delete', on_click=clear_history).props('flat').style(
