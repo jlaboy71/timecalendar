@@ -537,7 +537,7 @@ def render_ai_education_section():
                 ''', sanitize=False)
 
         # How They Work Together
-        with ui.expansion('How Do They Work Together?', icon='sync_alt').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
+        with ui.expansion('How Do They Work Together?', icon='sync_alt').classes('w-full mb-4').style(f'background-color: #374151; border-radius: 8px;'):
             ui.html(f'''
                 <div class="p-3">
                     <p class="text-gray-300 mb-3">
@@ -559,7 +559,7 @@ def render_ai_education_section():
             ''', sanitize=False)
 
         # Understanding the Metrics
-        with ui.expansion('What Do These Metrics Mean?', icon='insights').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
+        with ui.expansion('What Do These Metrics Mean?', icon='insights').classes('w-full mb-4').style(f'background-color: #374151; border-radius: 8px;'):
             ui.html('''
                 <div class="p-3">
                     <table class="w-full text-sm">
@@ -592,7 +592,7 @@ def render_ai_education_section():
             ''', sanitize=False)
 
         # Safety & Privacy
-        with ui.expansion('Safety & Privacy', icon='security').classes('').style(f'background-color: #374151; border-radius: 8px;'):
+        with ui.expansion('Safety & Privacy', icon='security').classes('w-full').style(f'background-color: #374151; border-radius: 8px;'):
             ui.html(f'''
                 <div class="p-3">
                     <p class="text-gray-300 mb-3">
@@ -639,12 +639,11 @@ def admin_analytics_page():
         # Summary cards row
         render_summary_cards(stats.get('summary', {}))
 
-        # Charts row 1: Trend + Agent breakdown (equal height)
-        with ui.row().classes('w-full gap-4 mt-4'):
-            with ui.element('div').classes('flex-grow-[3] min-w-0'):
-                render_usage_trend(stats.get('trends', []))
-            with ui.element('div').classes('flex-grow-[2] min-w-0'):
-                render_agent_breakdown(stats.get('by_agent', {}))
+        # Charts row 1: Trend + Agent breakdown + Peak Hours (3x3 layout)
+        with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4'):
+            render_usage_trend(stats.get('trends', []))
+            render_agent_breakdown(stats.get('by_agent', {}))
+            render_hourly_distribution(stats.get('hourly_distribution', {}))
 
         # Charts row 2: Confirmation + Actions + Top Users
         with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4'):
@@ -652,12 +651,14 @@ def admin_analytics_page():
             render_actions_chart(stats.get('by_action', {}))
             render_top_users(stats.get('top_users', []))
 
-        # Charts row 3: Peak Usage Hours (full width)
-        render_hourly_distribution(stats.get('hourly_distribution', {}))
-
         # AI Education Section
         render_ai_education_section()
 
-        # Footer
-        with ui.row().classes('w-full justify-center mt-8 opacity-50'):
-            ui.label('Powered by Claude AI').classes('text-sm')
+        # Footer with back button
+        with ui.row().classes('w-full justify-between items-center mt-8'):
+            ui.button(
+                'Back to Analytics',
+                icon='arrow_back',
+                on_click=lambda: ui.navigate.to('/analytics')
+            ).props('outline').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;')
+            ui.label('Powered by Claude AI').classes('text-sm opacity-50')
