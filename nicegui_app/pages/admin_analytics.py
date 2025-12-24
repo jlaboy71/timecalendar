@@ -215,7 +215,7 @@ def render_usage_trend(trends: list):
             )
 
         if not trends:
-            with ui.column().classes('items-center justify-center py-12 opacity-50'):
+            with ui.column().classes('w-full items-center justify-center flex-grow opacity-50').style('min-height: 180px;'):
                 ui.icon('show_chart', size='xl')
                 ui.label('No data yet').classes('text-lg')
                 ui.label('AI interactions will appear here').classes('text-sm')
@@ -260,7 +260,7 @@ def render_agent_breakdown(by_agent: dict):
             )
 
         if not by_agent:
-            with ui.column().classes('items-center justify-center py-12 opacity-50'):
+            with ui.column().classes('w-full items-center justify-center flex-grow opacity-50').style('min-height: 180px;'):
                 ui.icon('donut_large', size='xl')
                 ui.label('No data yet').classes('text-lg')
         else:
@@ -289,7 +289,7 @@ def render_confirmation_gauge(conf: dict):
     accepted = conf.get('accepted', 0)
     rejected = conf.get('rejected', 0)
 
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('verified', color='teal')
             ui.label('Confirmation Rate').classes('text-lg font-semibold')
@@ -337,7 +337,7 @@ def render_confirmation_gauge(conf: dict):
 
 def render_actions_chart(by_action: dict):
     """Render the actions breakdown bar chart."""
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('bolt', color='amber')
             ui.label('Actions').classes('text-lg font-semibold')
@@ -351,7 +351,7 @@ def render_actions_chart(by_action: dict):
             )
 
         if not by_action:
-            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+            with ui.column().classes('w-full items-center justify-center flex-grow opacity-50').style('min-height: 180px;'):
                 ui.icon('bar_chart', size='xl')
                 ui.label('No data yet').classes('text-lg')
         else:
@@ -380,7 +380,7 @@ def render_actions_chart(by_action: dict):
 
 def render_top_users(users: list):
     """Render the top users leaderboard."""
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('leaderboard', color='amber')
             ui.label('Top Users').classes('text-lg font-semibold')
@@ -392,7 +392,7 @@ def render_top_users(users: list):
             )
 
         if not users:
-            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+            with ui.column().classes('w-full items-center justify-center flex-grow opacity-50').style('min-height: 180px;'):
                 ui.icon('emoji_events', size='xl')
                 ui.label('No data yet').classes('text-lg')
         else:
@@ -409,7 +409,7 @@ def render_top_users(users: list):
 
 def render_hourly_distribution(hourly: dict):
     """Render the hourly usage heatmap."""
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('schedule', color='cyan')
             ui.label('Peak Usage Hours').classes('text-lg font-semibold')
@@ -421,7 +421,7 @@ def render_hourly_distribution(hourly: dict):
             )
 
         if not hourly:
-            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+            with ui.column().classes('w-full items-center justify-center flex-grow opacity-50').style('min-height: 180px;'):
                 ui.icon('access_time', size='xl')
                 ui.label('No data yet').classes('text-lg')
         else:
