@@ -396,14 +396,14 @@ window.ptoVoice.init();
             """Toggle voice input mode."""
             voice_state['enabled'] = enabled
             if enabled:
-                # Use style display for reliable visibility
-                voice_state['mic_button'].style('display: inline-flex;')
-                voice_state['speaker_button'].style('display: inline-flex;')
+                # Use NiceGUI's native .visible property
+                voice_state['mic_button'].visible = True
+                voice_state['speaker_button'].visible = True
                 ui.notify('🎤 Voice mode ON - Click mic to speak', type='info')
             else:
-                voice_state['mic_button'].style('display: none;')
-                voice_state['speaker_button'].style('display: none;')
-                voice_state['recording_indicator'].style('display: none;')
+                voice_state['mic_button'].visible = False
+                voice_state['speaker_button'].visible = False
+                voice_state['recording_indicator'].visible = False
                 if voice_state['recording']:
                     ui.run_javascript('window.ptoVoice.stop()')
                     voice_state['recording'] = False
@@ -417,14 +417,14 @@ window.ptoVoice.init();
                 voice_state['recording'] = False
                 voice_state['mic_button'].props(remove='color=red')
                 voice_state['mic_button'].props('color=amber')
-                voice_state['recording_indicator'].style('display: none;')
+                voice_state['recording_indicator'].visible = False
                 await ui.run_javascript('window.ptoVoice.stop()')
             else:
                 # Start recording
                 voice_state['recording'] = True
                 voice_state['mic_button'].props(remove='color=amber')
                 voice_state['mic_button'].props('color=red')
-                voice_state['recording_indicator'].style('display: flex;')
+                voice_state['recording_indicator'].visible = True
                 await ui.run_javascript('window.ptoVoice.start()')
                 ui.notify('🎤 Listening... speak now', type='info')
 
@@ -482,11 +482,11 @@ window.ptoVoice.init();
                 icon='mic',
                 on_click=toggle_recording
             ).props('round fab-mini color=amber').tooltip('Click to speak')
-            voice_state['mic_button'].style('display: none;')  # Hidden by default
+            voice_state['mic_button'].visible = False  # Hidden by default
 
             # Recording indicator (hidden by default)
             voice_state['recording_indicator'] = ui.row().classes('items-center gap-1')
-            voice_state['recording_indicator'].style('display: none;')  # Hidden by default
+            voice_state['recording_indicator'].visible = False  # Hidden by default
             with voice_state['recording_indicator']:
                 ui.spinner('audio', size='sm', color='red')
                 ui.label('Listening...').classes('text-red-400 text-sm')
@@ -506,7 +506,7 @@ window.ptoVoice.init();
                 icon='volume_up',
                 on_click=replay_last_response
             ).props('round fab-mini color=amber').tooltip('Play last response')
-            voice_state['speaker_button'].style('display: none;')  # Hidden by default
+            voice_state['speaker_button'].visible = False  # Hidden by default
 
             # Clear button
             ui.button('Clear', icon='delete', on_click=clear_history).props('flat').style(
