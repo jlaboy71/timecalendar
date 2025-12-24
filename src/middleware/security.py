@@ -45,7 +45,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",  # blob: for Web Speech API
             "script-src-elem 'self' 'unsafe-inline' blob:",
             "worker-src 'self' blob:",  # For web workers
-            "style-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline' blob:",  # blob: for dynamic styles
+            "style-src-elem 'self' 'unsafe-inline' blob:",  # blob: for stylesheet elements
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
             "connect-src 'self' ws: wss: https: blob:",  # WebSocket + blob for voice
