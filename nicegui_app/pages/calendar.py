@@ -1050,7 +1050,7 @@ def calendar_page():
                 return
 
             with ui.dialog() as dialog, ui.card().classes('min-w-80'):
-                ui.label('Request Time Off').classes('text-xl font-bold mb-2')
+                ui.label('SUBMIT PTO').classes('text-xl font-bold mb-2')
                 ui.label(f'{click_date.strftime("%A, %B %d, %Y")}').classes('opacity-70 mb-4')
 
                 # Show backdating notice if applicable

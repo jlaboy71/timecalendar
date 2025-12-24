@@ -1165,8 +1165,9 @@ def cancel_pto_request(
         requestor_name = requestor.username if requestor else f"User #{request.user_id}"
 
         # Cancel the request
-        reason = f"[AI-Assisted] {cancellation_reason}" if cancellation_reason else "[AI-Assisted Cancellation]"
-        pto_service.cancel_request(request_id, cancelled_by_id=user_id, reason=reason)
+        # PTOService.cancel_request expects (request_id, owner_user_id) for ownership check
+        # MCP already did permission check above, so pass request.user_id (the owner)
+        pto_service.cancel_request(request_id, request.user_id)
 
         # Audit log
         AuditService.log(

@@ -49,7 +49,7 @@ def assistant_page():
 
     with ui.column().classes('w-full max-w-4xl mx-auto p-4 h-screen flex flex-col'):
         # Header
-        page_header(title='SMART SCHEDULER', show_back=True)
+        page_header(title='PTO ASSISTANT', show_back=True)
 
         # Subtitle with AI indicator
         with ui.row().classes('items-center gap-2 mb-2'):

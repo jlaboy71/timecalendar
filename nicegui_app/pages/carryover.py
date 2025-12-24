@@ -94,7 +94,7 @@ def _render_chicago_rollover_view(current_user, balance, current_year, next_year
     paid_leave_will_expire = max(0, paid_leave_unused - paid_leave_will_rollover)
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
-        page_header(title='LEAVE ROLLOVER', show_back=False)
+        page_header(title='PTO ROLLOVER', show_back=False)
         ui.label(f'Your Chicago leave automatically rolls over to {next_year}').classes('opacity-70 mb-6')
 
         # Info banner

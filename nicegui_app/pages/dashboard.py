@@ -560,10 +560,11 @@ def dashboard_page():
                                 with ui.column().classes('p-4 gap-3'):
                                     ui.label('Quick actions for managing your time off:').classes('font-semibold')
                                     with ui.column().classes('pl-4 gap-2'):
-                                        ui.markdown('**Request/Submit Time Off** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
-                                        ui.markdown('**My Requests/History** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
-                                        ui.markdown('**WFH Day Swap** - Request to swap your designated WFH day with a teammate (peer-to-peer, no manager approval needed)').classes('text-sm')
-                                        ui.markdown('**Leave Rollover** - View year-end rollover status:').classes('text-sm')
+                                        ui.markdown('**SUBMIT PTO** - Submit a new PTO request for vacation, sick, personal, or other leave types').classes('text-sm')
+                                        ui.markdown('**PTO ASSISTANT** - AI-powered scheduling assistant to help plan and optimize your time off').classes('text-sm')
+                                        ui.markdown('**PTO REQUESTS** - View all your submitted requests and their current status (pending, approved, denied)').classes('text-sm')
+                                        ui.markdown('**WFH SWAP** - Request to swap your designated WFH day with a teammate (peer-to-peer, no manager approval needed)').classes('text-sm')
+                                        ui.markdown('**PTO ROLLOVER** - View year-end rollover status:').classes('text-sm')
                                         ui.markdown('&nbsp;&nbsp;• **Sick**: Auto-rolls over (up to 80 hrs) - no action needed').classes('text-xs opacity-80')
                                         ui.markdown('&nbsp;&nbsp;• **Vacation**: Use-it-or-lose-it (exception carryover with manager approval)').classes('text-xs opacity-80')
                                         ui.markdown('&nbsp;&nbsp;• **Personal**: Use-it-or-lose-it (no carryover)').classes('text-xs opacity-80')
@@ -576,18 +577,17 @@ def dashboard_page():
                             ui.label('PTO TIME OFF').classes('text-xs font-semibold uppercase opacity-60')
                             ui.button(icon='help_outline', on_click=show_time_off_help).props('flat dense round size=xs').style('color: #3b82f6')
                         with ui.row().classes('w-full gap-3 flex-wrap dashboard-actions'):
-                            # Managers auto-approve, so show "Submit" instead of "Request"
-                            time_off_label = 'Submit Time Off' if user_role == 'manager' else 'Request Time Off'
-                            ui.button(time_off_label, icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new time off request')
-                            # For managers: "My Time Off History" shows their submitted time with color-coded view
-                            # For employees: "My Requests" shows pending/approved requests
-                            history_label = 'My Time Off History' if user_role == 'manager' else 'My Requests'
-                            ui.button(history_label, icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
-                            # WFH Day Swap - peer-to-peer swap of WFH days
-                            ui.button('WFH Day Swap', icon='swap_horiz', on_click=lambda: ui.navigate.to('/wfh-swap')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Swap your WFH day with a teammate')
-                            # Carryover Request only for employees (managers auto-approve, use Manager Tools > Carryover Approvals)
+                            # Button 1: Submit PTO
+                            ui.button('SUBMIT PTO', icon='add_circle', on_click=lambda: ui.navigate.to('/submit-request')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Submit a new PTO request')
+                            # Button 2: PTO Assistant (AI scheduling)
+                            ui.button('PTO ASSISTANT', icon='smart_toy', on_click=lambda: ui.navigate.to('/assistant')).props('outline').classes('flex-1 min-w-fit').style(f'border-color: {PTO_GOLD} !important; color: {PTO_GOLD} !important;').tooltip('AI-powered PTO scheduling assistant')
+                            # Button 3: PTO Requests (view history)
+                            ui.button('PTO REQUESTS', icon='history', on_click=lambda: ui.navigate.to('/requests')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View your submitted requests and their status')
+                            # Button 4: WFH Swap (peer-to-peer)
+                            ui.button('WFH SWAP', icon='swap_horiz', on_click=lambda: ui.navigate.to('/wfh-swap')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('Swap your WFH day with a teammate')
+                            # Button 5: PTO Rollover (employees only - managers use Manager Tools)
                             if user_role != 'manager':
-                                ui.button('Leave Rollover', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View leave rollover status')
+                                ui.button('PTO ROLLOVER', icon='move_down', on_click=lambda: ui.navigate.to('/carryover')).props('outline color=primary').classes('flex-1 min-w-fit').tooltip('View leave rollover status')
 
                     # Row 2: Resources (employees only - managers use Manager Tools)
                     if user_role != 'manager':

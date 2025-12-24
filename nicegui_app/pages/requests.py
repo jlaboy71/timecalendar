@@ -386,7 +386,7 @@ def requests_page():
 
     with ui.column().classes('w-full max-w-5xl mx-auto p-4 animate-fade-in'):
         # Page title is always TIME OFF
-        page_header(title='TIME OFF', show_back=False)
+        page_header(title='PTO REQUESTS', show_back=False)
 
         db = next(get_db())
         try:
@@ -806,7 +806,7 @@ def requests_page():
                         header_name = f"{viewed_user_obj.first_name} {viewed_user_obj.last_name}"
                         ui.label(f"{header_name}'s Requests - {year_filter['value']}").classes('text-lg font-semibold')
                     else:
-                        ui.label(f'My Requests - {year_filter["value"]}').classes('text-lg font-semibold')
+                        ui.label(f'PTO REQUESTS - {year_filter["value"]}').classes('text-lg font-semibold')
 
                     with ui.row().classes('items-center gap-3'):
                         # View dropdown (for managers/admins only)
