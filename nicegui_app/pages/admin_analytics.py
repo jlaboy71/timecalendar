@@ -8,7 +8,7 @@ URL: /admin/analytics
 Access: admin, superadmin only
 """
 
-from nicegui import ui, app
+from nicegui import ui, app, context
 from datetime import datetime
 import pytz
 
@@ -32,16 +32,18 @@ def get_time_based_greeting() -> str:
 def create_help_button(title: str, message: str):
     """Create a gold help button that shows a dark-themed dialog."""
     def show_help():
-        with ui.dialog() as dialog, ui.card().classes('p-4 max-w-md').style('background-color: #1f2937;'):
-            with ui.row().classes('items-center gap-2 mb-3'):
-                ui.icon('help_outline', color='amber', size='sm')
-                ui.label(title).classes('text-lg font-bold').style(f'color: {PTO_GOLD};')
-            ui.html(message).classes('text-gray-300 text-sm')
-            with ui.row().classes('w-full justify-end mt-4'):
-                ui.button('Got it', on_click=dialog.close).props('color=amber')
-        dialog.open()
+        # Create dialog at root level using context.client.content
+        with context.client.content:
+            with ui.dialog() as dialog, ui.card().classes('p-5 max-w-md').style('background-color: #1f2937;'):
+                with ui.row().classes('items-center gap-2 mb-3'):
+                    ui.icon('help_outline', size='sm').style(f'color: {PTO_GOLD};')
+                    ui.label(title).classes('text-lg font-bold').style(f'color: {PTO_GOLD};')
+                ui.html(message).classes('text-gray-300 text-sm leading-relaxed')
+                with ui.row().classes('w-full justify-end mt-4'):
+                    ui.button('Got it', on_click=dialog.close).style(f'background-color: {PTO_GOLD} !important; color: black !important;')
+            dialog.open()
 
-    return ui.button(icon='help_outline', on_click=show_help).props('flat dense round size=sm').style('color: #f59e0b;')
+    return ui.button(icon='help_outline', on_click=show_help).props('flat dense round size=sm').style(f'color: {PTO_GOLD};')
 
 
 def render_header(user: dict, selected_days: dict):
@@ -78,12 +80,6 @@ def render_header(user: dict, selected_days: dict):
                     value=str(selected_days['value']),
                     on_change=lambda e: update_period(e.value, selected_days)
                 ).props('dense borderless').classes('min-w-24').style(f'color: {PTO_GOLD};')
-
-                # Help button
-                ui.button(
-                    icon='help_outline',
-                    on_click=lambda: ui.navigate.to('/help')
-                ).props('flat round').style(f'color: {PTO_GOLD} !important;').tooltip('Help Center')
 
                 # Dark mode toggle
                 dark_mode = ui.dark_mode()
@@ -134,12 +130,13 @@ def load_stats(days: int = 30) -> dict:
     except Exception as e:
         print(f"Error loading stats: {e}")
         return {
-            "summary": {"total_interactions": 0, "unique_users": 0, "successful_actions": 0, "avg_per_user": 0},
+            "summary": {"total_interactions": 0, "unique_users": 0, "successful_actions": 0, "avg_per_user": 0, "avg_response_time": 0, "error_rate": 0},
             "trends": [],
             "by_agent": {},
             "by_action": {},
             "confirmation_rate": {"acceptance_rate": 0, "accepted": 0, "rejected": 0},
-            "top_users": []
+            "top_users": [],
+            "hourly_distribution": {}
         }
 
 
@@ -153,42 +150,60 @@ def render_summary_cards(summary: dict):
             '<b>Total Interactions:</b> Number of conversations with AI agents<br><br>'
             '<b>Unique Users:</b> How many different employees used AI features<br><br>'
             '<b>Successful Actions:</b> PTO requests submitted/approved via AI<br><br>'
+            '<b>Avg Response:</b> How fast the AI responds (in seconds)<br><br>'
+            '<b>Error Rate:</b> Percentage of interactions that had issues<br><br>'
             '<b>Avg/User:</b> Average interactions per user'
         )
 
-    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;'):
+    with ui.element('div').classes('w-full').style('display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;'):
         # Total Interactions
-        with ui.card().classes('p-4'):
-            with ui.column().classes('items-center w-full'):
-                ui.icon('chat', size='lg', color='blue')
-                ui.label(str(summary.get('total_interactions', 0))).classes('text-3xl font-bold text-blue-500')
-                ui.label('Total Interactions').classes('text-sm opacity-70')
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('chat', size='md', color='blue')
+                ui.label(str(summary.get('total_interactions', 0))).classes('text-2xl font-bold text-blue-500')
+                ui.label('Interactions').classes('text-xs opacity-70')
 
         # Unique Users
-        with ui.card().classes('p-4'):
-            with ui.column().classes('items-center w-full'):
-                ui.icon('people', size='lg', color='purple')
-                ui.label(str(summary.get('unique_users', 0))).classes('text-3xl font-bold text-purple-500')
-                ui.label('Unique Users').classes('text-sm opacity-70')
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('people', size='md', color='purple')
+                ui.label(str(summary.get('unique_users', 0))).classes('text-2xl font-bold text-purple-500')
+                ui.label('Unique Users').classes('text-xs opacity-70')
 
         # Successful Actions
-        with ui.card().classes('p-4'):
-            with ui.column().classes('items-center w-full'):
-                ui.icon('check_circle', size='lg', color='green')
-                ui.label(str(summary.get('successful_actions', 0))).classes('text-3xl font-bold text-green-500')
-                ui.label('Successful Actions').classes('text-sm opacity-70')
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('check_circle', size='md', color='green')
+                ui.label(str(summary.get('successful_actions', 0))).classes('text-2xl font-bold text-green-500')
+                ui.label('Successful').classes('text-xs opacity-70')
+
+        # Avg Response Time
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('speed', size='md', color='cyan')
+                avg_time = summary.get('avg_response_time', 0)
+                ui.label(f'{avg_time:.1f}s').classes('text-2xl font-bold text-cyan-500')
+                ui.label('Avg Response').classes('text-xs opacity-70')
+
+        # Error Rate
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('error_outline', size='md', color='red')
+                error_rate = summary.get('error_rate', 0)
+                ui.label(f'{error_rate:.1f}%').classes('text-2xl font-bold text-red-500')
+                ui.label('Error Rate').classes('text-xs opacity-70')
 
         # Avg per User
-        with ui.card().classes('p-4'):
-            with ui.column().classes('items-center w-full'):
-                ui.icon('analytics', size='lg').style(f'color: {PTO_GOLD};')
-                ui.label(str(summary.get('avg_per_user', 0))).classes('text-3xl font-bold').style(f'color: {PTO_GOLD};')
-                ui.label('Avg/User').classes('text-sm opacity-70')
+        with ui.card().classes('p-3'):
+            with ui.column().classes('items-center w-full gap-1'):
+                ui.icon('analytics', size='md').style(f'color: {PTO_GOLD};')
+                ui.label(str(summary.get('avg_per_user', 0))).classes('text-2xl font-bold').style(f'color: {PTO_GOLD};')
+                ui.label('Avg/User').classes('text-xs opacity-70')
 
 
 def render_usage_trend(trends: list):
     """Render the usage trend line chart."""
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('trending_up', color='blue')
             ui.label('Usage Trend').classes('text-lg font-semibold')
@@ -200,7 +215,7 @@ def render_usage_trend(trends: list):
             )
 
         if not trends:
-            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+            with ui.column().classes('items-center justify-center py-12 opacity-50'):
                 ui.icon('show_chart', size='xl')
                 ui.label('No data yet').classes('text-lg')
                 ui.label('AI interactions will appear here').classes('text-sm')
@@ -228,12 +243,12 @@ def render_usage_trend(trends: list):
                 }],
                 'tooltip': {'trigger': 'axis', 'backgroundColor': '#1f2937', 'borderColor': PTO_GOLD},
                 'grid': {'left': 50, 'right': 20, 'bottom': 30, 'top': 20}
-            }).classes('w-full h-64')
+            }).classes('w-full').style('height: 220px;')
 
 
 def render_agent_breakdown(by_agent: dict):
     """Render the agent usage pie chart."""
-    with ui.card().classes('p-4'):
+    with ui.card().classes('p-4 h-full'):
         with ui.row().classes('items-center gap-2 mb-4'):
             ui.icon('smart_toy', color='purple')
             ui.label('By Agent').classes('text-lg font-semibold')
@@ -245,7 +260,7 @@ def render_agent_breakdown(by_agent: dict):
             )
 
         if not by_agent:
-            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+            with ui.column().classes('items-center justify-center py-12 opacity-50'):
                 ui.icon('donut_large', size='xl')
                 ui.label('No data yet').classes('text-lg')
         else:
@@ -265,7 +280,7 @@ def render_agent_breakdown(by_agent: dict):
                 }],
                 'tooltip': {'trigger': 'item', 'backgroundColor': '#1f2937', 'borderColor': PTO_GOLD},
                 'legend': {'bottom': 0, 'textStyle': {'color': '#9ca3af'}}
-            }).classes('w-full h-48')
+            }).classes('w-full').style('height: 220px;')
 
 
 def render_confirmation_gauge(conf: dict):
@@ -392,6 +407,216 @@ def render_top_users(users: list):
                     ui.label(str(u.get('interactions', 0))).classes('text-gray-400')
 
 
+def render_hourly_distribution(hourly: dict):
+    """Render the hourly usage heatmap."""
+    with ui.card().classes('p-4'):
+        with ui.row().classes('items-center gap-2 mb-4'):
+            ui.icon('schedule', color='cyan')
+            ui.label('Peak Usage Hours').classes('text-lg font-semibold')
+            create_help_button(
+                'Peak Usage Hours',
+                'Shows when employees use AI agents the most during the day.<br><br>'
+                'Taller bars = more usage during that hour.<br><br>'
+                '<i>Helps identify when AI assistance is most needed.</i>'
+            )
+
+        if not hourly:
+            with ui.column().classes('items-center justify-center py-8 opacity-50'):
+                ui.icon('access_time', size='xl')
+                ui.label('No data yet').classes('text-lg')
+        else:
+            # Create hourly data (0-23)
+            hours = [str(h) for h in range(24)]
+            values = [hourly.get(str(h), 0) for h in range(24)]
+
+            ui.echart({
+                'backgroundColor': 'transparent',
+                'xAxis': {
+                    'type': 'category',
+                    'data': ['12a', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
+                             '12p', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'],
+                    'axisLabel': {'color': '#9ca3af', 'fontSize': 10},
+                    'axisLine': {'lineStyle': {'color': '#374151'}}
+                },
+                'yAxis': {
+                    'type': 'value',
+                    'axisLabel': {'color': '#9ca3af'},
+                    'splitLine': {'lineStyle': {'color': '#374151'}}
+                },
+                'series': [{
+                    'type': 'bar',
+                    'data': values,
+                    'itemStyle': {
+                        'color': {
+                            'type': 'linear',
+                            'x': 0, 'y': 0, 'x2': 0, 'y2': 1,
+                            'colorStops': [
+                                {'offset': 0, 'color': PTO_GOLD},
+                                {'offset': 1, 'color': '#92400e'}
+                            ]
+                        },
+                        'borderRadius': [4, 4, 0, 0]
+                    }
+                }],
+                'tooltip': {'trigger': 'axis', 'backgroundColor': '#1f2937', 'borderColor': PTO_GOLD},
+                'grid': {'left': 40, 'right': 10, 'bottom': 30, 'top': 10}
+            }).classes('w-full h-40')
+
+
+def render_ai_education_section():
+    """Render the AI educational explanation section."""
+    with ui.card().classes('p-6 mt-6').style(f'border: 1px solid {PTO_GOLD}33; background-color: #1f293766;'):
+        # Header
+        with ui.row().classes('items-center gap-3 mb-4'):
+            ui.icon('school', size='md').style(f'color: {PTO_GOLD};')
+            ui.label('Understanding Your AI Assistants').classes('text-xl font-bold').style(f'color: {PTO_GOLD};')
+
+        # Introduction
+        ui.html('''
+            <p class="text-gray-300 mb-4">
+                PTO Central uses <b>three specialized AI agents</b> that work together to make managing
+                time off easier for everyone. Think of them as smart assistants that understand your
+                company's PTO policies and can help with specific tasks.
+            </p>
+        ''')
+
+        # The Three Agents
+        with ui.element('div').classes('grid grid-cols-1 md:grid-cols-3 gap-4 mb-6'):
+            # Smart Scheduler
+            with ui.card().classes('p-4').style('background-color: #1e3a5f; border-left: 4px solid #3b82f6;'):
+                with ui.row().classes('items-center gap-2 mb-2'):
+                    ui.icon('event_available', color='blue')
+                    ui.label('Smart Scheduler').classes('font-bold text-blue-400')
+                ui.html('''
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>What it does:</b> Helps you find the best dates for your vacation.
+                    </p>
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>How it helps:</b> Checks your balance, looks at team coverage,
+                        avoids holidays, and suggests optimal dates.
+                    </p>
+                    <p class="text-sm text-gray-400 italic">
+                        "I want to take a week off in March" → Suggests best available dates
+                    </p>
+                ''')
+
+            # Year-End Optimizer
+            with ui.card().classes('p-4').style('background-color: #3d2e1f; border-left: 4px solid #f59e0b;'):
+                with ui.row().classes('items-center gap-2 mb-2'):
+                    ui.icon('calendar_month', color='amber')
+                    ui.label('Year-End Optimizer').classes('font-bold text-amber-400')
+                ui.html('''
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>What it does:</b> Prevents you from losing unused PTO at year end.
+                    </p>
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>How it helps:</b> Analyzes your remaining balance, calculates
+                        expiring time, and creates a plan to use it before December 31st.
+                    </p>
+                    <p class="text-sm text-gray-400 italic">
+                        "How much PTO will I lose?" → Shows expiring balance + usage plan
+                    </p>
+                ''')
+
+            # Approval Assistant
+            with ui.card().classes('p-4').style('background-color: #1f3d2e; border-left: 4px solid #22c55e;'):
+                with ui.row().classes('items-center gap-2 mb-2'):
+                    ui.icon('approval', color='green')
+                    ui.label('Approval Assistant').classes('font-bold text-green-400')
+                ui.html('''
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>What it does:</b> Helps managers review and process PTO requests faster.
+                    </p>
+                    <p class="text-sm text-gray-300 mb-2">
+                        <b>How it helps:</b> Summarizes pending requests, checks for conflicts,
+                        and enables batch approvals with policy compliance checks.
+                    </p>
+                    <p class="text-sm text-gray-400 italic">
+                        "Show me pending requests" → Lists all with recommendations
+                    </p>
+                ''')
+
+        # How They Work Together
+        with ui.expansion('How Do They Work Together?', icon='sync_alt').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
+            ui.html(f'''
+                <div class="p-3">
+                    <p class="text-gray-300 mb-3">
+                        All three agents share the same knowledge about your company's PTO policies
+                        and have access to real-time data. Here's how a typical workflow might look:
+                    </p>
+                    <ol class="text-gray-300 text-sm space-y-2 list-decimal list-inside">
+                        <li><b>Employee</b> asks Smart Scheduler: "I need 3 days off next month"</li>
+                        <li><b>Smart Scheduler</b> checks balance, team calendar, and suggests March 15-17</li>
+                        <li><b>Employee</b> confirms and submits the request</li>
+                        <li><b>Manager</b> opens Approval Assistant to review pending requests</li>
+                        <li><b>Approval Assistant</b> shows the request with a coverage analysis</li>
+                        <li><b>Manager</b> approves with one click (AI already verified policy compliance)</li>
+                    </ol>
+                    <p class="text-gray-400 text-sm mt-3 italic">
+                        The AI handles the policy checking and calendar analysis so humans can focus on decisions.
+                    </p>
+                </div>
+            ''')
+
+        # Understanding the Metrics
+        with ui.expansion('What Do These Metrics Mean?', icon='insights').classes('mb-4').style(f'background-color: #374151; border-radius: 8px;'):
+            ui.html('''
+                <div class="p-3">
+                    <table class="w-full text-sm">
+                        <tr class="border-b border-gray-600">
+                            <td class="py-2 text-blue-400 font-medium">Total Interactions</td>
+                            <td class="py-2 text-gray-300">Every time someone sends a message to an AI agent, that's one interaction. More interactions = more AI adoption.</td>
+                        </tr>
+                        <tr class="border-b border-gray-600">
+                            <td class="py-2 text-purple-400 font-medium">Unique Users</td>
+                            <td class="py-2 text-gray-300">How many different employees have used AI features. Helps track adoption across the organization.</td>
+                        </tr>
+                        <tr class="border-b border-gray-600">
+                            <td class="py-2 text-green-400 font-medium">Successful Actions</td>
+                            <td class="py-2 text-gray-300">PTO requests that were actually submitted or approved through AI. This is the "real work" getting done.</td>
+                        </tr>
+                        <tr class="border-b border-gray-600">
+                            <td class="py-2 text-cyan-400 font-medium">Avg Response Time</td>
+                            <td class="py-2 text-gray-300">How fast the AI responds. Lower is better. Should typically be under 3 seconds.</td>
+                        </tr>
+                        <tr class="border-b border-gray-600">
+                            <td class="py-2 text-red-400 font-medium">Error Rate</td>
+                            <td class="py-2 text-gray-300">Percentage of interactions where something went wrong. Lower is better. Under 5% is healthy.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 font-medium" style="color: #C9A227;">Confirmation Rate</td>
+                            <td class="py-2 text-gray-300">When AI suggests an action, how often users say "yes" vs "cancel". High rates mean users trust the AI's suggestions.</td>
+                        </tr>
+                    </table>
+                </div>
+            ''')
+
+        # Safety & Privacy
+        with ui.expansion('Safety & Privacy', icon='security').classes('').style(f'background-color: #374151; border-radius: 8px;'):
+            ui.html(f'''
+                <div class="p-3">
+                    <p class="text-gray-300 mb-3">
+                        <b>Human-in-the-Loop:</b> AI agents can <i>suggest</i> actions, but they always ask for
+                        confirmation before making changes. No PTO request is submitted or approved without
+                        explicit user confirmation.
+                    </p>
+                    <p class="text-gray-300 mb-3">
+                        <b>Safety Gate:</b> All write operations (submit, approve, deny, cancel) require a
+                        confirmation step. The AI generates a unique token that expires in 5 minutes,
+                        ensuring you're always in control.
+                    </p>
+                    <p class="text-gray-300 mb-3">
+                        <b>Audit Trail:</b> Every AI action is logged with timestamps, user info, and
+                        what action was taken. Admins can review the complete history.
+                    </p>
+                    <p class="text-gray-300">
+                        <b>Data Privacy:</b> AI agents only access PTO-related data needed for their task.
+                        Conversations are not stored beyond the current session.
+                    </p>
+                </div>
+            ''')
+
+
 def admin_analytics_page():
     """Main AI Agent Analytics page."""
     # Apply dark mode theme
@@ -414,11 +639,11 @@ def admin_analytics_page():
         # Summary cards row
         render_summary_cards(stats.get('summary', {}))
 
-        # Charts row 1: Trend + Agent breakdown
-        with ui.element('div').classes('w-full grid grid-cols-1 lg:grid-cols-5 gap-4 mt-4'):
-            with ui.element('div').classes('lg:col-span-3'):
+        # Charts row 1: Trend + Agent breakdown (equal height)
+        with ui.row().classes('w-full gap-4 mt-4'):
+            with ui.element('div').classes('flex-grow-[3] min-w-0'):
                 render_usage_trend(stats.get('trends', []))
-            with ui.element('div').classes('lg:col-span-2'):
+            with ui.element('div').classes('flex-grow-[2] min-w-0'):
                 render_agent_breakdown(stats.get('by_agent', {}))
 
         # Charts row 2: Confirmation + Actions + Top Users
@@ -426,6 +651,12 @@ def admin_analytics_page():
             render_confirmation_gauge(stats.get('confirmation_rate', {}))
             render_actions_chart(stats.get('by_action', {}))
             render_top_users(stats.get('top_users', []))
+
+        # Charts row 3: Peak Usage Hours (full width)
+        render_hourly_distribution(stats.get('hourly_distribution', {}))
+
+        # AI Education Section
+        render_ai_education_section()
 
         # Footer
         with ui.row().classes('w-full justify-center mt-8 opacity-50'):
