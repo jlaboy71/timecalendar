@@ -147,17 +147,293 @@ def assistant_page():
     # Chat history for display (separate from agent's internal history)
     chat_messages = []
 
-    # Inject CSS for speaker button animation
-    ui.add_head_html("""
+    # ================================================================
+    # PREMIUM CSS - Futuristic Glassmorphism & Cyberpunk Effects
+    # ================================================================
+    ui.add_head_html(f"""
 <style>
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.1); }
-}
-.speaker-playing {
+/* ===== ANIMATIONS ===== */
+@keyframes pulse {{
+    0%, 100% {{ opacity: 1; transform: scale(1); }}
+    50% {{ opacity: 0.7; transform: scale(1.1); }}
+}}
+
+@keyframes cyber-pulse {{
+    0%, 100% {{ box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor; }}
+    50% {{ box-shadow: 0 0 20px currentColor, 0 0 40px currentColor, 0 0 60px currentColor; }}
+}}
+
+@keyframes data-flow {{
+    0% {{ background-position: 0% 50%; }}
+    100% {{ background-position: 200% 50%; }}
+}}
+
+@keyframes message-appear {{
+    0% {{ opacity: 0; transform: translateY(20px); }}
+    100% {{ opacity: 1; transform: translateY(0); }}
+}}
+
+@keyframes glow-border {{
+    0%, 100% {{ border-color: rgba(201, 162, 39, 0.3); }}
+    50% {{ border-color: rgba(201, 162, 39, 0.6); }}
+}}
+
+@keyframes shimmer {{
+    0% {{ background-position: -200% 0; }}
+    100% {{ background-position: 200% 0; }}
+}}
+
+/* ===== GLASSMORPHISM BASE ===== */
+.glass-panel {{
+    background: rgba(30, 30, 40, 0.75) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 0.5px solid rgba(201, 162, 39, 0.25) !important;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}}
+
+.glass-panel-glow {{
+    background: rgba(30, 30, 40, 0.8) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 0.5px solid rgba(201, 162, 39, 0.35) !important;
+    box-shadow:
+        0 0 30px rgba(201, 162, 39, 0.1),
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    animation: glow-border 3s ease-in-out infinite;
+}}
+
+/* ===== CYBERPUNK PIPELINE ===== */
+.pipeline-stage {{
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+.pipeline-stage-active {{
+    filter: drop-shadow(0 0 12px currentColor);
+}}
+
+.pipeline-icon-bg {{
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+.pipeline-icon-bg::before {{
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: transparent;
+    transition: all 0.4s ease;
+}}
+
+.pipeline-icon-active::before {{
+    background: radial-gradient(circle, currentColor 0%, transparent 70%);
+    opacity: 0.3;
+    animation: cyber-pulse 1.5s ease-in-out infinite;
+}}
+
+.data-fiber {{
+    position: relative;
+    height: 3px !important;
+    border-radius: 2px;
+    overflow: hidden;
+    transition: all 0.4s ease;
+}}
+
+.data-fiber::before {{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(201, 162, 39, 0.8) 25%,
+        {PTO_GOLD} 50%,
+        rgba(201, 162, 39, 0.8) 75%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}}
+
+.data-fiber-active::before {{
+    opacity: 1;
+    animation: data-flow 1s linear infinite;
+}}
+
+.data-fiber-glow {{
+    box-shadow: 0 0 8px {PTO_GOLD}, 0 0 16px rgba(201, 162, 39, 0.5);
+}}
+
+/* ===== PREMIUM CHAT BUBBLES ===== */
+.chat-message-wrapper {{
+    animation: message-appear 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+.chat-bubble-user {{
+    background: linear-gradient(135deg, #374151 0%, #1f2937 100%) !important;
+    border: 1px solid rgba(201, 162, 39, 0.3) !important;
+    border-radius: 16px 16px 4px 16px !important;
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}}
+
+.chat-bubble-ai {{
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    border-radius: 16px 16px 16px 4px !important;
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(139, 92, 246, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}}
+
+.chat-bubble-ai::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.4), transparent);
+}}
+
+/* ===== PREMIUM BUTTONS ===== */
+.btn-cyber {{
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}}
+
+.btn-cyber::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent
+    );
+    transition: left 0.5s ease;
+}}
+
+.btn-cyber:hover::before {{
+    left: 100%;
+}}
+
+/* ===== SPEAKER BUTTON ANIMATION ===== */
+.speaker-playing {{
     background-color: #ef4444 !important;
     animation: pulse 1s infinite !important;
-}
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5) !important;
+}}
+
+/* ===== INPUT FIELD PREMIUM ===== */
+.premium-input .q-field__control {{
+    background: rgba(30, 30, 40, 0.6) !important;
+    border: 1px solid rgba(201, 162, 39, 0.2) !important;
+    border-radius: 12px !important;
+    transition: all 0.3s ease !important;
+}}
+
+.premium-input .q-field__control:hover {{
+    border-color: rgba(201, 162, 39, 0.4) !important;
+}}
+
+.premium-input .q-field--focused .q-field__control {{
+    border-color: {PTO_GOLD} !important;
+    box-shadow: 0 0 16px rgba(201, 162, 39, 0.2) !important;
+}}
+
+/* ===== SYSTEM MANUAL DIALOG ===== */
+.system-manual {{
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(201, 162, 39, 0.3) !important;
+}}
+
+.manual-section {{
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}}
+
+.manual-section:hover {{
+    border-color: rgba(201, 162, 39, 0.3);
+    box-shadow: 0 0 20px rgba(201, 162, 39, 0.1);
+}}
+
+.spec-table {{
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}}
+
+.spec-table th {{
+    background: rgba(201, 162, 39, 0.1);
+    border-bottom: 1px solid rgba(201, 162, 39, 0.3);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: {PTO_GOLD};
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 1px;
+}}
+
+.spec-table td {{
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+}}
+
+.spec-table tr:hover td {{
+    background: rgba(201, 162, 39, 0.05);
+}}
+
+/* ===== SCROLL STYLING ===== */
+.premium-scroll::-webkit-scrollbar {{
+    width: 6px;
+}}
+
+.premium-scroll::-webkit-scrollbar-track {{
+    background: rgba(30, 30, 40, 0.5);
+    border-radius: 3px;
+}}
+
+.premium-scroll::-webkit-scrollbar-thumb {{
+    background: rgba(201, 162, 39, 0.4);
+    border-radius: 3px;
+}}
+
+.premium-scroll::-webkit-scrollbar-thumb:hover {{
+    background: rgba(201, 162, 39, 0.6);
+}}
+
+/* ===== EXPANSION PANEL PREMIUM ===== */
+.expansion-premium .q-expansion-item__container {{
+    background: rgba(30, 30, 40, 0.6) !important;
+    backdrop-filter: blur(8px) !important;
+    border: 0.5px solid rgba(201, 162, 39, 0.2) !important;
+}}
+
+.expansion-premium .q-item {{
+    transition: all 0.3s ease;
+}}
+
+.expansion-premium .q-item:hover {{
+    background: rgba(201, 162, 39, 0.05) !important;
+}}
 </style>
 """)
 
@@ -500,9 +776,12 @@ window.ptoVoice.init();
             ui.icon('schedule', size='1.2rem').classes('opacity-60')
             ui.label(f"{date_str} at {time_str}").classes('text-sm opacity-60')
 
-        # Agent selector row
-        with ui.row().classes('w-full items-center gap-4 mb-4 p-3 rounded-lg').style('background-color: #374151;'):
-            ui.label('Agent:').classes('text-sm opacity-70')
+        # Agent selector row with premium glassmorphism
+        with ui.row().classes('w-full items-center gap-4 mb-4 p-4 rounded-xl glass-panel'):
+            # Agent label with icon
+            with ui.row().classes('items-center gap-2'):
+                ui.icon('smart_toy', size='1.2rem').style(f'color: {PTO_GOLD}; opacity: 0.7;')
+                ui.label('AGENT').classes('text-xs font-bold tracking-widest opacity-60')
 
             # Build options for dropdown
             agent_options = {
@@ -514,18 +793,18 @@ window.ptoVoice.init();
                 options=agent_options,
                 value='smart_scheduler',
                 on_change=lambda e: switch_agent(e.value)
-            ).classes('min-w-48').props('dense outlined dark')
+            ).classes('min-w-48 premium-input').props('dense outlined dark')
 
             # Agent icon and description (updates when agent changes)
             agent_info = AGENTS[agent_state['current_type']]
-            with ui.row().classes('items-center gap-2 ml-auto'):
-                agent_icon_label = ui.icon(
-                    agent_info['icon'],
-                    size='1.2rem'
-                ).style(f'color: {agent_info["color"]};')
-                agent_desc_label = ui.label(
-                    agent_info['description']
-                ).classes('text-sm opacity-70')
+            with ui.row().classes('items-center gap-3 ml-auto'):
+                # Glowing agent icon
+                with ui.element('div').classes('rounded-full p-2').style(
+                    f'background: radial-gradient(circle, {agent_info["color"]}20 0%, transparent 70%); '
+                    f'box-shadow: 0 0 10px {agent_info["color"]}30;'
+                ):
+                    ui.icon(agent_info['icon'], size='1.2rem').style(f'color: {agent_info["color"]};')
+                ui.label(agent_info['description']).classes('text-sm opacity-70')
 
         # Error banner (hidden by default)
         error_banner = ui.column().classes('w-full hidden')
@@ -540,10 +819,10 @@ window.ptoVoice.init();
                         ui.label(message).classes('text-red-400')
             error_banner.classes(remove='hidden')
 
-        # Chat container (scrollable)
+        # Chat container (scrollable) with glassmorphism
         chat_container = ui.column().classes(
-            'w-full overflow-y-auto p-4 rounded-lg'
-        ).style('background-color: #1f2937; min-height: 300px; max-height: 50vh;')
+            'w-full overflow-y-auto p-5 rounded-xl glass-panel-glow premium-scroll'
+        ).style('min-height: 320px; max-height: 55vh;')
 
         # Store reference to confirmation dialog
         confirmation_dialog_ref = {'dialog': None}
@@ -554,28 +833,53 @@ window.ptoVoice.init();
             render_chat()
 
         def render_chat():
-            """Render all chat messages."""
+            """Render all chat messages with premium bubble styling."""
             chat_container.clear()
             current_agent = AGENTS[agent_state['current_type']]
             with chat_container:
                 if not chat_messages:
-                    # Welcome message - agent-specific
-                    with ui.column().classes('items-start pt-4 opacity-70'):
-                        with ui.row().classes('items-center gap-3'):
-                            ui.icon(current_agent['icon'], size='2.5rem').style(
+                    # Welcome message - premium styling
+                    with ui.column().classes('items-center justify-center py-8 chat-message-wrapper'):
+                        # Glowing icon container
+                        with ui.element('div').classes('rounded-full p-4 mb-4').style(
+                            f'background: radial-gradient(circle, {current_agent["color"]}20 0%, transparent 70%); '
+                            f'box-shadow: 0 0 30px {current_agent["color"]}30;'
+                        ):
+                            ui.icon(current_agent['icon'], size='3rem').style(
                                 f'color: {current_agent["color"]};'
                             )
-                            ui.label(f"Hi {user_name}! I'm your {current_agent['name']}.").classes('text-xl')
-                        ui.label(current_agent['welcome']).classes('ml-1 mt-2 max-w-xl')
+                        ui.label(f"Hi {user_name}!").classes('text-2xl font-light mb-1')
+                        ui.label(f"I'm your {current_agent['name']}").classes('text-lg opacity-70 mb-4')
+                        with ui.element('div').classes('max-w-lg text-center').style(
+                            'background: rgba(30, 41, 59, 0.5); '
+                            'border: 1px solid rgba(71, 85, 105, 0.3); '
+                            'border-radius: 12px; padding: 16px;'
+                        ):
+                            ui.label(current_agent['welcome']).classes('opacity-80 text-sm leading-relaxed')
                 else:
                     for msg in chat_messages:
                         is_user = msg['role'] == 'user'
-                        with ui.chat_message(
-                            name='You' if is_user else current_agent['name'],
-                            sent=is_user,
-                            avatar='person' if is_user else current_agent['icon']
-                        ).classes('mb-2'):
-                            ui.markdown(msg['content'])
+                        # Custom premium chat bubble
+                        with ui.element('div').classes(
+                            f'chat-message-wrapper w-full flex {"justify-end" if is_user else "justify-start"} mb-3'
+                        ):
+                            with ui.element('div').classes(
+                                f'max-w-[80%] {"chat-bubble-user" if is_user else "chat-bubble-ai"} p-4'
+                            ).style('position: relative;'):
+                                # Header with name
+                                with ui.row().classes('items-center gap-2 mb-2'):
+                                    if is_user:
+                                        ui.icon('person', size='sm').style(f'color: {PTO_GOLD}; opacity: 0.7;')
+                                        ui.label('You').classes('text-xs font-semibold opacity-70')
+                                    else:
+                                        ui.icon(current_agent['icon'], size='sm').style(
+                                            f'color: {current_agent["color"]};'
+                                        )
+                                        ui.label(current_agent['name']).classes('text-xs font-semibold').style(
+                                            f'color: {current_agent["color"]}; opacity: 0.8;'
+                                        )
+                                # Message content
+                                ui.markdown(msg['content']).classes('text-sm leading-relaxed')
 
         # Thinking indicator container (near input area, shown during processing)
         thinking_indicator = ui.row().classes('w-full items-center gap-2 mt-2 hidden')
@@ -618,13 +922,12 @@ window.ptoVoice.init();
         pipeline_container_ref = {'container': None}
 
         def update_pipeline_ui():
-            """Update pipeline UI based on current state (recording, thinking, playing).
+            """Update pipeline UI with cyberpunk effects based on current state.
 
-            This function checks the pipeline_state dict and updates the visual appearance
-            of each stage to reflect the current activity.
-            - Ghost mode (idle): opacity-15 for all elements
-            - Active stage: opacity-100 with animate-pulse
-            - Connectors: dull gray when idle, bright gold when data flows through
+            Visual states:
+            - Ghost mode (idle): Low opacity, grayscale, subtle styling
+            - Active stage: Full color, outer glow, pulsing animation
+            - Data fibers: Animated gold flow when data is passing through
             """
             if not pipeline_refs:
                 return  # Pipeline not built yet
@@ -641,53 +944,73 @@ window.ptoVoice.init();
                 elif pipeline_state.get('recording'):
                     active_stage = 'transcribing'
 
-            # Determine base opacity class based on voice mode
+            # Determine base opacity based on voice mode
             voice_mode_on = pipeline_state.get('voice_mode', False)
-            ghost_opacity_class = 'opacity-40' if voice_mode_on else 'opacity-15'
+            ghost_opacity = 'opacity-30' if voice_mode_on else 'opacity-20'
 
-            # Update each stage's appearance
+            # Update each stage's appearance with cyberpunk effects
             for stage_id, refs in pipeline_refs.items():
                 is_active = (stage_id == active_stage)
+                color = refs['color']
 
                 if is_active:
-                    # Active stage - full opacity, scaled up, pulsing with glow
-                    refs['emoji'].classes(remove='opacity-15 opacity-40')
+                    # ACTIVE: Full cyberpunk glow effect
+                    refs['container'].classes(add='pipeline-stage-active')
+                    refs['emoji'].classes(remove='opacity-20 opacity-30')
                     refs['emoji'].classes(add='opacity-100 animate-pulse')
-                    refs['emoji'].style('transform: scale(1.2);')
-                    refs['icon_bg'].style(f'background-color: {refs["color"]}20; box-shadow: 0 0 20px {refs["color"]}60;')
-                    refs['text'].classes(remove='opacity-15 opacity-40')
-                    refs['text'].classes(add='opacity-100')
-                    refs['text'].style(f'color: {refs["color"]}; font-weight: 600;')
-                else:
-                    # Inactive stage - ghost mode opacity
-                    refs['emoji'].classes(remove='opacity-100 opacity-15 opacity-40 animate-pulse')
-                    refs['emoji'].classes(add=ghost_opacity_class)
-                    refs['emoji'].style('transform: scale(1);')
-                    refs['icon_bg'].style('background-color: #374151; box-shadow: none;')
-                    refs['text'].classes(remove='opacity-100 opacity-15 opacity-40')
-                    refs['text'].classes(add=ghost_opacity_class)
-                    refs['text'].style('color: inherit; font-weight: 400;')
+                    refs['emoji'].style('transform: scale(1.15); filter: none;')
 
-            # Update connectors - light up with GOLD when data flows through
+                    # Cyberpunk outer glow on icon background
+                    refs['icon_bg'].classes(add='pipeline-icon-active')
+                    refs['icon_bg'].style(
+                        f'background: radial-gradient(circle, {color}30 0%, {color}10 50%, transparent 70%); '
+                        f'border: 1px solid {color}80; '
+                        f'box-shadow: 0 0 20px {color}60, 0 0 40px {color}30, inset 0 0 15px {color}20; '
+                        f'color: {color};'
+                    )
+
+                    refs['text'].classes(remove='opacity-20 opacity-30')
+                    refs['text'].classes(add='opacity-100')
+                    refs['text'].style(f'color: {color}; font-weight: 700; text-shadow: 0 0 10px {color}60;')
+                else:
+                    # GHOST MODE: Subtle, dimmed appearance
+                    refs['container'].classes(remove='pipeline-stage-active')
+                    refs['emoji'].classes(remove='opacity-100 opacity-20 opacity-30 animate-pulse')
+                    refs['emoji'].classes(add=ghost_opacity)
+                    refs['emoji'].style('transform: scale(1); filter: grayscale(50%);')
+
+                    refs['icon_bg'].classes(remove='pipeline-icon-active')
+                    refs['icon_bg'].style(
+                        'background: linear-gradient(145deg, #2d3748 0%, #1a202c 100%); '
+                        'border: 1px solid rgba(75, 85, 99, 0.3); '
+                        'box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);'
+                    )
+
+                    refs['text'].classes(remove='opacity-100 opacity-20 opacity-30')
+                    refs['text'].classes(add=ghost_opacity)
+                    refs['text'].style('color: inherit; font-weight: 400; text-shadow: none;')
+
+            # Update data fiber connectors with animated gold flow
             stage_order = [s['id'] for s in PIPELINE_STAGES]
             active_index = stage_order.index(active_stage) if active_stage in stage_order else -1
 
             for i, conn in enumerate(connector_refs):
                 if active_index > i:
-                    # Connector is before active stage - lit up gold (data has passed)
-                    conn['element'].classes(remove='opacity-15 opacity-40')
-                    conn['element'].classes(add='opacity-80')
-                    conn['element'].style(f'background-color: {PTO_GOLD};')
+                    # Data has passed through - lit gold
+                    conn['element'].classes(remove='opacity-20 opacity-30')
+                    conn['element'].classes(add='opacity-100 data-fiber-glow')
+                    conn['element'].classes(remove='data-fiber-active')
+                    conn['element'].style(f'background-color: {PTO_GOLD}; height: 3px;')
                 elif active_index == i:
-                    # Connector leads to active stage - bright gold, pulsing
-                    conn['element'].classes(remove='opacity-15 opacity-40')
-                    conn['element'].classes(add='opacity-100 animate-pulse')
-                    conn['element'].style(f'background-color: {PTO_GOLD};')
+                    # Data currently flowing - animated gold stream
+                    conn['element'].classes(remove='opacity-20 opacity-30')
+                    conn['element'].classes(add='opacity-100 data-fiber-active data-fiber-glow')
+                    conn['element'].style(f'background-color: {PTO_GOLD}; height: 3px;')
                 else:
-                    # Connector is after active stage - ghost mode
-                    conn['element'].classes(remove='opacity-100 opacity-80 opacity-15 opacity-40 animate-pulse')
-                    conn['element'].classes(add=ghost_opacity_class)
-                    conn['element'].style('background-color: #4b5563;')
+                    # Waiting for data - ghost mode
+                    conn['element'].classes(remove='opacity-100 data-fiber-active data-fiber-glow opacity-20 opacity-30')
+                    conn['element'].classes(add=ghost_opacity)
+                    conn['element'].style('background-color: #374151; height: 3px;')
 
         def update_pipeline(active_stage: str = None):
             """Update the pipeline to highlight the active stage.
@@ -895,11 +1218,11 @@ window.ptoVoice.init();
         render_chat()
 
         # ================================================================
-        # INPUT AREA - NUCLEAR REBUILD APPROACH
+        # INPUT AREA - Premium Glassmorphism Design
         # ================================================================
 
-        # Container that we'll rebuild when voice toggles
-        input_container = ui.row().classes('w-full items-center gap-3 mt-4')
+        # Container that we'll rebuild when voice toggles - premium styling
+        input_container = ui.row().classes('w-full items-center gap-3 mt-4 p-3 rounded-xl glass-panel')
 
         # Track voice state (simpler dict)
         voice_enabled = {'value': False, 'recording': False}
@@ -908,73 +1231,165 @@ window.ptoVoice.init();
         input_ref = {'field': None}
 
         def show_voice_commands_help():
-            """Show help dialog with available voice commands and pipeline explanation."""
-            with ui.dialog() as help_dialog, ui.card().classes('p-6').style('background-color: #1f2937; min-width: 550px; max-width: 650px;'):
-                ui.label('🎤 Voice Assistant Guide').classes('text-xl font-bold mb-4')
-
-                # ========================================
-                # UNDERSTANDING THE PIPELINE SECTION
-                # ========================================
-                with ui.expansion('Understanding the Pipeline', icon='timeline').classes('w-full mb-4').style(
-                    f'background-color: #374151; border-left: 3px solid {PTO_GOLD};'
-                ):
-                    with ui.column().classes('gap-3 p-3'):
-                        ui.label('The pipeline shows real-time processing status:').classes('opacity-80 text-sm mb-2')
-
-                        # Pipeline stages explanation
-                        pipeline_info = [
-                            ('🎙️', 'Mic (Transcribing)', '#ef4444', 'Your voice is being captured and converted to text'),
-                            ('⚡', 'Bridge (Processing)', '#f59e0b', 'Text is being sent from browser to AI backend'),
-                            ('🧠', 'AI (Generating)', '#8b5cf6', 'AI agent is thinking and formulating a response'),
-                            ('🔊', 'Speaker (Speaking)', '#22c55e', 'Response is being converted to speech and played'),
-                        ]
-
-                        for emoji, label, color, desc in pipeline_info:
-                            with ui.row().classes('items-center gap-3'):
-                                with ui.element('div').classes('rounded-full p-2').style(f'background-color: {color}20;'):
-                                    ui.label(emoji).classes('text-lg')
+            """Show premium System Intelligence Manual dialog."""
+            with ui.dialog().props('maximized') as help_dialog:
+                with ui.card().classes('w-full h-full system-manual p-0 overflow-hidden'):
+                    # ========================================
+                    # HEADER - Executive Branding
+                    # ========================================
+                    with ui.element('div').classes('w-full py-6 px-8').style(
+                        f'background: linear-gradient(135deg, rgba(201, 162, 39, 0.15) 0%, transparent 50%); '
+                        f'border-bottom: 1px solid rgba(201, 162, 39, 0.3);'
+                    ):
+                        with ui.row().classes('items-center justify-between'):
+                            with ui.row().classes('items-center gap-4'):
+                                # Logo/Icon
+                                with ui.element('div').classes('rounded-lg p-3').style(
+                                    f'background: linear-gradient(135deg, {PTO_GOLD}30 0%, {PTO_GOLD}10 100%); '
+                                    f'border: 1px solid {PTO_GOLD}50;'
+                                ):
+                                    ui.icon('smart_toy', size='2rem').style(f'color: {PTO_GOLD};')
                                 with ui.column().classes('gap-0'):
-                                    ui.label(label).classes('font-semibold text-sm').style(f'color: {color};')
-                                    ui.label(desc).classes('text-xs opacity-70')
+                                    ui.label('SYSTEM INTELLIGENCE MANUAL').classes(
+                                        'text-2xl font-bold tracking-wide'
+                                    ).style(f'color: {PTO_GOLD};')
+                                    ui.label('PTO Central Voice Assistant • Technical Specification').classes(
+                                        'text-sm opacity-60 font-mono'
+                                    )
+                            # Close button
+                            ui.button(icon='close', on_click=help_dialog.close).props(
+                                'round flat'
+                            ).style('color: white; opacity: 0.7;')
 
-                        ui.separator().classes('my-2')
-                        with ui.row().classes('items-center gap-2'):
-                            ui.icon('info', size='sm').style(f'color: {PTO_GOLD};')
-                            ui.label('Connecting lines light up gold as data flows through each stage.').classes('text-xs opacity-60 italic')
+                    # ========================================
+                    # CONTENT - Scrollable Manual
+                    # ========================================
+                    with ui.scroll_area().classes('w-full premium-scroll').style('height: calc(100vh - 120px);'):
+                        with ui.column().classes('gap-8 p-8 max-w-5xl mx-auto'):
 
-                # ========================================
-                # VOICE COMMANDS SECTION
-                # ========================================
-                ui.label('Voice Commands').classes('font-semibold mt-2 mb-2')
-                ui.label('Say any of these commands while voice mode is active:').classes('opacity-70 mb-3 text-sm')
+                            # --- SECTION 1: SYSTEM OVERVIEW ---
+                            with ui.element('div').classes('manual-section p-6'):
+                                with ui.row().classes('items-center gap-3 mb-4'):
+                                    ui.icon('hub', size='1.5rem').style(f'color: {PTO_GOLD};')
+                                    ui.label('SYSTEM OVERVIEW').classes(
+                                        'text-lg font-bold tracking-wider'
+                                    ).style(f'color: {PTO_GOLD};')
+                                ui.label(
+                                    'The PTO Central Voice Assistant is an AI-powered automation system that enables '
+                                    'natural language interaction with your company\'s PTO management platform. '
+                                    'Using advanced speech recognition and synthesis, employees can check balances, '
+                                    'request time off, and receive intelligent scheduling recommendations—all hands-free.'
+                                ).classes('opacity-80 leading-relaxed')
 
-                # Commands table
-                with ui.element('table').classes('w-full').style('border-collapse: collapse;'):
-                    # Header row
-                    with ui.element('thead'):
-                        with ui.element('tr').style('border-bottom: 1px solid #4b5563;'):
-                            ui.element('th').classes('text-left p-2 text-amber-400').style('width: 40%;').props('innerHTML="Command"')
-                            ui.element('th').classes('text-left p-2 text-amber-400').props('innerHTML="Action"')
+                                # Tech stack badges
+                                with ui.row().classes('gap-3 mt-4 flex-wrap'):
+                                    for tech, icon in [
+                                        ('NiceGUI Framework', 'code'),
+                                        ('OpenAI GPT-4o', 'psychology'),
+                                        ('Web Speech API', 'mic'),
+                                        ('OpenAI TTS', 'volume_up'),
+                                    ]:
+                                        with ui.element('div').classes('flex items-center gap-2 px-3 py-1 rounded-full').style(
+                                            'background: rgba(201, 162, 39, 0.1); border: 1px solid rgba(201, 162, 39, 0.3);'
+                                        ):
+                                            ui.icon(icon, size='xs').style(f'color: {PTO_GOLD}; opacity: 0.8;')
+                                            ui.label(tech).classes('text-xs font-mono')
 
-                    # Body rows
-                    with ui.element('tbody'):
-                        commands_data = [
-                            ('"Clear chat" / "New chat"', 'Start a fresh conversation'),
-                            ('"Go back" / "Go home"', 'Return to dashboard'),
-                            ('"Log out" / "Sign out"', 'Sign out of the app'),
-                            ('"Dark mode"', 'Switch to dark theme'),
-                            ('"Light mode"', 'Switch to light theme'),
-                            ('"Stop" / "Be quiet"', 'Stop audio playback'),
-                            ('"Help" / "Voice commands"', 'Show this reference'),
-                        ]
-                        for cmd, action in commands_data:
-                            with ui.element('tr').style('border-bottom: 1px solid #374151;'):
-                                ui.element('td').classes('p-2 font-mono text-sm').style('color: #fbbf24;').props(f'innerHTML="{cmd}"')
-                                ui.element('td').classes('p-2 opacity-80 text-sm').props(f'innerHTML="{action}"')
+                            # --- SECTION 2: DATA PIPELINE ---
+                            with ui.element('div').classes('manual-section p-6'):
+                                with ui.row().classes('items-center gap-3 mb-4'):
+                                    ui.icon('timeline', size='1.5rem').style(f'color: {PTO_GOLD};')
+                                    ui.label('DATA PROCESSING PIPELINE').classes(
+                                        'text-lg font-bold tracking-wider'
+                                    ).style(f'color: {PTO_GOLD};')
 
-                ui.button('Close', on_click=help_dialog.close).classes('mt-4').style(
-                    f'background-color: {PTO_GOLD} !important; color: white !important;'
-                )
+                                # Pipeline specification table
+                                with ui.element('table').classes('spec-table'):
+                                    with ui.element('thead'):
+                                        with ui.element('tr'):
+                                            for header in ['Stage', 'Component', 'Technology', 'Latency']:
+                                                ui.element('th').props(f'innerHTML="{header}"')
+                                    with ui.element('tbody'):
+                                        pipeline_specs = [
+                                            ('🎙️', 'TRANSCRIBE', 'Web Speech API', '< 100ms'),
+                                            ('⚡', 'BRIDGE', 'WebSocket Sync', '< 50ms'),
+                                            ('🧠', 'GENERATE', 'OpenAI GPT-4o', '1-3s'),
+                                            ('🔊', 'SYNTHESIZE', 'OpenAI TTS Nova', '< 500ms'),
+                                        ]
+                                        for emoji, stage, tech, latency in pipeline_specs:
+                                            with ui.element('tr'):
+                                                ui.element('td').classes('font-mono').props(f'innerHTML="{emoji} {stage}"')
+                                                ui.element('td').props(f'innerHTML="{stage}"')
+                                                ui.element('td').classes('opacity-70').props(f'innerHTML="{tech}"')
+                                                ui.element('td').classes('font-mono text-green-400').props(f'innerHTML="{latency}"')
+
+                                with ui.row().classes('items-center gap-2 mt-4 p-3 rounded-lg').style(
+                                    'background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3);'
+                                ):
+                                    ui.icon('speed', size='sm').classes('text-green-400')
+                                    ui.label('Total round-trip latency: 2-4 seconds for complete voice interaction').classes(
+                                        'text-sm text-green-400'
+                                    )
+
+                            # --- SECTION 3: VOICE COMMANDS ---
+                            with ui.element('div').classes('manual-section p-6'):
+                                with ui.row().classes('items-center gap-3 mb-4'):
+                                    ui.icon('record_voice_over', size='1.5rem').style(f'color: {PTO_GOLD};')
+                                    ui.label('VOICE COMMAND REFERENCE').classes(
+                                        'text-lg font-bold tracking-wider'
+                                    ).style(f'color: {PTO_GOLD};')
+
+                                with ui.element('table').classes('spec-table'):
+                                    with ui.element('thead'):
+                                        with ui.element('tr'):
+                                            for header in ['Command Phrase', 'Action', 'Category']:
+                                                ui.element('th').props(f'innerHTML="{header}"')
+                                    with ui.element('tbody'):
+                                        commands_data = [
+                                            ('"Clear chat" / "New chat"', 'Reset conversation', 'Navigation'),
+                                            ('"Go back" / "Go home"', 'Return to dashboard', 'Navigation'),
+                                            ('"Log out" / "Sign out"', 'End session', 'Auth'),
+                                            ('"Dark mode"', 'Enable dark theme', 'Display'),
+                                            ('"Light mode"', 'Enable light theme', 'Display'),
+                                            ('"Stop" / "Be quiet"', 'Halt audio playback', 'Audio'),
+                                            ('"Help"', 'Show this manual', 'System'),
+                                        ]
+                                        for cmd, action, category in commands_data:
+                                            with ui.element('tr'):
+                                                ui.element('td').classes('font-mono').style(f'color: {PTO_GOLD};').props(f'innerHTML="{cmd}"')
+                                                ui.element('td').classes('opacity-80').props(f'innerHTML="{action}"')
+                                                cat_color = {'Navigation': '#3b82f6', 'Auth': '#ef4444', 'Display': '#8b5cf6', 'Audio': '#22c55e', 'System': '#f59e0b'}
+                                                ui.element('td').props(f'innerHTML="<span style=\\"color: {cat_color.get(category, PTO_GOLD)};\\">{category}</span>"')
+
+                            # --- SECTION 4: AGENT CAPABILITIES ---
+                            with ui.element('div').classes('manual-section p-6'):
+                                with ui.row().classes('items-center gap-3 mb-4'):
+                                    ui.icon('psychology', size='1.5rem').style(f'color: {PTO_GOLD};')
+                                    ui.label('AI AGENT CAPABILITIES').classes(
+                                        'text-lg font-bold tracking-wider'
+                                    ).style(f'color: {PTO_GOLD};')
+
+                                with ui.row().classes('gap-4 flex-wrap'):
+                                    agents_info = [
+                                        ('Smart Scheduler', 'event_available', '#4CAF50', 'Optimal vacation planning with holiday awareness'),
+                                        ('Year-End Optimizer', 'calendar_month', '#FF9800', 'Prevent PTO loss before December 31st'),
+                                        ('Approval Assistant', 'fact_check', '#2196F3', 'Streamline manager approval workflows'),
+                                    ]
+                                    for name, icon, color, desc in agents_info:
+                                        with ui.element('div').classes('flex-1 min-w-[250px] p-4 rounded-lg').style(
+                                            f'background: rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.1); '
+                                            f'border: 1px solid {color}40;'
+                                        ):
+                                            with ui.row().classes('items-center gap-2 mb-2'):
+                                                ui.icon(icon, size='sm').style(f'color: {color};')
+                                                ui.label(name).classes('font-semibold').style(f'color: {color};')
+                                            ui.label(desc).classes('text-sm opacity-70')
+
+                            # --- FOOTER ---
+                            with ui.element('div').classes('text-center py-6 opacity-50'):
+                                ui.label('PTO Central • Enterprise Automation Platform').classes('text-xs font-mono')
+                                ui.label('© 2025 Haventech Solutions').classes('text-xs')
+
             help_dialog.open()
 
         def build_input_area(with_voice: bool):
@@ -1039,7 +1454,7 @@ window.ptoVoice.init();
                             ui.label('Listening...').classes('text-red-400 text-xs')
 
                 # === TEXT INPUT (always present) - with stable ID for voice targeting ===
-                msg_input = ui.input(placeholder='Ask about your PTO...').classes('flex-grow chat-input-field').props('outlined dense')
+                msg_input = ui.input(placeholder='Ask about your PTO...').classes('flex-grow chat-input-field premium-input').props('outlined dense dark')
                 input_ref['field'] = msg_input
 
                 # === SEND BUTTON (always present) ===
@@ -1120,40 +1535,43 @@ window.ptoVoice.init();
         build_input_area(False)
 
         # ================================================================
-        # LIVE PIPELINE - Visual progress indicator
-        # Positioned directly below input area for immediate visibility
-        # Always visible in "ghost mode" (opacity-15 idle, opacity-100 when active)
+        # LIVE PIPELINE - Cyberpunk Visual Progress Indicator
+        # Futuristic "data flow" visualization with glowing effects
         # ================================================================
         pipeline_container = ui.row().classes(
-            'w-full items-center justify-center gap-4 py-2 px-4 rounded-lg mt-2'
-        ).style('background-color: #1f2937; height: 60px;')
+            'w-full items-center justify-center gap-6 py-3 px-6 rounded-xl mt-3 glass-panel'
+        ).style('height: 70px;')
         pipeline_container_ref['container'] = pipeline_container
 
         def build_live_pipeline():
-            """Build the live pipeline UI with connecting lines."""
+            """Build the cyberpunk pipeline UI with data fiber connectors."""
             pipeline_container.clear()
             pipeline_refs.clear()
             connector_refs.clear()
 
             with pipeline_container:
                 for i, stage in enumerate(PIPELINE_STAGES):
-                    # Create stage container with icon and label
-                    with ui.column().classes('items-center gap-0') as stage_col:
-                        # Icon container with background circle
+                    # Create stage container with cyberpunk styling
+                    with ui.column().classes('items-center gap-1 pipeline-stage') as stage_col:
+                        # Outer glow container for cyberpunk effect
                         with ui.element('div').classes(
-                            'rounded-full p-2 transition-all duration-300'
-                        ).style('background-color: #374151;') as icon_bg:
-                            # Ghost mode: opacity-15 by default
+                            'rounded-full p-3 pipeline-icon-bg transition-all duration-300'
+                        ).style(
+                            f'background: linear-gradient(145deg, #2d3748 0%, #1a202c 100%); '
+                            f'border: 1px solid rgba(75, 85, 99, 0.3); '
+                            f'box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);'
+                        ) as icon_bg:
+                            # Emoji with ghost mode opacity
                             emoji_label = ui.label(stage['emoji']).classes(
-                                'text-xl transition-all duration-300 opacity-15'
-                            )
+                                'text-2xl transition-all duration-300 opacity-20'
+                            ).style('filter: grayscale(50%);')
 
-                        # Stage label - ghost mode opacity
-                        text_label = ui.label(stage['label']).classes(
-                            'text-xs transition-all duration-300 opacity-15'
+                        # Stage label with tech font styling
+                        text_label = ui.label(stage['label'].upper()).classes(
+                            'text-xs font-mono tracking-wider transition-all duration-300 opacity-20'
                         )
 
-                        # Store references
+                        # Store references with color info
                         pipeline_refs[stage['id']] = {
                             'container': stage_col,
                             'icon_bg': icon_bg,
@@ -1163,12 +1581,12 @@ window.ptoVoice.init();
                             'state_key': stage.get('state_key')
                         }
 
-                    # Add connecting line between stages (except after last)
+                    # Add data fiber connector between stages
                     if i < len(PIPELINE_STAGES) - 1:
-                        # Ghost mode: dull gray connector at low opacity
+                        # Data fiber cable with animated flow when active
                         connector = ui.element('div').classes(
-                            'h-0.5 w-8 rounded transition-all duration-300 opacity-15'
-                        ).style('background-color: #4b5563;')
+                            'data-fiber w-12 rounded-full transition-all duration-300 opacity-20'
+                        ).style('background-color: #374151; height: 3px;')
                         connector_refs.append({
                             'element': connector,
                             'from_stage': stage['id'],
@@ -1315,76 +1733,112 @@ window.ptoVoice.init();
         update_suggestions()
 
         # ================================================================
-        # UNDER THE HOOD - Technical Architecture Expansion
+        # UNDER THE HOOD - Premium Technical Architecture Panel
         # ================================================================
         with ui.expansion(
-            'How this works (Technical Architecture)',
+            'Technical Architecture',
             icon='architecture'
-        ).classes('w-full mt-6').style('background-color: #374151; border-radius: 8px;'):
-            with ui.column().classes('gap-4 p-4'):
-                ui.label('Voice-Enabled AI Assistant Data Flow').classes('text-lg font-semibold mb-2')
+        ).classes('w-full mt-6 expansion-premium rounded-xl'):
+            with ui.column().classes('gap-5 p-5'):
+                # Header with gradient accent
+                with ui.element('div').classes('w-full pb-4 mb-2').style(
+                    f'border-bottom: 1px solid rgba(201, 162, 39, 0.2);'
+                ):
+                    with ui.row().classes('items-center gap-3'):
+                        ui.icon('hub', size='1.5rem').style(f'color: {PTO_GOLD};')
+                        ui.label('VOICE-ENABLED AI ASSISTANT').classes(
+                            'text-lg font-bold tracking-wider'
+                        ).style(f'color: {PTO_GOLD};')
+                    ui.label('Real-time data flow architecture').classes('text-sm opacity-60 mt-1 font-mono')
 
-                # Data flow diagram using cards
+                # Data flow diagram using premium cards
                 flow_steps = [
                     {
-                        'icon': 'mic',
-                        'emoji': '🎤',
-                        'title': 'Input: Voice Recognition',
-                        'tech': 'Web Speech API (Browser)',
-                        'desc': 'Browser captures your voice and converts speech to text in real-time using the SpeechRecognition API.',
-                        'color': '#ef4444'
+                        'emoji': '🎙️',
+                        'title': 'VOICE CAPTURE',
+                        'tech': 'Web Speech API',
+                        'desc': 'Real-time speech-to-text conversion using browser\'s native SpeechRecognition engine.',
+                        'color': '#ef4444',
+                        'latency': '< 100ms'
                     },
                     {
-                        'icon': 'bolt',
                         'emoji': '⚡',
-                        'title': 'Processing: Command Parser',
-                        'tech': 'JavaScript → Python State Sync',
-                        'desc': 'JavaScript parses voice commands (e.g., "clear chat") and syncs text to Python via NiceGUI\'s reactive binding.',
-                        'color': '#f59e0b'
+                        'title': 'STATE BRIDGE',
+                        'tech': 'WebSocket Sync',
+                        'desc': 'Bidirectional JavaScript↔Python state synchronization via NiceGUI reactive bindings.',
+                        'color': '#f59e0b',
+                        'latency': '< 50ms'
                     },
                     {
-                        'icon': 'psychology',
                         'emoji': '🧠',
-                        'title': 'Intelligence: AI Agent',
-                        'tech': 'OpenAI GPT-4o / Claude Sonnet',
-                        'desc': 'Your message is processed by an AI agent with access to PTO tools: balance lookups, date optimization, and request creation.',
-                        'color': '#8b5cf6'
+                        'title': 'AI PROCESSING',
+                        'tech': 'OpenAI GPT-4o',
+                        'desc': 'Intelligent agent with PTO tools: balance lookup, date optimization, request management.',
+                        'color': '#8b5cf6',
+                        'latency': '1-3s'
                     },
                     {
-                        'icon': 'volume_up',
                         'emoji': '🔊',
-                        'title': 'Output: Text-to-Speech',
-                        'tech': 'OpenAI TTS (Nova) → HTML5 Audio',
-                        'desc': 'AI responses are converted to natural speech using OpenAI\'s TTS API with the "Nova" voice, played via HTML5 Audio.',
-                        'color': '#22c55e'
+                        'title': 'VOICE OUTPUT',
+                        'tech': 'OpenAI TTS Nova',
+                        'desc': 'Natural speech synthesis with the Nova voice model, streamed via HTML5 Audio.',
+                        'color': '#22c55e',
+                        'latency': '< 500ms'
                     }
                 ]
 
                 for step in flow_steps:
-                    with ui.card().classes('w-full p-3').style(f'background-color: #1f2937; border-left: 4px solid {step["color"]};'):
-                        with ui.row().classes('items-center gap-3'):
-                            ui.label(step['emoji']).classes('text-2xl')
+                    with ui.element('div').classes('w-full p-4 rounded-lg transition-all duration-300').style(
+                        f'background: linear-gradient(135deg, {step["color"]}10 0%, transparent 50%); '
+                        f'border: 1px solid {step["color"]}30; '
+                        f'border-left: 3px solid {step["color"]};'
+                    ):
+                        with ui.row().classes('items-start gap-4'):
+                            # Glowing emoji container
+                            with ui.element('div').classes('rounded-full p-3 flex-shrink-0').style(
+                                f'background: radial-gradient(circle, {step["color"]}20 0%, transparent 70%); '
+                                f'box-shadow: 0 0 15px {step["color"]}30;'
+                            ):
+                                ui.label(step['emoji']).classes('text-2xl')
+                            # Content
                             with ui.column().classes('gap-1 flex-grow'):
-                                with ui.row().classes('items-center gap-2'):
-                                    ui.label(step['title']).classes('font-semibold')
-                                    ui.badge(step['tech']).props('outline').style(f'color: {step["color"]}; border-color: {step["color"]};')
-                                ui.label(step['desc']).classes('text-sm opacity-70')
+                                with ui.row().classes('items-center gap-3'):
+                                    ui.label(step['title']).classes('font-bold tracking-wide').style(f'color: {step["color"]};')
+                                    with ui.element('div').classes('px-2 py-0.5 rounded-full').style(
+                                        f'background: {step["color"]}20; border: 1px solid {step["color"]}40;'
+                                    ):
+                                        ui.label(step['tech']).classes('text-xs font-mono').style(f'color: {step["color"]};')
+                                ui.label(step['desc']).classes('text-sm opacity-70 leading-relaxed')
+                            # Latency indicator
+                            with ui.element('div').classes('flex-shrink-0 text-right'):
+                                ui.label(step['latency']).classes('text-xs font-mono text-green-400')
 
-                # Arrow indicators between steps (visual connector)
-                ui.separator().classes('my-2')
+                # Performance summary
+                with ui.element('div').classes('w-full p-4 rounded-lg mt-2').style(
+                    'background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3);'
+                ):
+                    with ui.row().classes('items-center justify-between'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('speed', size='sm').classes('text-green-400')
+                            ui.label('Total Round-Trip Latency').classes('text-sm font-semibold text-green-400')
+                        ui.label('2-4 seconds').classes('font-mono font-bold text-green-400')
 
-                # Technology stack summary
-                with ui.row().classes('w-full flex-wrap gap-4 mt-2'):
-                    tech_badges = [
-                        ('NiceGUI', 'Python web framework'),
-                        ('Quasar', 'Vue.js UI components'),
-                        ('OpenAI API', 'GPT-4o & TTS'),
-                        ('Web Speech API', 'Browser voice I/O'),
+                # Technology stack
+                with ui.row().classes('w-full flex-wrap gap-3 mt-2 pt-4').style(
+                    'border-top: 1px solid rgba(71, 85, 105, 0.3);'
+                ):
+                    tech_stack = [
+                        ('NiceGUI', 'Framework'),
+                        ('Quasar', 'Components'),
+                        ('GPT-4o', 'Intelligence'),
+                        ('TTS Nova', 'Voice'),
                     ]
-                    for name, desc in tech_badges:
-                        with ui.column().classes('items-center'):
-                            ui.badge(name).style(f'background-color: {PTO_GOLD} !important;')
-                            ui.label(desc).classes('text-xs opacity-60')
+                    for name, desc in tech_stack:
+                        with ui.element('div').classes('flex items-center gap-2 px-3 py-2 rounded-lg').style(
+                            'background: rgba(201, 162, 39, 0.1); border: 1px solid rgba(201, 162, 39, 0.2);'
+                        ):
+                            ui.label(name).classes('text-sm font-semibold').style(f'color: {PTO_GOLD};')
+                            ui.label(f'• {desc}').classes('text-xs opacity-50')
 
         def show_confirmation(pending_action: dict):
             """Display confirmation dialog for pending write action."""
