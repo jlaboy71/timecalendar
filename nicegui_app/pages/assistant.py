@@ -391,127 +391,102 @@ window.ptoVoice.init();
         # Initial render
         render_chat()
 
-        # Voice handler functions
-        def toggle_voice_mode(enabled: bool):
-            """Toggle voice input mode."""
-            voice_state['enabled'] = enabled
-            if enabled:
-                # Use NiceGUI's native .visible property
-                voice_state['mic_button'].visible = True
-                voice_state['speaker_button'].visible = True
-                ui.notify('🎤 Voice mode ON - Click mic to speak', type='info')
-            else:
-                voice_state['mic_button'].visible = False
-                voice_state['speaker_button'].visible = False
-                voice_state['recording_indicator'].visible = False
-                if voice_state['recording']:
-                    ui.run_javascript('window.ptoVoice.stop()')
-                    voice_state['recording'] = False
-                    voice_state['mic_button'].props(remove='color=red')
-                    voice_state['mic_button'].props('color=amber')
+        # ================================================================
+        # INPUT AREA - NUCLEAR REBUILD APPROACH
+        # ================================================================
 
-        async def toggle_recording():
-            """Toggle voice recording on/off."""
-            if voice_state['recording']:
-                # Stop recording
-                voice_state['recording'] = False
-                voice_state['mic_button'].props(remove='color=red')
-                voice_state['mic_button'].props('color=amber')
-                voice_state['recording_indicator'].visible = False
-                await ui.run_javascript('window.ptoVoice.stop()')
-            else:
-                # Start recording
-                voice_state['recording'] = True
-                voice_state['mic_button'].props(remove='color=amber')
-                voice_state['mic_button'].props('color=red')
-                voice_state['recording_indicator'].visible = True
-                await ui.run_javascript('window.ptoVoice.start()')
-                ui.notify('🎤 Listening... speak now', type='info')
+        # Container that we'll rebuild when voice toggles
+        input_container = ui.row().classes('w-full items-center gap-3 mt-4')
 
-        async def replay_last_response():
-            """Replay the last agent response using browser TTS."""
-            if not chat_messages:
-                ui.notify('No response to replay', type='warning')
-                return
+        # Track voice state (simpler dict)
+        voice_enabled = {'value': False, 'recording': False}
 
-            last_assistant_msg = None
-            for msg in reversed(chat_messages):
-                if msg.get('role') == 'assistant':
-                    last_assistant_msg = msg.get('content', '')
-                    break
+        # Reference to input field for send_message
+        input_ref = {'field': None}
 
-            if not last_assistant_msg:
-                ui.notify('No response to replay', type='warning')
-                return
+        def build_input_area(with_voice: bool):
+            """Build the input area with or without voice controls."""
+            input_container.clear()
 
-            # Change speaker button to green while playing
-            voice_state['speaker_button'].props(remove='color=amber')
-            voice_state['speaker_button'].props('color=green')
+            with input_container:
+                # Voice toggle (always present)
+                def on_toggle(e):
+                    voice_enabled['value'] = e.value
+                    voice_enabled['recording'] = False
+                    build_input_area(e.value)  # REBUILD!
+                    if e.value:
+                        ui.notify('🎤 Voice ON - click mic to speak', type='info')
 
-            # Use browser's built-in TTS
-            # Strip markdown formatting for cleaner speech
-            clean_text = last_assistant_msg.replace('**', '').replace('*', '').replace('#', '')
-            clean_text = clean_text[:1000]  # Limit length
-            await ui.run_javascript(f'''
-                const utterance = new SpeechSynthesisUtterance({repr(clean_text)});
-                utterance.rate = 1.0;
-                utterance.pitch = 1.0;
-                utterance.onend = () => {{
-                    // Will need to manually reset color
-                }};
-                window.speechSynthesis.speak(utterance);
-            ''')
-            ui.notify('🔊 Playing response...', type='info')
+                ui.switch('', value=with_voice, on_change=on_toggle).tooltip('Voice mode')
 
-            # Reset color after a delay (approximate based on text length)
-            async def reset_color():
-                await asyncio.sleep(min(len(clean_text) / 15, 30))  # Rough estimate
-                voice_state['speaker_button'].props(remove='color=green')
-                voice_state['speaker_button'].props('color=amber')
+                if with_voice:
+                    # === MIC BUTTON (only when voice enabled) ===
+                    async def on_mic():
+                        if voice_enabled['recording']:
+                            voice_enabled['recording'] = False
+                            build_input_area(True)  # Rebuild to show amber mic
+                            await ui.run_javascript('window.ptoVoice && window.ptoVoice.stop()')
+                        else:
+                            voice_enabled['recording'] = True
+                            build_input_area(True)  # Rebuild to show red mic
+                            await ui.run_javascript('window.ptoVoice && window.ptoVoice.start()')
+                            ui.notify('🎤 Listening...', type='info')
 
-            asyncio.create_task(reset_color())
+                    mic_color = 'red' if voice_enabled['recording'] else 'amber'
+                    ui.button(icon='mic', on_click=on_mic).props(f'round fab-mini color={mic_color}').tooltip('Speak')
 
-        # Input row at bottom
-        with ui.row().classes('w-full items-center gap-2 mt-4'):
-            # Voice toggle switch
-            voice_toggle = ui.switch('', value=False).tooltip('Enable voice input')
-            voice_toggle.on('change', lambda e: toggle_voice_mode(e.value))
+                    # Recording indicator (only when recording)
+                    if voice_enabled['recording']:
+                        with ui.row().classes('items-center gap-1'):
+                            ui.spinner('audio', size='sm', color='red')
+                            ui.label('Listening...').classes('text-red-400 text-xs')
 
-            # Microphone button (hidden until voice enabled)
-            voice_state['mic_button'] = ui.button(
-                icon='mic',
-                on_click=toggle_recording
-            ).props('round fab-mini color=amber').tooltip('Click to speak')
-            voice_state['mic_button'].visible = False  # Hidden by default
+                # === TEXT INPUT (always present) ===
+                msg_input = ui.input(placeholder='Ask about your PTO...').classes('flex-grow').props('outlined dense')
+                input_ref['field'] = msg_input
 
-            # Recording indicator (hidden by default)
-            voice_state['recording_indicator'] = ui.row().classes('items-center gap-1')
-            voice_state['recording_indicator'].visible = False  # Hidden by default
-            with voice_state['recording_indicator']:
-                ui.spinner('audio', size='sm', color='red')
-                ui.label('Listening...').classes('text-red-400 text-sm')
+                # === SEND BUTTON (always present) ===
+                async def on_send():
+                    text = msg_input.value
+                    if text and text.strip():
+                        msg_input.value = ''
+                        voice_enabled['recording'] = False
+                        # Add user message and process
+                        add_chat_message('user', text.strip())
+                        process_message(text.strip())
 
-            # Text input
-            input_field = ui.input(placeholder='Ask about your PTO...').classes(
-                'flex-grow'
-            ).props('outlined dense').on('keydown.enter', send_message)
+                ui.button(icon='send', on_click=on_send).props('round fab-mini color=amber').tooltip('Send')
+                msg_input.on('keydown.enter', on_send)
 
-            # Send button
-            send_button = ui.button(icon='send', on_click=send_message).style(
-                f'background-color: {PTO_GOLD} !important; color: white !important;'
-            )
+                if with_voice:
+                    # === SPEAKER BUTTON (only when voice enabled) ===
+                    async def on_speaker():
+                        last_msg = None
+                        for m in reversed(chat_messages):
+                            if isinstance(m, dict) and m.get('role') == 'assistant':
+                                last_msg = m.get('content', '')
+                                break
 
-            # Speaker button (replay last response - hidden until voice enabled)
-            voice_state['speaker_button'] = ui.button(
-                icon='volume_up',
-                on_click=replay_last_response
-            ).props('round fab-mini color=amber').tooltip('Play last response')
-            voice_state['speaker_button'].visible = False  # Hidden by default
+                        if not last_msg:
+                            ui.notify('No response to play', type='warning')
+                            return
 
-            # Clear button
-            ui.button('Clear', icon='delete', on_click=clear_history).props('flat').style(
-                f'color: {PTO_GOLD} !important;'
-            )
+                        # Use browser TTS
+                        clean_text = last_msg.replace('**', '').replace('*', '').replace('#', '')[:500]
+                        await ui.run_javascript(f'''
+                            const utterance = new SpeechSynthesisUtterance({repr(clean_text)});
+                            utterance.rate = 1.0;
+                            window.speechSynthesis.speak(utterance);
+                        ''')
+                        ui.notify('🔊 Playing...', type='info')
+
+                    ui.button(icon='volume_up', on_click=on_speaker).props('round fab-mini color=amber').tooltip('Play')
+
+                # === CLEAR BUTTON (always present) ===
+                ui.button('Clear', icon='delete', on_click=clear_history).props('flat').style(f'color: {PTO_GOLD} !important;')
+
+        # Initial build (no voice)
+        build_input_area(False)
 
         # Quick action suggestions (agent-specific)
         suggestions_container = ui.row().classes('w-full gap-2 mt-2 flex-wrap')
