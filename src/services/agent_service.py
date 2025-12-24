@@ -483,13 +483,13 @@ IMPORTANT: When checking balance, use the user_id {self.user_id} that was provid
             },
             {
                 "name": "confirm_action",
-                "description": "Request user confirmation before submitting. REQUIRED before any write operation.",
+                "description": "Request user confirmation before any write operation. REQUIRED before submit or cancel.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "action_type": {
                             "type": "string",
-                            "enum": ["submit_pto_request"],
+                            "enum": ["submit_pto_request", "cancel_pto_request"],
                             "description": "Type of action to confirm"
                         },
                         "action_summary": {
@@ -537,6 +537,55 @@ IMPORTANT: When checking balance, use the user_id {self.user_id} that was provid
                         }
                     },
                     "required": ["user_id", "pto_type", "start_date", "end_date", "confirmation_token"]
+                }
+            },
+            {
+                "name": "get_employee_requests",
+                "description": "Get the user's PTO requests. Can filter by status (pending, approved, denied, cancelled) and year.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "employee_id": {
+                            "type": "integer",
+                            "description": "Employee ID to get requests for"
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["pending", "approved", "denied", "cancelled"],
+                            "description": "Optional filter by request status"
+                        },
+                        "year": {
+                            "type": "integer",
+                            "description": "Optional filter by year"
+                        }
+                    },
+                    "required": ["employee_id"]
+                }
+            },
+            {
+                "name": "cancel_pto_request",
+                "description": "Cancel a pending or approved PTO request. REQUIRES confirmation_token from confirm_action.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {
+                            "type": "integer",
+                            "description": "The PTO request ID to cancel"
+                        },
+                        "user_id": {
+                            "type": "integer",
+                            "description": "The user requesting the cancellation"
+                        },
+                        "cancellation_reason": {
+                            "type": "string",
+                            "description": "Optional reason for cancellation"
+                        },
+                        "confirmation_token": {
+                            "type": "string",
+                            "description": "REQUIRED - Token from confirm_action"
+                        }
+                    },
+                    "required": ["request_id", "user_id", "confirmation_token"]
                 }
             }
         ]
