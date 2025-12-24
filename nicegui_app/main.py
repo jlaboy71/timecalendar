@@ -33,6 +33,7 @@ from nicegui_app.pages.admin_handbook import admin_handbook_page
 from nicegui_app.pages.admin_year_end import admin_year_end_page
 from nicegui_app.pages.help import help_page as help_page_content
 from nicegui_app.pages.admin_system import admin_system_page
+from nicegui_app.pages.admin_analytics import admin_analytics_page
 from nicegui_app.pages.admin_email_preview import email_preview_page
 from nicegui_app.pages.admin_auto_notify_reports import auto_notify_reports_page
 from nicegui_app.pages.admin_policy_viewer import admin_policy_viewer_page
@@ -403,6 +404,19 @@ def admin_testing_console():
         ui.label('Access denied. Admin or SuperAdmin role required.').classes('text-red-500 p-4')
         return
     testing_console_page()
+
+
+@ui.page('/admin/analytics')
+def admin_analytics():
+    """AI Agent Analytics dashboard for admins."""
+    if not require_auth():
+        return
+    # Check for admin/superadmin role
+    user = app.storage.user.get('user')
+    if user and user.get('role') not in ['admin', 'superadmin']:
+        ui.label('Access denied. Admin or SuperAdmin role required.').classes('text-red-500 p-4')
+        return
+    admin_analytics_page()
 
 
 # ============================================================

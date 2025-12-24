@@ -116,6 +116,13 @@ def analytics_page():
                 overview_btn = ui.button('Overview', icon='dashboard')
                 trends_btn = ui.button('Trends', icon='trending_up')
                 insights_btn = ui.button('Insights', icon='lightbulb')
+
+                # AI Analytics link (navigates to separate dashboard)
+                ui.element('div').classes('w-px h-6 bg-gray-300 mx-2')  # Separator
+                ui.button('AI Agents', icon='smart_toy',
+                          on_click=lambda: ui.navigate.to('/admin/analytics')
+                ).props('flat').classes('text-amber-500 hover:text-amber-400').tooltip('AI Agent Analytics Dashboard')
+
                 ui.button(icon='help_outline', on_click=lambda: show_help_tip(
                     'Analytics Dashboard',
                     'Overview: Key metrics at a glance - total days used, pending requests, utilization rates, and leave type breakdown.\n\n'
