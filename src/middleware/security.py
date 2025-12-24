@@ -39,14 +39,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Content Security Policy
         # NiceGUI requires 'unsafe-inline' and 'unsafe-eval' for its reactive UI
-        # blob: and data: needed for file downloads and embedded images
+        # blob: and data: needed for file downloads, embedded images, and voice features
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",  # blob: for Web Speech API
+            "script-src-elem 'self' 'unsafe-inline' blob:",
+            "worker-src 'self' blob:",  # For web workers
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
-            "connect-src 'self' ws: wss:",  # WebSocket for NiceGUI reactivity
+            "connect-src 'self' ws: wss: https:",  # WebSocket for NiceGUI reactivity
+            "media-src 'self' blob: data:",  # For audio playback (TTS)
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
