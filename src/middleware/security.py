@@ -48,7 +48,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
-            "connect-src 'self' ws: wss: https:",  # WebSocket for NiceGUI reactivity
+            "connect-src 'self' ws: wss: https: blob:",  # WebSocket + blob for voice
             "media-src 'self' blob: data:",  # For audio playback (TTS)
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
