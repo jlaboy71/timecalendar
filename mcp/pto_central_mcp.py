@@ -1164,10 +1164,27 @@ def cancel_pto_request(
         requestor = user_service.get_user(request.user_id)
         requestor_name = requestor.username if requestor else f"User #{request.user_id}"
 
-        # Cancel the request
-        # PTOService.cancel_request expects (request_id, owner_user_id) for ownership check
-        # MCP already did permission check above, so pass request.user_id (the owner)
-        pto_service.cancel_request(request_id, request.user_id)
+        # Cancel the request - different handling for pending vs approved
+        if request_status == "pending":
+            # For pending: use PTOService which handles removing pending balance
+            pto_service.cancel_request(request_id, request.user_id)
+        else:
+            # For approved: manually update status and restore used balance
+            from src.services.balance_service import BalanceService
+
+            request.status = 'cancelled'
+
+            # Restore balance for tracked PTO types
+            pto_type_lower = request.pto_type.lower()
+            if pto_type_lower in ('vacation', 'sick', 'personal', 'chicago_leave'):
+                balance_service = BalanceService(db)
+                # Handle vacation rollover (uses carryover_from_year)
+                balance_year = request.carryover_from_year if request.carryover_from_year else request.start_date.year
+                balance = balance_service.get_or_create_balance(request.user_id, balance_year)
+                hours = float(request.total_days) * 8
+                balance_service.restore_balance(balance.id, pto_type_lower, hours, was_approved=True)
+
+            db.commit()
 
         # Audit log
         AuditService.log(
